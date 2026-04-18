@@ -1,0 +1,235 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum UserRole {
+  GENERAL
+  VENDOR
+  ADMIN
+}
+
+enum EventType {
+  WEDDING
+  FUNERAL
+  BIRTHDAY
+  BABY_SHOWER
+  HOUSEWARMING
+  FIRST_BIRTHDAY
+  MEMORIAL
+  ETC
+}
+
+enum EventStatus {
+  DRAFT
+  PLANNING
+  PUBLISHED
+  COMPLETED
+  CANCELLED
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum TransactionMethod {
+  MOCK
+  CARD
+  BANK_TRANSFER
+  CASH
+}
+
+enum PostCategory {
+  NOTICE
+  STORY
+  QNA
+  REVIEW
+  PROMOTION
+}
+
+enum InvitationStatus {
+  DRAFT
+  SENT
+  VIEWED
+  RSVP_ACCEPTED
+  RSVP_DECLINED
+}
+
+model User {
+  id                  String        @id @default(cuid())
+  email               String        @unique
+  name                String
+  passwordHash        String
+  role                UserRole      @default(GENERAL)
+  phone               String?       @unique
+  companyName         String?
+  bio                 String?
+  imageUrl            String?
+  location            String?
+  emailVerifiedAt     DateTime?
+  isActive            Boolean       @default(true)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  ownedEventPlans     EventPlan[]   @relation("EventOwner")
+  vendorReservations  Reservation[] @relation("ReservationVendor")
+  authoredPosts       Post[]        @relation("PostAuthor")
+  writtenReviews      Review[]      @relation("ReviewAuthor")
+  receivedReviews     Review[]      @relation("ReviewVendor")
+  payerTransactions   Transaction[] @relation("TransactionPayer")
+  sentInvitations     Invitation[]  @relation("InvitationSender")
+  receivedInvitations Invitation[]  @relation("InvitationRecipient")
+
+  @@index([role, isActive])
+}
+
+model EventPlan {
+  id               String        @id @default(cuid())
+  ownerId          String
+  title            String
+  slug             String        @unique
+  type             EventType
+  status           EventStatus   @default(PLANNING)
+  hostName         String?
+  honoreeName      String?
+  venueName        String?
+  region           String?
+  scheduledAt      DateTime?
+  guestTarget      Int?
+  budget           Int?
+  description      String?
+  coverImageUrl    String?
+  aiRecommendation Json?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  owner            User          @relation("EventOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  reservations     Reservation[]
+  posts            Post[]        @relation("EventPosts")
+  reviews          Review[]      @relation("EventReviews")
+  invitations      Invitation[]
+
+  @@index([ownerId, status])
+  @@index([type, scheduledAt])
+}
+
+model Reservation {
+  id              String            @id @default(cuid())
+  eventPlanId     String
+  vendorId        String
+  serviceName     String
+  serviceCategory String?
+  description     String?
+  serviceDate     DateTime?
+  guestCount      Int?
+  quotedAmount    Int?
+  confirmedAmount Int?
+  status          ReservationStatus @default(PENDING)
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  eventPlan       EventPlan         @relation(fields: [eventPlanId], references: [id], onDelete: Cascade)
+  vendor          User              @relation("ReservationVendor", fields: [vendorId], references: [id])
+  transaction     Transaction?
+  reviews         Review[]          @relation("ReservationReviews")
+
+  @@index([eventPlanId, status])
+  @@index([vendorId, status])
+}
+
+model Post {
+  id          String       @id @default(cuid())
+  authorId    String
+  eventPlanId String?
+  title       String
+  slug        String       @unique
+  excerpt     String?
+  content     String
+  category    PostCategory @default(STORY)
+  isPublished Boolean      @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  author      User         @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  eventPlan   EventPlan?   @relation("EventPosts", fields: [eventPlanId], references: [id], onDelete: SetNull)
+
+  @@index([authorId, category])
+  @@index([eventPlanId, isPublished])
+}
+
+model Review {
+  id           String       @id @default(cuid())
+  authorId     String
+  vendorId     String?
+  eventPlanId  String?
+  reservationId String?
+  rating       Int
+  title        String?
+  content      String
+  isPublished  Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  author       User         @relation("ReviewAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  vendor       User?        @relation("ReviewVendor", fields: [vendorId], references: [id], onDelete: SetNull)
+  eventPlan    EventPlan?   @relation("EventReviews", fields: [eventPlanId], references: [id], onDelete: SetNull)
+  reservation  Reservation? @relation("ReservationReviews", fields: [reservationId], references: [id], onDelete: SetNull)
+
+  @@index([vendorId, rating])
+  @@index([eventPlanId, isPublished])
+}
+
+model Transaction {
+  id               String            @id @default(cuid())
+  reservationId    String            @unique
+  payerId          String
+  amount           Int
+  status           TransactionStatus @default(PENDING)
+  method           TransactionMethod @default(MOCK)
+  gatewayReference String?
+  paidAt           DateTime?
+  failureReason    String?
+  receiptUrl       String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  reservation      Reservation       @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  payer            User              @relation("TransactionPayer", fields: [payerId], references: [id], onDelete: Cascade)
+
+  @@index([payerId, status])
+}
+
+model Invitation {
+  id             String           @id @default(cuid())
+  eventPlanId    String
+  senderId       String
+  recipientId    String?
+  recipientName  String
+  recipientPhone String?
+  recipientEmail String?
+  message        String?
+  rsvpStatus     InvitationStatus @default(DRAFT)
+  attendees      Int?
+  invitationCode String           @unique
+  sentAt         DateTime?
+  viewedAt       DateTime?
+  respondedAt    DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  eventPlan      EventPlan        @relation(fields: [eventPlanId], references: [id], onDelete: Cascade)
+  sender         User             @relation("InvitationSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient      User?            @relation("InvitationRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+
+  @@index([eventPlanId, rsvpStatus])
+}
