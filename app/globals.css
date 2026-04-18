@@ -6,19 +6,19 @@
   :root {
     --font-body: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
     --font-display: "Space Grotesk", "Pretendard", "Noto Sans KR", system-ui, sans-serif;
-    --background: 45 42% 96%;
-    --foreground: 197 30% 16%;
+    --background: 30 42% 97%;
+    --foreground: 224 24% 20%;
     --card: 0 0% 100%;
-    --card-foreground: 197 30% 16%;
-    --primary: 170 49% 27%;
-    --primary-foreground: 46 43% 97%;
-    --accent: 28 78% 57%;
-    --accent-foreground: 0 0% 100%;
-    --muted: 42 33% 90%;
-    --muted-foreground: 200 12% 39%;
-    --border: 34 24% 82%;
-    --input: 34 24% 82%;
-    --ring: 170 49% 27%;
+    --card-foreground: 224 24% 20%;
+    --primary: 221 26% 29%;
+    --primary-foreground: 32 45% 97%;
+    --accent: 24 36% 67%;
+    --accent-foreground: 222 24% 18%;
+    --muted: 30 32% 92%;
+    --muted-foreground: 219 13% 40%;
+    --border: 26 26% 84%;
+    --input: 26 26% 84%;
+    --ring: 221 26% 29%;
   }
 
   * {
@@ -32,12 +32,12 @@
   body {
     @apply min-h-screen bg-background text-foreground antialiased;
     background-image:
-      radial-gradient(circle at top left, rgba(240, 145, 72, 0.18), transparent 34%),
-      radial-gradient(circle at top right, rgba(31, 109, 94, 0.12), transparent 30%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(255, 249, 240, 0.92));
+      radial-gradient(circle at top left, rgba(205, 163, 138, 0.24), transparent 34%),
+      radial-gradient(circle at top right, rgba(74, 82, 108, 0.18), transparent 30%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(249, 242, 235, 0.96));
   }
 
   ::selection {
-    background: rgba(240, 145, 72, 0.28);
+    background: rgba(205, 163, 138, 0.28);
   }
 }

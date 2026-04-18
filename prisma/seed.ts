@@ -1,6 +1,6 @@
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 
-import { PrismaClient, UserRole } from "../generated/prisma/client";
+import { PrismaClient, UserRole, VendorApprovalStatus } from "../generated/prisma/client";
 
 import { hashPassword } from "../lib/auth/password";
 import { generateMockAIRecommendation } from "../lib/mocks/ai-recommendation";
@@ -35,6 +35,8 @@ async function main() {
       passwordHash,
       role: UserRole.GENERAL,
       phone: "010-1111-2222",
+      phoneVerifiedAt: new Date(),
+      vendorApprovalStatus: VendorApprovalStatus.NOT_APPLICABLE,
       location: "서울 마포구",
       bio: "가족 행사를 차분하게 준비하는 대표 사용자 샘플입니다."
     }
@@ -48,6 +50,8 @@ async function main() {
       passwordHash,
       role: UserRole.VENDOR,
       phone: "010-3333-4444",
+      phoneVerifiedAt: new Date(),
+      vendorApprovalStatus: VendorApprovalStatus.APPROVED,
       location: "서울 강남구",
       bio: "웨딩과 프라이빗 가족연을 위한 공간 연출 전문 업체입니다."
     }
@@ -61,6 +65,8 @@ async function main() {
       passwordHash,
       role: UserRole.VENDOR,
       phone: "010-5555-6666",
+      phoneVerifiedAt: new Date(),
+      vendorApprovalStatus: VendorApprovalStatus.APPROVED,
       location: "경기 성남시",
       bio: "경조사 규모에 맞춘 한식·양식 케이터링 패키지를 제공합니다."
     }
@@ -73,6 +79,8 @@ async function main() {
       passwordHash,
       role: UserRole.GENERAL,
       phone: "010-7777-8888",
+      phoneVerifiedAt: new Date(),
+      vendorApprovalStatus: VendorApprovalStatus.NOT_APPLICABLE,
       location: "서울 서초구",
       bio: "초대 응답과 후기 흐름을 테스트하기 위한 일반 사용자입니다."
     }
@@ -85,6 +93,8 @@ async function main() {
       passwordHash,
       role: UserRole.ADMIN,
       phone: "010-9999-0000",
+      phoneVerifiedAt: new Date(),
+      vendorApprovalStatus: VendorApprovalStatus.NOT_APPLICABLE,
       location: "서울 중구",
       bio: "운영자 계정 샘플입니다."
     }

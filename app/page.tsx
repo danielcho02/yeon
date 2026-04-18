@@ -1,6 +1,9 @@
+import Link from "next/link";
 import { CalendarDays, Database, MapPin, PartyPopper, UsersRound } from "lucide-react";
 
+import { LogoutButton } from "@/components/auth/logout-button";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -10,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
+import { getServerAuthSession } from "@/lib/auth/session";
 
 const eventTypeLabels: Record<string, string> = {
   WEDDING: "웨딩",
@@ -33,7 +37,10 @@ const statusLabels: Record<string, string> = {
   SENT: "발송",
   VIEWED: "열람",
   RSVP_ACCEPTED: "참석",
-  RSVP_DECLINED: "불참"
+  RSVP_DECLINED: "불참",
+  APPROVED: "승인",
+  REJECTED: "거절",
+  NOT_APPLICABLE: "해당 없음"
 };
 
 const statusTone: Record<string, string> = {
@@ -47,7 +54,10 @@ const statusTone: Record<string, string> = {
   SENT: "bg-primary/10 text-primary",
   VIEWED: "bg-sky-100 text-sky-700",
   RSVP_ACCEPTED: "bg-emerald-100 text-emerald-700",
-  RSVP_DECLINED: "bg-rose-100 text-rose-700"
+  RSVP_DECLINED: "bg-rose-100 text-rose-700",
+  APPROVED: "bg-emerald-100 text-emerald-700",
+  REJECTED: "bg-rose-100 text-rose-700",
+  NOT_APPLICABLE: "bg-muted text-muted-foreground"
 };
 
 const plannedFolders = [
@@ -93,6 +103,7 @@ type ReadyHomeData = {
     companyName: string | null;
     location: string | null;
     bio: string | null;
+    vendorApprovalStatus: string;
     _count: {
       vendorReservations: number;
       receivedReviews: number;
@@ -166,6 +177,7 @@ async function getHomeData(): Promise<ReadyHomeData | PendingHomeData> {
             companyName: true,
             location: true,
             bio: true,
+            vendorApprovalStatus: true,
             _count: {
               select: {
                 vendorReservations: true,
@@ -234,67 +246,102 @@ async function getHomeData(): Promise<ReadyHomeData | PendingHomeData> {
 }
 
 export default async function HomePage() {
+  const session = await getServerAuthSession();
   const data = await getHomeData();
 
   return (
     <main className="mx-auto flex min-h-screen max-w-7xl flex-col gap-8 px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
+      <section className="flex flex-col gap-4 rounded-[2rem] border border-white/70 bg-white/84 px-5 py-5 shadow-glow backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="space-y-1">
+          <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">YeON · 緣</p>
+          <h1 className="font-[var(--font-display)] text-2xl font-semibold text-foreground">사람과 마음을 잇다</h1>
+          <p className="text-sm text-muted-foreground">
+            따뜻하고 부드러운 브랜드 톤 위에 회원가입과 인증 흐름을 올린 Step 2입니다.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {session?.user ? (
+            <>
+              <Link className={buttonVariants({ variant: "outline" })} href="/account">
+                {session.user.name}님 계정
+              </Link>
+              <LogoutButton variant="default">로그아웃</LogoutButton>
+            </>
+          ) : (
+            <>
+              <Link className={buttonVariants({ variant: "outline" })} href="/login">
+                로그인
+              </Link>
+              <Link className={buttonVariants({ variant: "accent" })} href="/signup">
+                회원가입
+              </Link>
+            </>
+          )}
+        </div>
+      </section>
+
       <section className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/80 shadow-glow backdrop-blur">
         <div className="grid gap-8 px-6 py-8 sm:px-8 lg:grid-cols-[1.25fr_0.85fr] lg:px-10 lg:py-10">
           <div className="space-y-6">
             <Badge className="bg-primary/10 text-primary hover:bg-primary/10">
-              YeON Step 1 · Project Setup & DB Schema
+              YeON Step 2 · Auth Onboarding
             </Badge>
             <div className="space-y-4">
               <h1 className="font-[var(--font-display)] text-4xl font-semibold leading-tight text-foreground sm:text-5xl">
-                경조사 통합 플랫폼의 첫 실행 지점을
-                <br className="hidden sm:block" /> 바로 확인할 수 있는 초기 셋업입니다.
+                일반 사용자와 업체 사용자의 가입부터 로그인까지,
+                <br className="hidden sm:block" /> 브랜드 톤으로 연결한 인증 경험입니다.
               </h1>
               <p className="max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">
-                Next.js 14 App Router, Prisma + SQLite, Tailwind, shadcn/ui 구조를 먼저 세팅하고,
-                홈 화면에서 seed 데이터를 확인할 수 있도록 Step 1 범위만 구현했습니다.
+                Next.js 14 App Router, Prisma + SQLite 구조 위에 NextAuth Credentials 인증을 얹고, 일반 사용자
+                회원가입, 업체 사용자 회원가입, 로그인과 보호된 계정 화면까지 Step 2 범위 안에서 구현했습니다.
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <HeroStat
                 icon={Database}
-                label="DB Ready"
-                value={data.ready ? "Seed Loaded" : "Pending"}
+                label="DB State"
+                value={data.ready ? "Ready" : "Pending"}
               />
               <HeroStat
                 icon={PartyPopper}
-                label="Event Types"
-                value="Wedding · Funeral · More"
+                label="Verification"
+                value="Mock Code Flow"
               />
               <HeroStat
                 icon={UsersRound}
-                label="NextAuth Ready"
-                value="Credentials Schema"
+                label="Auth Mode"
+                value="Credentials"
               />
               <HeroStat
                 icon={CalendarDays}
                 label="Current Scope"
-                value="Step 1 Only"
+                value="U01 · U02 · U03"
               />
             </div>
           </div>
 
           <Card className="border-primary/10 bg-primary/5">
             <CardHeader>
-              <CardTitle>런타임 체크 메모</CardTitle>
+              <CardTitle>Step 2 빠른 진입</CardTitle>
               <CardDescription>
-                현재 WSL 세션에서는 `node`, `npm`이 PATH에 잡히지 않았습니다. 코드와 구조는 모두 Step 1 기준으로
-                구성했고, 아래 명령으로 사용자 런타임에서 바로 이어서 검증할 수 있습니다.
+                로그인과 회원가입 첫인상이 브랜드답게 보이도록 곡선형 카드, 여백, 차분한 네이비와 로즈골드 톤으로
+                정리했습니다.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {setupCommands.map((command) => (
-                <div
-                  key={command}
-                  className="rounded-2xl border border-primary/10 bg-white/80 px-4 py-3 font-mono text-sm text-foreground"
-                >
-                  {command}
-                </div>
-              ))}
+            <CardContent className="space-y-4">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Link className={buttonVariants({ variant: "accent" })} href="/signup">
+                  일반/업체 회원가입
+                </Link>
+                <Link className={buttonVariants({ variant: "outline" })} href="/login">
+                  로그인
+                </Link>
+              </div>
+              <div className="rounded-3xl border border-primary/10 bg-white/85 p-4 text-sm leading-6 text-muted-foreground">
+                개발 환경에서는 인증번호가 서버 콘솔에 출력됩니다. 신규 업체 계정은 가입 후 `승인 대기` 상태로 저장되며,
+                계정 페이지에서 상태를 확인할 수 있습니다.
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -353,7 +400,7 @@ export default async function HomePage() {
               <Card>
                 <CardHeader>
                   <CardTitle>입점 업체 샘플</CardTitle>
-                  <CardDescription>Vendor 유저를 별도 엔티티로 분리하지 않고 역할 기반으로 확장 가능한 구조를 택했습니다.</CardDescription>
+                  <CardDescription>역할 기반 사용자 구조에 승인 상태를 더해 업체 가입 흐름을 최소 범위로 확장했습니다.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {data.vendors.map((vendor) => (
@@ -363,7 +410,12 @@ export default async function HomePage() {
                           <h3 className="text-lg font-semibold">{vendor.companyName ?? vendor.name}</h3>
                           <p className="text-sm text-muted-foreground">{vendor.name}</p>
                         </div>
-                        <Badge variant="outline">Vendor</Badge>
+                        <div className="flex flex-col items-end gap-2">
+                          <Badge variant="outline">Vendor</Badge>
+                          <Badge className={statusTone[vendor.vendorApprovalStatus] ?? "bg-muted text-muted-foreground"}>
+                            {statusLabels[vendor.vendorApprovalStatus] ?? vendor.vendorApprovalStatus}
+                          </Badge>
+                        </div>
                       </div>
                       <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
                         <MapPin className="h-4 w-4" />
