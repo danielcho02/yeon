@@ -1,0 +1,849 @@
+# yeON 프로젝트 종합 기초 문서
+
+> **작성일**: 2026-05-11  
+> **프로젝트**: yeON (경조사 통합 플랫폼 서비스)  
+> **현재 상태**: 미완성 (핵심 로직 문제 + UI/UX 정적 문제)  
+> **개발 도구**: Claude Code (프론트엔드) + Codex (백엔드)
+
+---
+
+## 1. 프로젝트 비전 및 현재 상태
+
+### 1.1 프로젝트 정의
+
+**yeON**은 결혼식과 장례식 등 주요 경조사의 전 과정을 하나의 플랫폼에서 통합 관리하는 서비스입니다. 현재 경조사 준비 과정에서 사용자가 겪는 핵심 문제는 다수의 업체를 개별적으로 탐색하고 비교해야 하는 정보 비대칭, 불투명한 추가 요금 구조, 그리고 일정/초대/금전 관리가 여러 채널로 분산되어 있다는 점입니다. yeON은 이 모든 과정을 **플랜 생성 → 업체 견적/상담 → 예약 확정 → 초대장 공유 → 금전 정산**이라는 단일 흐름으로 연결하여 사용자 편의와 신뢰를 동시에 확보합니다.
+
+### 1.2 핵심 차별점
+
+yeON이 기존 서비스와 구별되는 핵심 차별점은 **모듈형 투명 견적** 시스템입니다. 각 업체의 서비스를 포함/제외/추가비용으로 항목화하여 가격 비교의 신뢰성을 강화하고, 행사 준비의 전 과정을 단절 없이 연결합니다. 또한 비대면 송금과 오프라인 데이터 업로드를 통합한 정산 시스템은 기존에 수작업으로 처리하던 축의금/부의금 관리를 자동화합니다.
+
+### 1.3 현재 진행 상태 및 블로커 분석
+
+| 항목 | 상태 | 상세 |
+|---|---|---|
+| 프로젝트 설정 (Next.js 14, Prisma, Tailwind) | 완료 | `npm run build` 성공 확인 |
+| 라우팅 구조 (웨딩/장례 분리) | 완료 | App Router 기반, 역할별 리다이렉트 |
+| 인증 시스템 (NextAuth JWT) | 완료 | 데모 계정 3개 동작 |
+| 핵심 워크스페이스 UI (4단계 스테퍼) | 부분 완료 | 1009줄, 기본 폼 구현 |
+| **핵심 비즈니스 로직 (견적/예약 상태 관리)** | **미완성** | **블로커 #1: 상태 전이 로직 부재** |
+| **모듈형 가격 견적 시스템** | **설계 중** | **블로커 #2: 모듈화 구조 미확정** |
+| **UI/UX 인터랙션 (애니메이션, 감성 피드백)** | **미완성** | **블로커 #3: 정적이고 폼 위주** |
+| 정산 시스템 (송금/엑셀 업로드) | 미착수 | 기능 명세만 존재 |
+| 모바일 초대장/부고장 | 미착수 | 기능 명세만 존재 |
+
+현재 프로젝트가 진행되지 못하는 근본 원인은 세 가지입니다. 첫째, Prisma Schema가 불완전하여 데이터가 정상적으로 흐르지 않습니다. 둘째, 업체의 가격 모듈화 구조가 확정되지 않아 견적 시스템을 구현할 수 없습니다. 셋째, UI가 단순한 폼 나열에 그쳐 사용자가 서비스에 몰입하지 못합니다.
+
+---
+
+## 2. 시스템 아키텍처
+
+### 2.1 기술 스택
+
+| 분류 | 기술 | 버전 | 역할 |
+|---|---|---|---|
+| 프레임워크 | Next.js (App Router) | 14.2.x | 풀스택 React 프레임워크 |
+| 언어 | TypeScript | 5.7.x | 정적 타입 시스템 (Strict Mode) |
+| UI 라이브러리 | shadcn/ui + Tailwind CSS | 3.4.x | 컴포넌트 + 유틸리티 CSS |
+| 애니메이션 | Framer Motion (신규 도입) | 11.x | 마이크로 인터랙션 및 레이아웃 애니메이션 |
+| 아이콘 | Lucide React | 0.511.x | SVG 아이콘 시스템 |
+| ORM | Prisma | 7.7.x | 타입 세이프 데이터베이스 접근 |
+| 데이터베이스 | SQLite (better-sqlite3) | - | 로컬 파일 기반 RDBMS |
+| 인증 | NextAuth.js | 4.24.x | JWT 기반 세션 관리 |
+| 폼 관리 | React Hook Form + Zod (신규 도입) | - | 선언적 폼 검증 |
+
+### 2.2 아키텍처 다이어그램
+
+![yeON 시스템 아키텍처](https://private-us-east-1.manuscdn.com/sessionFile/yDdF4T9d1zoWXR33QGY5Yg/sandbox/FWOXCbuPFe8iVU1zGgIpEb-images_1778473739273_na1fn_L2hvbWUvdWJ1bnR1L3llT05fZG9jcy95ZW9uX2FyY2hpdGVjdHVyZQ.png?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUveURkRjRUOWQxem9XWFIzM1FHWTVZZy9zYW5kYm94L0ZXT1hDYnVQRmU4aVZVMXpHZ0lwRWItaW1hZ2VzXzE3Nzg0NzM3MzkyNzNfbmExZm5fTDJodmJXVXZkV0oxYm5SMUwzbGxUMDVmWkc5amN5OTVaVzl1WDJGeVkyaHBkR1ZqZEhWeVpRLnBuZyIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc5ODc2MTYwMH19fV19&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=V~9nKwbwUSvF7Qcyi3boXeT6Imp1lU~O1Goa9BicZOpyxPLaGPe46wsYWjmbcR135bFeZBvwf3~XA8NGR5mAkHrSpkkusDhQoEFpzlS43Ei1EqB~vS~0n-4GjBLcklMIR9IZ65qQwm6uIeMH~U4smrgypthUvu-thhq8WC~W1tAT2AmJrZMuU3cWuTQQwk5W6i9qWx6AbqO-h4h8Bk8UXe28KoPPq-MCYVHzY6Rxekg8uXpOiuIVcgLU6Pr92-HOl3hmBEQvsMTeAV0CkzS8srRVaBstuYClEX873oBh03WGbl9Ota81if~kXg43~ls6RkLGKfOa2DpgDpmFTTqJ-Q__)
+
+프론트엔드는 Next.js App Router를 기반으로 서버 컴포넌트(RSC)와 클라이언트 컴포넌트를 혼합하여 구성됩니다. 인증은 NextAuth.js가 JWT 토큰을 발급하여 처리하며, 비즈니스 로직은 Server Actions 또는 API Routes를 통해 Prisma ORM으로 SQLite 데이터베이스에 접근합니다. 신규로 도입되는 Framer Motion은 클라이언트 컴포넌트에서만 사용되며, 서버 컴포넌트의 성능에 영향을 주지 않습니다.
+
+### 2.3 컴포넌트 트리 (프론트엔드 아키텍처)
+
+![yeON 컴포넌트 트리](https://private-us-east-1.manuscdn.com/sessionFile/yDdF4T9d1zoWXR33QGY5Yg/sandbox/FWOXCbuPFe8iVU1zGgIpEb-images_1778473739273_na1fn_L2hvbWUvdWJ1bnR1L3llT05fZG9jcy95ZW9uX2NvbXBvbmVudF90cmVl.png?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUveURkRjRUOWQxem9XWFIzM1FHWTVZZy9zYW5kYm94L0ZXT1hDYnVQRmU4aVZVMXpHZ0lwRWItaW1hZ2VzXzE3Nzg0NzM3MzkyNzNfbmExZm5fTDJodmJXVXZkV0oxYm5SMUwzbGxUMDVmWkc5amN5OTVaVzl1WDJOdmJYQnZibVZ1ZEY5MGNtVmwucG5nIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzk4NzYxNjAwfX19XX0_&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=RZ86xtAkXEp4CwpzClajsvxhcN13Ds-eMkTpaf8UjxmivHkKNFQ0QiW22V9GF8Y3UWSkDRpnndRCLl~myWM7~ocedbGtDvH25JjxDTdmAWZhHhZz7bKZN2ZWR6fOSUeDsnN2QNFycv3JmwTlmFxWW3Ox~tQrzyjIKn6Ehuz2wrG6wksLWU4eX6rL2s~RFSWZG2edM6j5ktYcgD6f~TF1-6EuQLcngTT2YyOuJyQzWo~v75v2s0ZMFavZxOaUHs2QuWf7NivPr-WaiCPFPZNv6oUf8JFxV10AGq3UXnrz99ki~XSKg87rl527g7zVXLIgvBDZ3HO36TXbQxhXzqcifw__)
+
+위 다이어그램은 페이지 → 기능 컴포넌트 → UI 프리미티브 → 모션 컴포넌트 → 공유 훅의 의존 관계를 보여줍니다. 핵심은 `EventPlanningWorkspace`가 `MultiStepWizard`, `ModularQuoteBuilder`, `QuoteComparison`을 자식으로 가지며, 각각이 `useTheme`, `useQuoteBuilder`, `useWizardStep` 훅을 통해 상태를 공유한다는 점입니다.
+
+### 2.4 확장 디렉토리 구조
+
+```
+yeon/
+├── app/
+│   ├── page.tsx                          # 랜딩 페이지
+│   ├── (auth)/
+│   │   ├── layout.tsx                    # 인증 레이아웃 (2패널)
+│   │   ├── login/page.tsx                # 로그인
+│   │   └── signup/page.tsx               # 회원가입
+│   ├── planner/
+│   │   ├── page.tsx                      # 라우터 (역할/플랜 기반 분기)
+│   │   ├── wedding/page.tsx              # 웨딩 워크스페이스
+│   │   └── funeral/page.tsx              # 장례 워크스페이스
+│   ├── actions/                          # [신규] Server Actions
+│   │   ├── plan.ts                       # 플랜 CRUD
+│   │   ├── quote.ts                      # 견적 요청/응답
+│   │   ├── reservation.ts               # 예약 상태 관리
+│   │   └── transaction.ts               # 정산 내역 관리
+│   └── api/
+│       └── auth/[...nextauth]/route.ts   # NextAuth 엔드포인트
+├── components/
+│   ├── ui/                               # shadcn/ui 기본 컴포넌트
+│   │   └── motion/                       # [신규] 공용 애니메이션 래퍼
+│   │       ├── fade-in.tsx
+│   │       ├── slide-up.tsx
+│   │       ├── swipe-transition.tsx
+│   │       ├── count-up.tsx
+│   │       ├── confetti.tsx
+│   │       └── progress-bar.tsx
+│   └── features/planning/
+│       ├── event-planning-workspace.tsx   # 핵심 워크스페이스 (리팩토링 대상)
+│       ├── modular-quote-builder.tsx      # [신규] 모듈형 견적 빌더
+│       ├── vendor-quote-editor.tsx        # [신규] 업체 견적 응답 에디터
+│       ├── quote-comparison.tsx           # [신규] 견적 비교 테이블
+│       ├── multi-step-wizard.tsx          # [신규] 다단계 마법사 폼
+│       ├── vendor-workspace.tsx           # 업체 워크스페이스
+│       └── workspace-types.ts            # 공용 타입
+├── hooks/                                # [신규] 공유 훅
+│   ├── use-theme.ts                      # 웨딩/장례 테마 훅
+│   ├── use-quote-builder.ts              # 견적 빌더 상태 훅
+│   └── use-wizard-step.ts                # 마법사 단계 훅
+├── lib/
+│   ├── state-machine.ts                  # [신규] 상태 머신 유틸리티
+│   ├── errors.ts                         # [신규] 에러 핸들링
+│   └── utils.ts                          # 기존 유틸리티
+├── types/                                # [신규] 공유 TypeScript 인터페이스
+│   ├── quote.ts                          # 견적 관련 타입
+│   ├── reservation.ts                    # 예약 관련 타입
+│   └── plan.ts                           # 플랜 관련 타입
+├── prisma/
+│   ├── schema.prisma                     # 데이터베이스 스키마
+│   ├── migrations/                       # 마이그레이션 파일
+│   └── seed.ts                           # 시드 데이터 스크립트
+└── package.json
+```
+
+---
+
+## 3. 핵심 데이터 모델
+
+### 3.1 ER 다이어그램
+
+![yeON 데이터 모델](https://private-us-east-1.manuscdn.com/sessionFile/yDdF4T9d1zoWXR33QGY5Yg/sandbox/FWOXCbuPFe8iVU1zGgIpEb-images_1778473739273_na1fn_L2hvbWUvdWJ1bnR1L3llT05fZG9jcy95ZW9uX2RhdGFfbW9kZWw.png?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUveURkRjRUOWQxem9XWFIzM1FHWTVZZy9zYW5kYm94L0ZXT1hDYnVQRmU4aVZVMXpHZ0lwRWItaW1hZ2VzXzE3Nzg0NzM3MzkyNzNfbmExZm5fTDJodmJXVXZkV0oxYm5SMUwzbGxUMDVmWkc5amN5OTVaVzl1WDJSaGRHRmZiVzlrWld3LnBuZyIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc5ODc2MTYwMH19fV19&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=Wp0IUB5lF0OGMA9tT0fUupI~S1XLm25bW5DegiXuCUHZaWP1GM3OuGrjITTZztaHDb7So0vxC~orf4FJdhOFw99kJEfKKFsY3TQk9pPdAIQxoFbVmK1SU-OvMRgA93dBUotzY-tlDlL2cCOW9-aPHqV4wTLVYoWAsma-KNpTr3xB1EaNuZEG6OrkzzPmfiwDeKC8DN9bDpa-BkuUmUCFaobIwsasb-Wf9O8vNardNIGRj3bFB3XHKx-fQqRiE86VYOK0T-k4p4skcRqNwHduvrtXZKsFVzOWpSKZeQoH3l5PFDOnN3vAJqvqqvrcq0BhWr-S7oItnHFQwJmIpsUP8g__)
+
+### 3.2 엔티티 상세
+
+아래는 기능 명세서를 기반으로 도출한 핵심 데이터 모델입니다. 특히 모듈형 가격 견적을 지원하기 위한 JSON 구조가 포함되어 있습니다.
+
+**User (사용자)**: 시스템의 모든 사용자를 하나의 테이블에서 `role` 필드로 구분합니다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| id | String (cuid) | 고유 식별자 |
+| email | String (unique) | 로그인 이메일 |
+| password | String | bcrypt 해시 비밀번호 |
+| name | String | 사용자 이름 |
+| phone | String? | 연락처 |
+| role | String (USER/VENDOR/ADMIN) | 사용자 역할 |
+
+**VendorProfile (업체 프로필)**: 업체 사용자의 추가 정보 및 승인 상태를 관리합니다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| id | String (cuid) | 고유 식별자 |
+| userId | String (FK) | 연결된 사용자 |
+| businessNumber | String | 사업자 등록번호 |
+| companyName | String | 업체명 |
+| category | String | 업종 카테고리 |
+| status | String (PENDING/APPROVED/REJECTED) | 승인 상태 |
+
+**EventPlan (행사 플랜)**: 모든 견적, 예약, 정산, 초대장이 연결되는 중심 엔티티입니다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| id | String (cuid) | 고유 식별자 |
+| userId | String (FK) | 플랜 소유자 |
+| eventType | String (WEDDING/FUNERAL) | 행사 유형 |
+| title | String? | 행사명 |
+| eventDate | DateTime? | 행사 예정일 |
+| location | String? | 행사 지역 |
+| guestCount | Int? | 예상 인원 |
+| budget | Int? | 예산 (원) |
+| status | String (DRAFT/ACTIVE/COMPLETED) | 플랜 상태 |
+
+**VendorServiceModule (업체 서비스 모듈)**: 모듈형 가격 견적의 핵심 테이블입니다. 업체가 제공하는 개별 서비스 항목을 독립적인 모듈로 관리합니다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| id | String (cuid) | 고유 식별자 |
+| vendorId | String (FK) | 소속 업체 |
+| name | String | 모듈명 (예: "본식 스냅 2인") |
+| category | String | 카테고리 (PHOTO/DECORATION/CATERING 등) |
+| price | Int | 가격 (원) |
+| description | String? | 상세 설명 |
+| isBaseIncluded | Boolean | 기본 패키지 포함 여부 |
+
+**QuoteRequest (견적 요청)**: 사용자가 업체에 보내는 견적 요청입니다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| id | String (cuid) | 고유 식별자 |
+| planId | String (FK) | 연결된 행사 플랜 |
+| vendorId | String (FK) | 대상 업체 |
+| requirements | String | 요구사항 상세 |
+| selectedModuleIds | String | 사용자가 선택한 모듈 ID 목록 (JSON) |
+| status | String (PENDING/RESPONDED/ACCEPTED/CANCELED) | 요청 상태 |
+
+**QuoteResponse (견적 응답)**: 업체의 모듈형 견적 응답입니다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| id | String (cuid) | 고유 식별자 |
+| requestId | String (FK) | 연결된 견적 요청 |
+| vendorId | String (FK) | 응답 업체 |
+| basePrice | Int | 기본 패키지 금액 |
+| modules | String | 모듈별 상세 (JSON: 포함/추가/제외 항목) |
+| totalPrice | Int | 총 견적 금액 |
+| note | String? | 업체 메모 |
+
+**Reservation (예약)**: 견적 수락 후 확정되는 예약 정보입니다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| id | String (cuid) | 고유 식별자 |
+| planId | String (FK) | 연결된 행사 플랜 |
+| vendorId | String (FK) | 예약 업체 |
+| quoteResponseId | String? (FK) | 기반 견적 |
+| reservedDate | DateTime | 예약 확정일 |
+| totalAmount | Int | 총 결제 금액 |
+| status | String (PENDING/CONFIRMED/CHANGED/CANCELED) | 예약 상태 |
+
+**Transaction (정산 내역)**: 축의금/부의금 거래 내역입니다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| id | String (cuid) | 고유 식별자 |
+| planId | String (FK) | 연결된 행사 플랜 |
+| senderName | String | 입금자명 |
+| amount | Int | 금액 (원) |
+| relation | String? | 관계 (가족/친구/직장 등) |
+| type | String (ONLINE/OFFLINE) | 입금 유형 |
+
+**Invitation (초대장/부고장)**: 행사 플랜에 연결된 모바일 초대장 정보입니다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| id | String (cuid) | 고유 식별자 |
+| planId | String (FK, unique) | 연결된 행사 플랜 |
+| templateId | String | 사용된 템플릿 ID |
+| shareUrl | String (unique) | 공유 URL |
+| content | String | 편집된 콘텐츠 (JSON) |
+| isPublished | Boolean | 공개 여부 |
+
+---
+
+## 4. 비즈니스 로직 상태 머신
+
+### 4.1 상태 전이 다이어그램
+
+![yeON 비즈니스 로직 상태 머신](https://private-us-east-1.manuscdn.com/sessionFile/yDdF4T9d1zoWXR33QGY5Yg/sandbox/FWOXCbuPFe8iVU1zGgIpEb-images_1778473739273_na1fn_L2hvbWUvdWJ1bnR1L3llT05fZG9jcy95ZW9uX3N0YXRlX21hY2hpbmU.png?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUveURkRjRUOWQxem9XWFIzM1FHWTVZZy9zYW5kYm94L0ZXT1hDYnVQRmU4aVZVMXpHZ0lwRWItaW1hZ2VzXzE3Nzg0NzM3MzkyNzNfbmExZm5fTDJodmJXVXZkV0oxYm5SMUwzbGxUMDVmWkc5amN5OTVaVzl1WDNOMFlYUmxYMjFoWTJocGJtVS5wbmciLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3OTg3NjE2MDB9fX1dfQ__&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=ej8390UXE~IdxehnUpc8lq4F08vm8AyXpJ~yFTiA~yLVX1y1WVpepPsT4KiL1-WLA~5zF6o44joq~p8WLsNMEDf7ToUlw1FuF3-t5IgNN-o6GyE2yi5OQToRR~4AmitxsrvsQgrqjeVPjkTdH8SAEox~DOlXl7PPm5DIOUzEr7FNR7rg~uPJ1e1gxstIhAgGk9oEDHsQJjMb5XKAk-393Mi~Teo8908T0BpljdycHyPv2WeHwhDIIqBd~pYAQsXYVoAJFGgMnkW-M8NVMSRfUiCkFPN0X84C75cz0vxd4kYcRsV0Q~VyjemZaIq2jY~IiF5-kdg86V1pbW5GmXFjXg__)
+
+### 4.2 견적 요청 상태 전이 규칙
+
+yeON의 핵심 비즈니스 로직은 **상태 머신(State Machine)** 패턴으로 구현해야 합니다. 각 엔티티의 `status` 필드가 허용된 전이만 수행하도록 강제하는 것이 핵심이며, 이를 통해 잘못된 상태 변경으로 인한 데이터 불일치를 원천적으로 방지합니다.
+
+| 현재 상태 | 허용 전이 | 트리거 주체 | 부수 효과 |
+|---|---|---|---|
+| PENDING | RESPONDED | 업체 | 사용자에게 알림 발송, 견적 응답 레코드 생성 |
+| PENDING | CANCELED | 사용자 | 업체에게 알림 발송 |
+| RESPONDED | ACCEPTED | 사용자 | 예약 신청 가능 상태로 전환 |
+| RESPONDED | CANCELED | 사용자 | 종료 |
+
+### 4.3 예약 상태 전이 규칙
+
+| 현재 상태 | 허용 전이 | 트리거 주체 | 부수 효과 |
+|---|---|---|---|
+| PENDING | CONFIRMED | 업체 | 양측 알림, 캘린더 반영, 감성적 축하/위로 피드백 |
+| PENDING | REJECTED | 업체 | 사용자에게 거절 사유 통지 |
+| CONFIRMED | CHANGED | 사용자 | 업체 승인 대기 |
+| CONFIRMED | CANCELED | 사용자 | 환불 규정 적용, 양측 알림 |
+| CHANGED | CONFIRMED | 업체 | 변경 승인, 양측 알림 |
+
+### 4.4 구현 코드 (lib/state-machine.ts)
+
+```typescript
+// lib/state-machine.ts
+// 이 파일은 Codex가 구현합니다.
+
+export type QuoteStatus = 'PENDING' | 'RESPONDED' | 'ACCEPTED' | 'CANCELED';
+export type ReservationStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'CHANGED' | 'CANCELED';
+
+const QUOTE_TRANSITIONS: Record<QuoteStatus, QuoteStatus[]> = {
+  PENDING:   ['RESPONDED', 'CANCELED'],
+  RESPONDED: ['ACCEPTED', 'CANCELED'],
+  ACCEPTED:  [],
+  CANCELED:  [],
+};
+
+const RESERVATION_TRANSITIONS: Record<ReservationStatus, ReservationStatus[]> = {
+  PENDING:   ['CONFIRMED', 'REJECTED'],
+  CONFIRMED: ['CHANGED', 'CANCELED'],
+  REJECTED:  [],
+  CHANGED:   ['CONFIRMED'],
+  CANCELED:  [],
+};
+
+export function canTransitionQuote(current: QuoteStatus, next: QuoteStatus): boolean {
+  return QUOTE_TRANSITIONS[current]?.includes(next) ?? false;
+}
+
+export function canTransitionReservation(current: ReservationStatus, next: ReservationStatus): boolean {
+  return RESERVATION_TRANSITIONS[current]?.includes(next) ?? false;
+}
+
+export class InvalidTransitionError extends Error {
+  constructor(entity: string, from: string, to: string) {
+    super(`[${entity}] 상태 전이 불가: ${from} → ${to}`);
+    this.name = 'InvalidTransitionError';
+  }
+}
+```
+
+---
+
+## 5. 사용자 여정 및 페인포인트 분석
+
+### 5.1 사용자 여정 플로우
+
+![yeON 사용자 여정](https://private-us-east-1.manuscdn.com/sessionFile/yDdF4T9d1zoWXR33QGY5Yg/sandbox/FWOXCbuPFe8iVU1zGgIpEb-images_1778473739273_na1fn_L2hvbWUvdWJ1bnR1L3llT05fZG9jcy95ZW9uX3VzZXJfam91cm5leQ.png?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUveURkRjRUOWQxem9XWFIzM1FHWTVZZy9zYW5kYm94L0ZXT1hDYnVQRmU4aVZVMXpHZ0lwRWItaW1hZ2VzXzE3Nzg0NzM3MzkyNzNfbmExZm5fTDJodmJXVXZkV0oxYm5SMUwzbGxUMDVmWkc5amN5OTVaVzl1WDNWelpYSmZhbTkxY201bGVRLnBuZyIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc5ODc2MTYwMH19fV19&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=YTeuM~Bk3LkZoP1OfulrNC4KzyMrakKaV5cJ2t5Ar3MwobAmPzDnAzLT-BlkokArf0qc81ejp9WfJWlhq5i~qzR1C30QsAR9~er7P1lA6bnUBj5nCj0w~1YorZwqlizG1PFUnIqIkobYx3PI3~udD9RFz5DQlaQL1qd-8W8t3xA9lH0CHqlqs1OCxYeTR01gW7LHmhUUi5QRkDLK2W7OO5UJZf8kIOehev6R1q11rtVeNYtokjgy5mhFIuKkb1DGn1j7f~zxKfjIyQ7~1FhMQf0Q6gwvC2jdh0LCzW8mpvZe5ZJwDKlhG30Tzjx6hSb37n0t75IJTXZ1Xo6IhC-xrA__)
+
+### 5.2 일반 사용자 여정 상세
+
+아래 표는 일반 사용자(예비부부/유가족)가 yeON을 이용하는 전체 과정에서 겪는 페인포인트와 이를 해결하기 위한 구체적인 UX 개선 방안을 정리한 것입니다.
+
+| 단계 | 사용자 행동 | 현재 페인포인트 | 개선 방안 |
+|---|---|---|---|
+| **1. 진입** | 랜딩 페이지에서 웨딩/장례 선택 | 텍스트 위주의 지루한 카드, 감성적 연결 부족 | 풀스크린 히어로 섹션, 행사 유형별 몰입형 비주얼, 스크롤 기반 패럴랙스 |
+| **2. 플랜 생성** | 날짜/지역/인원/예산 입력 | 한 화면에 모든 필드가 나열되어 부담감 | **다단계 마법사(Wizard)** 도입. 한 화면에 1~2개 질문만 표시, 스와이프 전환 |
+| **3. 업체 탐색** | 카테고리/지역으로 업체 검색 | 리스트형 나열로 비교가 어려움 | 카드 그리드 + 퀵 프리뷰(호버 시 주요 정보 팝업), 지도 뷰 병행 |
+| **4. 견적 요청** | 요구사항을 텍스트로 작성 | 무엇을 적어야 할지 막막함 | **모듈형 견적 빌더**: 시각적 타일 클릭으로 옵션 선택, 텍스트 입력 최소화 |
+| **5. 견적 비교** | 여러 업체 응답 확인 | 텍스트 기반으로 비교 불가 | **항목별 비교 테이블**: 기본/추가/제외를 컬럼으로 나란히 비교 |
+| **6. 상담** | 업체와 메시지 교환 | 채팅 UI가 기본적이고 맥락 파악 어려움 | 견적서가 채팅방 상단에 고정(Pinned), 항목 클릭 시 해당 부분 하이라이트 |
+| **7. 예약 확정** | 최종 업체 선택 후 예약 | 단순 버튼 클릭, 성취감 부족 | **감성적 피드백**: 웨딩은 Confetti 파티클, 장례는 차분한 체크마크 드로우 |
+| **8. 초대장** | 템플릿 선택 후 편집/공유 | 편집 자유도 낮음, 미리보기 부족 | 실시간 미리보기 + 드래그 편집, 카카오톡/SMS 원클릭 공유 |
+| **9. 정산** | 엑셀 업로드 또는 수기 입력 | 업로드 오류 시 원인 파악 어려움 | **드래그 앤 드롭** 업로드 + 데이터 매핑 마법사 + 미리보기 확인 |
+
+### 5.3 업체 사용자 여정 상세
+
+| 단계 | 사용자 행동 | 현재 페인포인트 | 개선 방안 |
+|---|---|---|---|
+| **1. 온보딩** | 사업자 정보 및 서비스 등록 | 복잡한 입력, 승인 대기 불확실성 | 프로필 완성도 게이지, 승인 상태 시각적 타임라인 |
+| **2. 견적 응답** | 고객 요청 확인 후 가격 입력 | 매번 텍스트로 설명하고 계산하는 번거로움 | **프리셋 템플릿**: 자주 쓰는 모듈 조합을 저장/불러오기 |
+| **3. 예약 관리** | 승인 대기 예약 확인/처리 | 일정 중복 확인 어려움 | **캘린더 뷰** 기반 직관적 일정 관리 |
+| **4. 리뷰 관리** | 고객 후기 확인 | 별도 페이지로 이동해야 함 | 대시보드에 최신 리뷰 위젯 통합 |
+
+---
+
+## 6. 모듈형 가격 견적 시스템 설계
+
+### 6.1 시스템 구조
+
+![yeON 모듈형 가격 견적 시스템](https://private-us-east-1.manuscdn.com/sessionFile/yDdF4T9d1zoWXR33QGY5Yg/sandbox/FWOXCbuPFe8iVU1zGgIpEb-images_1778473739273_na1fn_L2hvbWUvdWJ1bnR1L3llT05fZG9jcy95ZW9uX21vZHVsYXJfcHJpY2luZw.png?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUveURkRjRUOWQxem9XWFIzM1FHWTVZZy9zYW5kYm94L0ZXT1hDYnVQRmU4aVZVMXpHZ0lwRWItaW1hZ2VzXzE3Nzg0NzM3MzkyNzNfbmExZm5fTDJodmJXVXZkV0oxYm5SMUwzbGxUMDVmWkc5amN5OTVaVzl1WDIxdlpIVnNZWEpmY0hKcFkybHVady5wbmciLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3OTg3NjE2MDB9fX1dfQ__&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=lmRtQ3vsd01o33DyCXOo9oCYSIgUtYB8m8rBrAPlJiPdcK4Y4tobzijAhXyBz3G7kTWzBX2MU8Pu42TU2vyts549MKJR0o-bgTcZ0-4gm8L7XdZp4Jebp6~1Ty6h~AXkTxrXNghI4dWtOSuP5J9~tK0xL0ZDJ09U1R03gAf3EtFI9whtWSU3TS6UNzEOSs0m0kIqh6v3yM4rnEmdSvCLf5600ueHv1b1Rjd1RYQ7J-SYPd5xgZxSK0Jr7lx6b1wHfGaUfoiht1nud2WCU62Pyp-BLKdD9PJutl8E2YkNyz5KgVCKxiu-51O-YR~jnu0ZUx-TPlN-F9p2shhPw~gM8g__)
+
+### 6.2 설계 철학
+
+기존의 불투명하고 텍스트 위주의 견적 방식을 개선하기 위해, 사용자가 쇼핑몰에서 상품을 담듯 시각적으로 직관적인 **모듈형 가격 견적 시스템(Modular Pricing System)**을 도입합니다. 이 시스템의 핵심은 업체가 제공하는 서비스를 독립적인 '모듈'로 분리하고, 각 모듈에 명확한 가격을 부여하여 사용자가 자유롭게 조합할 수 있도록 하는 것입니다.
+
+### 6.3 모듈 카테고리 체계
+
+**웨딩 모듈 카테고리**
+
+| 카테고리 코드 | 한글명 | 대표 모듈 예시 |
+|---|---|---|
+| VENUE | 예식장 | 대관료, 홀 타입(실내/야외), 시간대 |
+| PHOTO | 촬영 | 본식 스냅, 원판, DVD, 앨범 |
+| DRESS | 드레스 | 웨딩드레스 대여, 턱시도 대여 |
+| MAKEUP | 메이크업 | 신부 메이크업, 어머니 메이크업 |
+| DECORATION | 장식 | 기본 생화, 아치형 장식, 포토테이블 |
+| CATERING | 식사 | 뷔페(인당), 답례품, 폐백 음식 |
+| INVITATION | 초대장 | 모바일 청첩장, 실물 청첩장 |
+
+**장례 모듈 카테고리**
+
+| 카테고리 코드 | 한글명 | 대표 모듈 예시 |
+|---|---|---|
+| FUNERAL_HALL | 장례식장 | 빈소 대관(1일/3일/5일), 안치실 |
+| WREATH | 화환 | 근조 화환, 제단 꽃장식 |
+| TRANSPORT | 운구 | 운구차량, 장지 운구 |
+| CEREMONY | 의전 | 사회자, 종교 의식 |
+| MEAL | 식사 | 조문객 식사(인당), 음료 |
+| OBITUARY | 부고장 | 모바일 부고장, 신문 부고 |
+
+### 6.4 견적 응답 JSON 스키마
+
+업체가 견적 응답 시 저장되는 `modules` 필드의 JSON 구조입니다. 이 구조를 통해 프론트엔드에서 항목별 비교 테이블을 렌더링할 수 있습니다.
+
+```json
+{
+  "basePackage": {
+    "name": "프리미엄 웨딩 패키지",
+    "price": 3500000,
+    "description": "대관료 + 기본 생화 장식 + 음향/조명"
+  },
+  "includedModules": [
+    { "id": "m1", "name": "포토테이블", "category": "DECORATION", "price": 0 },
+    { "id": "m2", "name": "기본 음향", "category": "VENUE", "price": 0 }
+  ],
+  "optionalModules": [
+    {
+      "id": "opt1",
+      "name": "추가 생화 장식 (아치형)",
+      "category": "DECORATION",
+      "price": 800000,
+      "isSelected": true
+    },
+    {
+      "id": "opt2",
+      "name": "본식 스냅 (2인 작가)",
+      "category": "PHOTO",
+      "price": 1200000,
+      "isSelected": false
+    }
+  ],
+  "excludedModules": [
+    { "id": "ex1", "name": "폐백실 이용", "reason": "고객 미요청" }
+  ],
+  "totalPrice": 5500000
+}
+```
+
+### 6.5 프론트엔드 컴포넌트 상세 (Claude Code 담당)
+
+**ModularQuoteBuilder** (사용자 화면): 좌측에는 카테고리별로 그룹화된 모듈 타일(Tile) 그리드가 배치되고, 우측에는 현재까지의 선택 내역과 총액이 실시간으로 업데이트되는 Sticky Summary 패널이 배치됩니다. 모듈 타일을 클릭하면 선택 상태가 토글되며, Framer Motion의 `AnimatePresence`와 `layout` prop을 활용하여 요약 패널의 항목이 부드럽게 추가/제거됩니다. 총액 표시부에는 숫자가 굴러가듯 변경되는 카운트업(Count-up) 애니메이션을 적용합니다.
+
+**VendorQuoteEditor** (업체 화면): 업체가 미리 정의해둔 패키지 프리셋을 원클릭으로 불러올 수 있는 드롭다운을 상단에 배치합니다. 제공 가능한 모듈 목록에서 고객 견적서 영역으로 모듈을 드래그하여 직관적으로 견적을 구성할 수 있도록 지원합니다.
+
+**QuoteComparison** (견적 비교 화면): 여러 업체의 견적 응답을 나란히 배치하여 항목별(기본/추가/제외)로 비교할 수 있는 테이블 컴포넌트입니다. 가격 차이가 큰 항목은 하이라이트 처리하여 사용자의 의사결정을 돕습니다.
+
+### 6.6 백엔드 로직 상세 (Codex 담당)
+
+**calculateQuoteTotal**: 클라이언트에서 전송된 모듈 목록의 가격을 서버 측에서 재계산하여 가격 조작을 방지합니다. 각 모듈 ID에 대해 데이터베이스에서 실제 가격을 조회하고, 기본 패키지 가격과 선택된 옵션 가격을 합산합니다.
+
+**submitQuoteResponse**: 업체가 작성한 모듈형 견적 데이터를 JSON 형태로 직렬화하여 `QuoteResponse` 테이블에 저장하고, 해당 견적 요청의 상태를 `RESPONDED`로 변경합니다. 이때 상태 머신 유틸리티를 통해 전이 가능 여부를 먼저 검증합니다.
+
+---
+
+## 7. UX 및 인터랙션 설계 가이드
+
+### 7.1 핵심 디자인 원칙
+
+**점진적 공개 (Progressive Disclosure)**: 복잡한 폼을 한 번에 보여주지 않고, 사용자의 선택에 따라 다음 질문이나 옵션이 부드럽게 나타나도록 설계합니다. 예를 들어, 플랜 생성 시 "어떤 행사를 준비하시나요?"라는 질문 하나로 시작하고, 선택에 따라 후속 질문이 자연스럽게 이어집니다.
+
+**감성적 피드백 (Emotional Feedback)**: 성공, 실패, 대기 상태에 대해 명확하고 감성적인 애니메이션 피드백을 제공합니다. 웨딩 예약 확정 시에는 파스텔 톤의 Confetti 파티클이 화면에 뿌려지고, 장례 예약 확정 시에는 은은한 체크마크가 그려지며 "준비가 잘 진행되고 있습니다"라는 위로의 메시지가 표시됩니다.
+
+**상황 인식형 UI (Context-Aware UI)**: 사용자가 선택한 행사 유형에 따라 전체 인터페이스의 분위기가 완전히 달라져야 합니다.
+
+### 7.2 행사 유형별 테마 시스템
+
+| 속성 | 웨딩 (Wedding) | 장례 (Funeral) |
+|---|---|---|
+| **Primary Color** | Rose (#F43F5E) | Slate (#475569) |
+| **Background** | Warm Cream (#FFF7ED) | Cool Ivory (#F8FAFC) |
+| **Accent** | Gold (#D97706) | Navy (#1E3A5F) |
+| **Font Weight** | Regular (400) ~ Medium (500) | Light (300) ~ Regular (400) |
+| **Border Radius** | 큰 라운드 (16px) | 작은 라운드 (8px) |
+| **트랜지션 속도** | 빠르고 경쾌 (200ms, spring) | 느리고 차분 (400ms, ease) |
+| **성공 피드백** | Confetti 파티클 + 축하 메시지 | 체크마크 드로우 + 위로 메시지 |
+| **아이콘 스타일** | 화사한 이모지 (💒 👰 💐 🥂) | 차분한 이모지 (🕯️ 🌿 🙏) |
+
+### 7.3 신규 도입 패키지 및 설정
+
+Framer Motion을 프로젝트에 추가하고, 공용 애니메이션 컴포넌트를 구축합니다.
+
+```bash
+npm install framer-motion react-hook-form @hookform/resolvers zod
+```
+
+### 7.4 공용 애니메이션 컴포넌트 명세
+
+| 컴포넌트 | 파일 경로 | 설명 | 사용처 |
+|---|---|---|---|
+| `FadeIn` | `components/ui/motion/fade-in.tsx` | 요소가 투명에서 불투명으로 나타남 | 카드, 섹션 진입 |
+| `SlideUp` | `components/ui/motion/slide-up.tsx` | 아래에서 위로 슬라이드하며 나타남 | 리스트 아이템, 알림 |
+| `SwipeTransition` | `components/ui/motion/swipe-transition.tsx` | 좌우 스와이프로 화면 전환 | 다단계 마법사 |
+| `CountUp` | `components/ui/motion/count-up.tsx` | 숫자가 카운트업 애니메이션 | 총액 표시, 통계 |
+| `Confetti` | `components/ui/motion/confetti.tsx` | 화면에 파티클 효과 | 웨딩 예약 확정 |
+| `ProgressBar` | `components/ui/motion/progress-bar.tsx` | 부드럽게 채워지는 진행률 바 | 마법사 상단, 프로필 완성도 |
+
+### 7.5 다단계 마법사(Multi-Step Wizard) 상세 설계
+
+현재의 한 화면에 모든 필드를 나열하는 방식 대신, 사용자가 한 번에 1~2개의 질문에만 집중할 수 있는 다단계 마법사를 도입합니다.
+
+**웨딩 플랜 생성 마법사 (5단계)**
+
+| 단계 | 질문 | 입력 유형 | 인터랙션 |
+|---|---|---|---|
+| 1 | "결혼식 예정일이 언제인가요?" | 날짜 피커 (캘린더) | 날짜 선택 시 부드러운 하이라이트 |
+| 2 | "어느 지역에서 진행하시나요?" | 지역 선택 (시/도 → 구/군) | 계단식 드롭다운, 선택 시 지도 미리보기 |
+| 3 | "예상 하객 수는 몇 명인가요?" | 슬라이더 + 숫자 입력 | 슬라이더 드래그 시 실시간 숫자 업데이트 |
+| 4 | "총 예산은 어느 정도인가요?" | 범위 슬라이더 (최소~최대) | 예산 범위에 따른 추천 패키지 힌트 표시 |
+| 5 | "어떤 서비스가 필요하신가요?" | 모듈 타일 멀티 선택 | 타일 클릭 시 선택 애니메이션 + 하단 요약 |
+
+**장례 플랜 생성 마법사 (4단계)**
+
+| 단계 | 질문 | 입력 유형 | 인터랙션 |
+|---|---|---|---|
+| 1 | "장례 일정은 어떻게 되나요?" | 날짜 피커 + 기간 선택 (3일/5일) | 기간 선택 시 종료일 자동 계산 |
+| 2 | "어느 지역에서 진행하시나요?" | 지역 선택 | 주변 장례식장 자동 추천 |
+| 3 | "예상 조문객 수는 몇 명인가요?" | 슬라이더 + 숫자 입력 | 실시간 숫자 업데이트 |
+| 4 | "필요한 서비스를 선택해주세요" | 모듈 타일 멀티 선택 | 차분한 톤의 선택 애니메이션 |
+
+---
+
+## 8. AI 에이전트 협업 프로토콜
+
+### 8.1 에이전트 역할 분담
+
+![yeON 에이전트 협업 워크플로우](https://private-us-east-1.manuscdn.com/sessionFile/yDdF4T9d1zoWXR33QGY5Yg/sandbox/FWOXCbuPFe8iVU1zGgIpEb-images_1778473739273_na1fn_L2hvbWUvdWJ1bnR1L3llT05fZG9jcy95ZW9uX2FnZW50X2NvbGxhYg.png?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUveURkRjRUOWQxem9XWFIzM1FHWTVZZy9zYW5kYm94L0ZXT1hDYnVQRmU4aVZVMXpHZ0lwRWItaW1hZ2VzXzE3Nzg0NzM3MzkyNzNfbmExZm5fTDJodmJXVXZkV0oxYm5SMUwzbGxUMDVmWkc5amN5OTVaVzl1WDJGblpXNTBYMk52Ykd4aFlnLnBuZyIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc5ODc2MTYwMH19fV19&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=VGjen0qAq2Sytz8MHryEASD4c16eAOwMHad8pOaoAF8sgHTTDvhCxy-w7hV7ylg3dj-aGr7eaMzKc8UPMRuQb0ca17A4Qzsm4SMhSKpopkXbfCTCFaFHg-ZduIlkPMDusHKAxQagqh~8jmqJemoxGURRWid0KncjhjuNg8OhBG-oEm47Yq80Y0ad4ICfJf2qgx9tBppDCXn1skZZyLInM-T6ImfKxt2hpOGYXNqL2b2Ibr0OR1psxOaGU6YFhgeheO8LXB03e9iceJeSY9G5ShkIWqY4ez7JBLuPlDeoiU6Bq9rDNHl49o9eMtCzh3X7BJ23I8X5HM2sChSLUjiNaQ__)
+
+두 에이전트의 강점을 살려 역할을 명확히 분리합니다. Claude Code는 문맥 이해력과 복잡한 UI 상태 관리에 강점이 있어 프론트엔드를 전담하고, Codex는 명확한 지시사항 기반의 백엔드 로직과 데이터베이스 작업에 빠르고 정확하게 대응하여 서버 측을 전담합니다 [1].
+
+| 구분 | Claude Code (Frontend) | Codex (Backend) |
+|---|---|---|
+| **담당 디렉토리** | `app/` (페이지), `components/`, `hooks/`, CSS | `prisma/`, `app/actions/`, `lib/`, `types/` |
+| **핵심 역량** | UI/UX 구현, 애니메이션, 상태 관리 | DB 스키마, 비즈니스 로직, API 설계 |
+| **사용 도구** | Framer Motion, React Hook Form, Tailwind | Prisma, Server Actions, Zod |
+| **작업 브랜치** | `feature/ui-*` | `feature/api-*` |
+| **검증 기준** | 시각적 렌더링, 반응형 레이아웃 | 타입 안전성, 데이터 무결성 |
+
+### 8.2 협업 워크플로우 (5단계)
+
+**Step 0 — 인터페이스 합의 (사전 작업)**
+
+두 에이전트가 작업을 시작하기 전, 데이터 교환을 위한 TypeScript 타입과 API 응답 구조를 먼저 합의하고 `types/` 디렉토리에 정의합니다. 이 단계가 없으면 프론트엔드와 백엔드의 데이터 구조가 불일치하여 통합 시 대규모 수정이 필요해집니다.
+
+```typescript
+// types/quote.ts — 두 에이전트가 공유하는 인터페이스
+export interface QuoteModule {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+  isSelected?: boolean;
+}
+
+export interface QuoteResponseData {
+  basePackage: { name: string; price: number; description: string };
+  includedModules: QuoteModule[];
+  optionalModules: QuoteModule[];
+  excludedModules: { id: string; name: string; reason: string }[];
+  totalPrice: number;
+}
+
+export interface QuoteRequestPayload {
+  planId: string;
+  vendorId: string;
+  requirements: string;
+  selectedModuleIds: string[];
+}
+```
+
+**Step 1 — 병렬 개발 (Codex: 백엔드 / Claude Code: 프론트엔드)**
+
+Codex는 Prisma Schema 작성, 마이그레이션, Server Actions 구현, Seed 데이터 생성을 순차적으로 진행합니다. 동시에 Claude Code는 정의된 타입을 바탕으로 Mock 데이터를 사용하여 UI 컴포넌트를 개발합니다. 이 단계에서 두 에이전트는 서로 다른 Git 브랜치에서 작업하여 충돌을 방지합니다.
+
+**Step 2 — 통합 (Integration)**
+
+백엔드 API가 준비되면, Claude Code가 Mock 데이터를 실제 Server Actions 호출로 교체합니다. 이 과정에서 API 응답 지연 시의 스켈레톤 UI 처리는 Claude Code가, 에러 응답 구조와 핸들링 로직은 Codex가 주도합니다.
+
+**Step 3 — 검증**
+
+`npx tsc --noEmit` (타입 에러 0), `npm run lint` (경고 0), `npm run build` (성공) 세 가지를 모두 통과해야 합니다.
+
+**Step 4 — 핸드오프 기록**
+
+한 에이전트의 작업이 완료되면, 커밋 메시지 또는 `STATUS.md`에 상대 에이전트가 참고할 수 있는 요약 정보를 남깁니다.
+
+### 8.3 AGENTS.md 업데이트 권장안
+
+현재 프로젝트의 `AGENTS.md`에 아래 내용을 추가하여 두 에이전트가 컨텍스트를 공유할 수 있도록 합니다.
+
+```markdown
+## Agent roles
+- **Claude Code**: Frontend specialist. Owns `app/`, `components/`, `hooks/`, CSS.
+- **Codex**: Backend specialist. Owns `prisma/`, `app/actions/`, `lib/`, `types/`.
+
+## Shared contracts
+- All shared TypeScript interfaces live in `types/`.
+- Both agents MUST import types from `types/` — never define inline.
+
+## Integration protocol
+- Frontend uses mock data until backend APIs are ready.
+- Backend commits include a summary of available endpoints in STATUS.md.
+- After integration, both agents verify: `tsc --noEmit && lint && build`.
+
+## New dependencies
+- framer-motion (animation)
+- react-hook-form + @hookform/resolvers + zod (form validation)
+```
+
+---
+
+## 9. 프로젝트 실행 마스터플랜
+
+### Phase 1: 기반 아키텍처 (1~2주)
+
+| Task | 담당 | 상세 | 산출물 |
+|---|---|---|---|
+| 1.1 공유 타입 정의 | 협업 | `types/` 디렉토리에 Quote, Reservation, Plan 인터페이스 정의 | `types/*.ts` |
+| 1.2 Prisma Schema | Codex | VendorServiceModule 포함 전체 스키마 작성 | `prisma/schema.prisma` |
+| 1.3 DB 마이그레이션 | Codex | `prisma migrate dev --name init` 실행 | `prisma/migrations/` |
+| 1.4 상태 머신 유틸리티 | Codex | 견적/예약 상태 전이 검증 함수 | `lib/state-machine.ts` |
+| 1.5 Server Actions | Codex | 플랜 CRUD, 견적 요청/응답, 예약 상태 변경 | `app/actions/*.ts` |
+| 1.6 Seed 데이터 | Codex | 다양한 상태의 더미 데이터 (업체 3개, 플랜 2개, 견적 5개) | `prisma/seed.ts` |
+
+### Phase 2: 인터랙티브 UI (2~3주)
+
+| Task | 담당 | 상세 | 산출물 |
+|---|---|---|---|
+| 2.1 패키지 설치 | Claude Code | framer-motion, react-hook-form, zod 설치 | `package.json` |
+| 2.2 테마 시스템 | Claude Code | 웨딩/장례 컬러 팔레트, useTheme 훅 | `hooks/use-theme.ts`, `tailwind.config.ts` |
+| 2.3 공용 모션 컴포넌트 | Claude Code | FadeIn, SlideUp, SwipeTransition, CountUp, Confetti, ProgressBar | `components/ui/motion/*.tsx` |
+| 2.4 다단계 마법사 | Claude Code | 플랜 생성 Wizard (웨딩 5단계, 장례 4단계) | `components/features/planning/multi-step-wizard.tsx` |
+| 2.5 모듈형 견적 빌더 | Claude Code | 타일 그리드 + Sticky Summary + 카운트업 | `components/features/planning/modular-quote-builder.tsx` |
+| 2.6 견적 비교 테이블 | Claude Code | 다중 업체 항목별 비교 | `components/features/planning/quote-comparison.tsx` |
+| 2.7 업체 견적 에디터 | Claude Code | 프리셋 로드 + 드래그 앤 드롭 | `components/features/planning/vendor-quote-editor.tsx` |
+| 2.8 랜딩 페이지 리디자인 | Claude Code | 풀스크린 히어로, 패럴랙스, 테마별 카드 | `app/page.tsx` |
+
+### Phase 3: 통합 및 워크스페이스 완성 (1~2주)
+
+| Task | 담당 | 상세 | 산출물 |
+|---|---|---|---|
+| 3.1 Mock → 실제 API 교체 | Claude Code | Server Actions 바인딩, 로딩/에러 상태 처리 | 각 컴포넌트 수정 |
+| 3.2 워크스페이스 리팩토링 | Claude Code | event-planning-workspace.tsx를 새 컴포넌트들로 재구성 | 리팩토링된 워크스페이스 |
+| 3.3 업체 워크스페이스 고도화 | 협업 | 인박스 + 캘린더 뷰 + 프리셋 견적 | `vendor-workspace.tsx` |
+| 3.4 빌드 검증 | 협업 | tsc + lint + build 통과 | 빌드 성공 로그 |
+
+### Phase 4: 부가 기능 (2~3주)
+
+| Task | 담당 | 상세 | 산출물 |
+|---|---|---|---|
+| 4.1 정산 시스템 백엔드 | Codex | 엑셀 파싱, 통계 집계 API | `app/actions/transaction.ts` |
+| 4.2 정산 시스템 프론트엔드 | Claude Code | 드래그 앤 드롭 업로드, 차트, 다운로드 | 정산 관련 컴포넌트 |
+| 4.3 모바일 초대장 | 협업 | 템플릿 편집기 + 동적 라우팅 공유 페이지 | `app/invitation/[id]/` |
+| 4.4 알림 시스템 | Codex | 상태 변경 시 인앱 알림 | `app/actions/notification.ts` |
+
+### Phase 5: 프로덕션 준비 (1~2주)
+
+| Task | 담당 | 상세 | 산출물 |
+|---|---|---|---|
+| 5.1 DB 전환 | Codex | SQLite → PostgreSQL 마이그레이션 | 수정된 schema + 환경변수 |
+| 5.2 배포 환경 | 협업 | Vercel 또는 자체 서버 배포 설정 | 배포 스크립트 |
+| 5.3 보안 강화 | Codex | 입력 검증, CSRF, Rate Limiting | 미들웨어 |
+| 5.4 성능 최적화 | Claude Code | 이미지 최적화, 코드 스플리팅, 번들 분석 | 최적화된 빌드 |
+
+---
+
+## 10. 즉시 적용 가능한 Prisma Schema
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── 사용자 및 인증 ───────────────────────────────────
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  password      String
+  name          String
+  phone         String?
+  role          String         @default("USER")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  vendorProfile VendorProfile?
+  eventPlans    EventPlan[]
+  quoteRequests QuoteRequest[]
+}
+
+model VendorProfile {
+  id             String              @id @default(cuid())
+  userId         String              @unique
+  businessNumber String
+  companyName    String
+  category       String
+  description    String?
+  location       String?
+  status         String              @default("PENDING")
+  createdAt      DateTime            @default(now())
+
+  user           User                @relation(fields: [userId], references: [id])
+  serviceModules VendorServiceModule[]
+  quoteResponses QuoteResponse[]
+  reservations   Reservation[]
+}
+
+// ─── 업체 서비스 모듈 (모듈형 가격 견적의 핵심) ──────
+
+model VendorServiceModule {
+  id             String        @id @default(cuid())
+  vendorId       String
+  name           String
+  category       String
+  price          Int
+  description    String?
+  isBaseIncluded Boolean       @default(false)
+  isActive       Boolean       @default(true)
+  sortOrder      Int           @default(0)
+  createdAt      DateTime      @default(now())
+
+  vendor         VendorProfile @relation(fields: [vendorId], references: [id])
+}
+
+// ─── 행사 플랜 ────────────────────────────────────────
+
+model EventPlan {
+  id            String         @id @default(cuid())
+  userId        String
+  eventType     String
+  title         String?
+  eventDate     DateTime?
+  location      String?
+  guestCount    Int?
+  budget        Int?
+  status        String         @default("DRAFT")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id])
+  quoteRequests QuoteRequest[]
+  reservations  Reservation[]
+  transactions  Transaction[]
+  invitation    Invitation?
+}
+
+// ─── 견적 요청/응답 ───────────────────────────────────
+
+model QuoteRequest {
+  id              String          @id @default(cuid())
+  planId          String
+  vendorId        String
+  requirements    String
+  selectedModules String          @default("[]")
+  preferredDate   DateTime?
+  budget          Int?
+  status          String          @default("PENDING")
+  createdAt       DateTime        @default(now())
+
+  plan            EventPlan       @relation(fields: [planId], references: [id])
+  user            User            @relation(fields: [vendorId], references: [id])
+  responses       QuoteResponse[]
+}
+
+model QuoteResponse {
+  id          String        @id @default(cuid())
+  requestId   String
+  vendorId    String
+  basePrice   Int
+  modules     String        @default("{}")
+  totalPrice  Int
+  note        String?
+  createdAt   DateTime      @default(now())
+
+  request     QuoteRequest  @relation(fields: [requestId], references: [id])
+  vendor      VendorProfile @relation(fields: [vendorId], references: [id])
+  reservation Reservation?
+}
+
+// ─── 예약 ─────────────────────────────────────────────
+
+model Reservation {
+  id              String         @id @default(cuid())
+  planId          String
+  vendorId        String
+  quoteResponseId String?        @unique
+  reservedDate    DateTime
+  totalAmount     Int
+  status          String         @default("PENDING")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  plan            EventPlan      @relation(fields: [planId], references: [id])
+  vendor          VendorProfile  @relation(fields: [vendorId], references: [id])
+  quoteResponse   QuoteResponse? @relation(fields: [quoteResponseId], references: [id])
+}
+
+// ─── 정산 ─────────────────────────────────────────────
+
+model Transaction {
+  id         String    @id @default(cuid())
+  planId     String
+  senderName String
+  amount     Int
+  relation   String?
+  message    String?
+  type       String    @default("OFFLINE")
+  createdAt  DateTime  @default(now())
+
+  plan       EventPlan @relation(fields: [planId], references: [id])
+}
+
+// ─── 초대장 ───────────────────────────────────────────
+
+model Invitation {
+  id          String    @id @default(cuid())
+  planId      String    @unique
+  templateId  String
+  shareUrl    String    @unique
+  content     String    @default("{}")
+  isPublished Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  plan        EventPlan @relation(fields: [planId], references: [id])
+}
+```
+
+---
+
+## 11. 개발 환경 설정
+
+### 11.1 환경 변수
+
+```env
+DATABASE_URL="file:./prisma/yeon.db"
+NEXTAUTH_SECRET="replace-this-in-production"
+NEXTAUTH_URL="http://localhost:3000"
+```
+
+### 11.2 실행 명령어
+
+| 명령어 | 설명 |
+|---|---|
+| `npm install` | 의존성 설치 |
+| `npm install framer-motion react-hook-form @hookform/resolvers zod` | 신규 패키지 추가 |
+| `npm run db:generate` | Prisma Client 생성 |
+| `npm run db:migrate` | DB 마이그레이션 실행 |
+| `npm run db:seed` | 시드 데이터 삽입 |
+| `npm run dev` | 개발 서버 실행 (localhost:3000) |
+| `npx tsc --noEmit` | TypeScript 타입 검사 |
+| `npm run lint` | ESLint 검사 |
+| `npm run build` | 프로덕션 빌드 |
+
+### 11.3 데모 계정
+
+| 역할 | 이메일 | 비밀번호 |
+|---|---|---|
+| 일반 사용자 (플래너) | planner@yeon.local | demo1234 |
+| 업체 사용자 (예식장) | venue@yeon.local | demo1234 |
+| 업체 사용자 (케이터링) | catering@yeon.local | demo1234 |
+
+---
+
+## References
+
+[1]: https://www.builder.io/blog/codex-vs-claude-code "Codex vs Claude Code: which is the better AI coding agent? - Builder.io"

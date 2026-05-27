@@ -10,6 +10,7 @@ import {
   normalizeEmail,
   parseSignupRole
 } from "@/lib/auth/validation";
+import { UserRole } from "@/generated/prisma/client";
 
 type RequestCodeBody = {
   name?: string;
@@ -30,7 +31,10 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           ok: false,
-          message: "이름은 2자 이상 입력해 주세요."
+          message:
+            role === UserRole.VENDOR
+              ? "업체명은 2자 이상 입력해 주세요."
+              : "이름은 2자 이상 입력해 주세요."
         },
         { status: 400 }
       );

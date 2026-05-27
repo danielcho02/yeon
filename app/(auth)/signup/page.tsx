@@ -11,14 +11,14 @@ export default async function SignupPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <div className="space-y-2">
-        <h2 className="font-[var(--font-display)] text-2xl font-semibold text-foreground">
-          회원가입
+        <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-muted-foreground/50">Create account</p>
+        <h2 className="font-[var(--font-display)] text-2xl font-bold text-foreground">
+          YeON 시작하기
         </h2>
         <p className="text-sm leading-6 text-muted-foreground">
-          일반 사용자와 업체 사용자 가입 흐름을 하나의 화면에서 처리합니다. 업체 계정은 생성 후 승인 상태가
-          `대기`로 표시됩니다.
+          역할을 선택하고 계정을 만들면 바로 시작할 수 있습니다.
         </p>
       </div>
 

@@ -1,564 +1,455 @@
+export const dynamic = "force-dynamic";
+
+import Image from "next/image";
 import Link from "next/link";
-import { CalendarDays, Database, MapPin, PartyPopper, UsersRound } from "lucide-react";
+import {
+  ArrowRight,
+  BadgeCheck,
+  Building2,
+  ChevronDown,
+  Heart,
+  HeartHandshake,
+  Shield,
+  Sparkles,
+  Users
+} from "lucide-react";
 
 import { LogoutButton } from "@/components/auth/logout-button";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle
-} from "@/components/ui/card";
-import { formatCurrency, formatDate } from "@/lib/format";
-import { prisma } from "@/lib/prisma";
 import { getServerAuthSession } from "@/lib/auth/session";
-
-const eventTypeLabels: Record<string, string> = {
-  WEDDING: "웨딩",
-  FUNERAL: "장례",
-  BIRTHDAY: "생일",
-  BABY_SHOWER: "베이비샤워",
-  HOUSEWARMING: "집들이",
-  FIRST_BIRTHDAY: "돌잔치",
-  MEMORIAL: "추모",
-  ETC: "기타"
-};
-
-const statusLabels: Record<string, string> = {
-  DRAFT: "초안",
-  PLANNING: "기획 중",
-  PUBLISHED: "공개",
-  COMPLETED: "완료",
-  CANCELLED: "취소",
-  PENDING: "대기",
-  CONFIRMED: "확정",
-  SENT: "발송",
-  VIEWED: "열람",
-  RSVP_ACCEPTED: "참석",
-  RSVP_DECLINED: "불참",
-  APPROVED: "승인",
-  REJECTED: "거절",
-  NOT_APPLICABLE: "해당 없음"
-};
-
-const statusTone: Record<string, string> = {
-  DRAFT: "bg-muted text-muted-foreground",
-  PLANNING: "bg-primary/10 text-primary",
-  PUBLISHED: "bg-accent/15 text-accent",
-  COMPLETED: "bg-emerald-100 text-emerald-700",
-  CANCELLED: "bg-rose-100 text-rose-700",
-  PENDING: "bg-amber-100 text-amber-700",
-  CONFIRMED: "bg-primary/10 text-primary",
-  SENT: "bg-primary/10 text-primary",
-  VIEWED: "bg-sky-100 text-sky-700",
-  RSVP_ACCEPTED: "bg-emerald-100 text-emerald-700",
-  RSVP_DECLINED: "bg-rose-100 text-rose-700",
-  APPROVED: "bg-emerald-100 text-emerald-700",
-  REJECTED: "bg-rose-100 text-rose-700",
-  NOT_APPLICABLE: "bg-muted text-muted-foreground"
-};
-
-const plannedFolders = [
-  ["app/", "App Router 엔트리와 단계별 화면을 둡니다. Step 2부터 `(auth)` 세그먼트를 확장합니다."],
-  ["components/ui/", "shadcn/ui 컴포넌트를 누적하는 위치입니다."],
-  ["components/features/", "행사 플랜, 초대장, 예약 등 도메인 단위 UI를 확장할 자리입니다."],
-  ["lib/auth/", "비밀번호 해시, NextAuth 옵션, 권한 헬퍼를 모읍니다."],
-  ["lib/mocks/", "결제, AI 추천, 알림용 로컬 mock 함수를 둡니다."],
-  ["prisma/", "SQLite 스키마, 마이그레이션, 시드 데이터를 관리합니다."],
-  ["types/", "NextAuth 세션 확장과 도메인 타입 보강에 사용합니다."]
-] as const;
-
-const setupCommands = [
-  "npm install",
-  "npx prisma migrate dev --name init",
-  "npx prisma db seed",
-  "npm run dev"
-];
-
-type ReadyHomeData = {
-  ready: true;
-  stats: {
-    users: number;
-    eventPlans: number;
-    reservations: number;
-    invitations: number;
-  };
-  eventPlans: Array<{
-    id: string;
-    title: string;
-    type: string;
-    status: string;
-    scheduledAt: Date | null;
-    budget: number | null;
-    guestTarget: number | null;
-    owner: {
-      name: string;
-    };
-  }>;
-  vendors: Array<{
-    id: string;
-    name: string;
-    companyName: string | null;
-    location: string | null;
-    bio: string | null;
-    vendorApprovalStatus: string;
-    _count: {
-      vendorReservations: number;
-      receivedReviews: number;
-    };
-  }>;
-  posts: Array<{
-    id: string;
-    title: string;
-    category: string;
-    isPublished: boolean;
-    publishedAt: Date | null;
-    author: {
-      name: string;
-    };
-  }>;
-  invitations: Array<{
-    id: string;
-    recipientName: string;
-    rsvpStatus: string;
-    sentAt: Date | null;
-    eventPlan: {
-      title: string;
-    };
-  }>;
-};
-
-type PendingHomeData = {
-  ready: false;
-  message: string;
-};
-
-async function getHomeData(): Promise<ReadyHomeData | PendingHomeData> {
-  try {
-    const [users, eventPlans, reservations, invitations, featuredPlans, featuredVendors, latestPosts, latestInvites] =
-      await Promise.all([
-        prisma.user.count(),
-        prisma.eventPlan.count(),
-        prisma.reservation.count(),
-        prisma.invitation.count(),
-        prisma.eventPlan.findMany({
-          take: 3,
-          orderBy: {
-            createdAt: "desc"
-          },
-          select: {
-            id: true,
-            title: true,
-            type: true,
-            status: true,
-            scheduledAt: true,
-            budget: true,
-            guestTarget: true,
-            owner: {
-              select: {
-                name: true
-              }
-            }
-          }
-        }),
-        prisma.user.findMany({
-          where: {
-            role: "VENDOR"
-          },
-          take: 3,
-          orderBy: {
-            createdAt: "asc"
-          },
-          select: {
-            id: true,
-            name: true,
-            companyName: true,
-            location: true,
-            bio: true,
-            vendorApprovalStatus: true,
-            _count: {
-              select: {
-                vendorReservations: true,
-                receivedReviews: true
-              }
-            }
-          }
-        }),
-        prisma.post.findMany({
-          take: 3,
-          orderBy: {
-            createdAt: "desc"
-          },
-          select: {
-            id: true,
-            title: true,
-            category: true,
-            isPublished: true,
-            publishedAt: true,
-            author: {
-              select: {
-                name: true
-              }
-            }
-          }
-        }),
-        prisma.invitation.findMany({
-          take: 4,
-          orderBy: {
-            createdAt: "desc"
-          },
-          select: {
-            id: true,
-            recipientName: true,
-            rsvpStatus: true,
-            sentAt: true,
-            eventPlan: {
-              select: {
-                title: true
-              }
-            }
-          }
-        })
-      ]);
-
-    return {
-      ready: true,
-      stats: {
-        users,
-        eventPlans,
-        reservations,
-        invitations
-      },
-      eventPlans: featuredPlans,
-      vendors: featuredVendors,
-      posts: latestPosts,
-      invitations: latestInvites
-    };
-  } catch {
-    return {
-      ready: false,
-      message:
-        "데이터베이스가 아직 준비되지 않았습니다. 마이그레이션과 시드를 실행하면 이 화면에 샘플 데이터가 표시됩니다."
-    };
-  }
-}
+import {
+  AnimatedSectionHeader,
+  AnimatedCardGrid,
+  AnimatedStepGrid,
+  AnimatedHeroContent,
+} from "@/components/features/landing/animated-section";
 
 export default async function HomePage() {
   const session = await getServerAuthSession();
-  const data = await getHomeData();
+  const isLoggedIn = Boolean(session?.user?.id);
+  const isVendor = session?.user?.role === "VENDOR";
+  const defaultWorkspaceHref = isVendor ? "/vendor/dashboard" : "/plans";
+  const weddingHref = !isLoggedIn
+    ? "/login?callbackUrl=/planner/wedding"
+    : isVendor
+      ? "/vendor/dashboard"
+      : "/planner/wedding";
+  const funeralHref = !isLoggedIn
+    ? "/login?callbackUrl=/planner/funeral"
+    : isVendor
+      ? "/vendor/dashboard"
+      : "/planner/funeral";
+  const publicVendorHref = isVendor ? "/vendor/dashboard" : "/vendors";
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-7xl flex-col gap-8 px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
-      <section className="flex flex-col gap-4 rounded-[2rem] border border-white/70 bg-white/84 px-5 py-5 shadow-glow backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <div className="space-y-1">
-          <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">YeON · 緣</p>
-          <h1 className="font-[var(--font-display)] text-2xl font-semibold text-foreground">사람과 마음을 잇다</h1>
-          <p className="text-sm text-muted-foreground">
-            따뜻하고 부드러운 브랜드 톤 위에 회원가입과 인증 흐름을 올린 Step 2입니다.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-2 sm:flex-row">
-          {session?.user ? (
-            <>
-              <Link className={buttonVariants({ variant: "outline" })} href="/account">
-                {session.user.name}님 계정
-              </Link>
-              <LogoutButton variant="default">로그아웃</LogoutButton>
-            </>
-          ) : (
-            <>
-              <Link className={buttonVariants({ variant: "outline" })} href="/login">
-                로그인
-              </Link>
-              <Link className={buttonVariants({ variant: "accent" })} href="/signup">
-                회원가입
-              </Link>
-            </>
-          )}
-        </div>
-      </section>
-
-      <section className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/80 shadow-glow backdrop-blur">
-        <div className="grid gap-8 px-6 py-8 sm:px-8 lg:grid-cols-[1.25fr_0.85fr] lg:px-10 lg:py-10">
-          <div className="space-y-6">
-            <Badge className="bg-primary/10 text-primary hover:bg-primary/10">
-              YeON Step 2 · Auth Onboarding
-            </Badge>
-            <div className="space-y-4">
-              <h1 className="font-[var(--font-display)] text-4xl font-semibold leading-tight text-foreground sm:text-5xl">
-                일반 사용자와 업체 사용자의 가입부터 로그인까지,
-                <br className="hidden sm:block" /> 브랜드 톤으로 연결한 인증 경험입니다.
-              </h1>
-              <p className="max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">
-                Next.js 14 App Router, Prisma + SQLite 구조 위에 NextAuth Credentials 인증을 얹고, 일반 사용자
-                회원가입, 업체 사용자 회원가입, 로그인과 보호된 계정 화면까지 Step 2 범위 안에서 구현했습니다.
-              </p>
+    <div className="min-h-screen">
+      {/* ─── Sticky Nav ──────────────────────────────────────── */}
+      <header className="sticky top-0 z-50 border-b border-white/50 bg-white/88 backdrop-blur-md">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <div className="relative h-8 w-[52px] overflow-hidden transition-transform duration-200 group-hover:scale-105">
+              <Image src="/yeon-logo.png" alt="YeON" fill className="object-contain" />
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <HeroStat
-                icon={Database}
-                label="DB State"
-                value={data.ready ? "Ready" : "Pending"}
-              />
-              <HeroStat
-                icon={PartyPopper}
-                label="Verification"
-                value="Mock Code Flow"
-              />
-              <HeroStat
-                icon={UsersRound}
-                label="Auth Mode"
-                value="Credentials"
-              />
-              <HeroStat
-                icon={CalendarDays}
-                label="Current Scope"
-                value="U01 · U02 · U03"
-              />
+            <div className="leading-none">
+              <p className="text-[10px] uppercase tracking-[0.32em] text-muted-foreground/70">YeON</p>
+              <p className="font-[var(--font-display)] text-sm font-semibold text-foreground">사람과 마음을 잇다</p>
             </div>
+          </Link>
+
+          <nav className="flex items-center gap-1.5">
+            {!isVendor && (
+              <Link className={buttonVariants({ variant: "ghost", size: "sm" })} href="/vendors">업체 찾기</Link>
+            )}
+            {isLoggedIn ? (
+              <>
+                <Link className={buttonVariants({ variant: "ghost", size: "sm" })} href={defaultWorkspaceHref}>
+                  {isVendor ? "업체 대시보드" : "내 플랜"}
+                </Link>
+                <Link className={buttonVariants({ variant: "ghost", size: "sm" })} href="/account">계정</Link>
+                <LogoutButton size="sm" variant="ghost">로그아웃</LogoutButton>
+              </>
+            ) : (
+              <>
+                <Link className={buttonVariants({ variant: "ghost", size: "sm" })} href="/login">로그인</Link>
+                <Link className={buttonVariants({ variant: "default", size: "sm" })} href="/signup">시작하기</Link>
+              </>
+            )}
+          </nav>
+        </div>
+      </header>
+
+      <main>
+        {/* ─── Hero (100vh) ────────────────────────────────────── */}
+        <section
+          className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 text-center"
+          style={{
+            background: "radial-gradient(ellipse at 20% 20%, #F7EFE5 0%, transparent 52%), radial-gradient(ellipse at 80% 80%, #2C3455 0%, transparent 52%), linear-gradient(135deg, #F7EFE5 0%, #e8ddd0 28%, #3a4468 68%, #2C3455 100%)"
+          }}
+        >
+          {/* Soft ambient orbs behind logo */}
+          <div
+            className="pointer-events-none absolute left-1/2 top-[38%] -translate-x-1/2 -translate-y-1/2 h-[480px] w-[640px] opacity-20"
+            style={{
+              background: "radial-gradient(ellipse 60% 40% at 50% 50%, #F7EFE5 0%, rgba(196,151,122,0.4) 40%, transparent 70%)"
+            }}
+          />
+          <div
+            className="pointer-events-none absolute left-1/2 top-[38%] -translate-x-1/2 -translate-y-1/2 h-[360px] w-[500px] opacity-15"
+            style={{
+              background: "radial-gradient(ellipse 55% 35% at 50% 50%, #2C3455 0%, transparent 65%)"
+            }}
+          />
+
+          {/* ── Logo ── */}
+          <div className="relative z-10 mb-6 animate-logo-entrance">
+            <Image
+              src="/yeon-logo.png"
+              alt="YeON"
+              width={340}
+              height={207}
+              priority
+              className="animate-logo-float animate-logo-glow w-[220px] sm:w-[290px] lg:w-[340px] h-auto"
+            />
           </div>
 
-          <Card className="border-primary/10 bg-primary/5">
-            <CardHeader>
-              <CardTitle>Step 2 빠른 진입</CardTitle>
-              <CardDescription>
-                로그인과 회원가입 첫인상이 브랜드답게 보이도록 곡선형 카드, 여백, 차분한 네이비와 로즈골드 톤으로
-                정리했습니다.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Link className={buttonVariants({ variant: "accent" })} href="/signup">
-                  일반/업체 회원가입
-                </Link>
-                <Link className={buttonVariants({ variant: "outline" })} href="/login">
-                  로그인
-                </Link>
-              </div>
-              <div className="rounded-3xl border border-primary/10 bg-white/85 p-4 text-sm leading-6 text-muted-foreground">
-                개발 환경에서는 인증번호가 서버 콘솔에 출력됩니다. 신규 업체 계정은 가입 후 `승인 대기` 상태로 저장되며,
-                계정 페이지에서 상태를 확인할 수 있습니다.
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
+          {/* Brand name */}
+          <div className="relative z-10 mb-7 animate-fade-in delay-300 flex flex-col items-center gap-1">
+            <p
+              className="text-5xl font-bold tracking-[0.06em] text-white/95 sm:text-6xl"
+              style={{ fontFamily: "var(--font-serif)", textShadow: "0 2px 24px rgba(44,52,85,0.5)" }}
+            >
+              緣
+            </p>
+            <p className="font-[var(--font-display)] text-[11px] font-bold uppercase tracking-[0.5em] text-white/50">
+              YeON
+            </p>
+          </div>
 
-      <section className="grid gap-6 lg:grid-cols-[1.35fr_0.95fr]">
-        <div className="space-y-6">
-          {data.ready ? (
-            <>
-              <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <SummaryCard label="사용자" value={`${data.stats.users}명`} />
-                <SummaryCard label="행사 플랜" value={`${data.stats.eventPlans}건`} />
-                <SummaryCard label="예약" value={`${data.stats.reservations}건`} />
-                <SummaryCard label="초대장" value={`${data.stats.invitations}건`} />
-              </section>
+          {/* Main copy */}
+          <AnimatedHeroContent>
+            <div className="relative z-10 mb-6 max-w-xl">
+              <h1
+                className="text-3xl font-bold leading-[1.3] tracking-[-0.02em] text-white sm:text-4xl lg:text-[2.75rem]"
+                style={{ fontFamily: "var(--font-serif)", textShadow: "0 4px 24px rgba(44,52,85,0.4)" }}
+              >
+                결혼, 장례,<br />
+                모든 경조사의<br />
+                시작과 끝을 함께합니다
+              </h1>
+            </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>행사 플랜 샘플</CardTitle>
-                  <CardDescription>U01~U10 확장을 고려해 이벤트, 예산, 일정, 초대장 연결 구조를 먼저 잡았습니다.</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-4">
-                  {data.eventPlans.map((plan) => (
-                    <article key={plan.id} className="rounded-3xl border bg-white/90 p-5">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="space-y-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="outline">{eventTypeLabels[plan.type] ?? plan.type}</Badge>
-                            <Badge className={statusTone[plan.status] ?? "bg-muted text-muted-foreground"}>
-                              {statusLabels[plan.status] ?? plan.status}
-                            </Badge>
-                          </div>
-                          <h3 className="text-lg font-semibold">{plan.title}</h3>
-                          <p className="text-sm text-muted-foreground">담당자: {plan.owner.name}</p>
-                        </div>
-                        <div className="rounded-2xl bg-muted/70 px-4 py-3 text-right">
-                          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">예산</p>
-                          <p className="text-base font-semibold">{formatCurrency(plan.budget)}</p>
-                        </div>
-                      </div>
-                      <div className="mt-4 grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
-                        <div className="flex items-center gap-2">
-                          <CalendarDays className="h-4 w-4" />
-                          <span>{formatDate(plan.scheduledAt)}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <UsersRound className="h-4 w-4" />
-                          <span>목표 하객 {plan.guestTarget ?? 0}명</span>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </CardContent>
-              </Card>
+            {/* Sub copy */}
+            <p className="relative z-10 mb-10 max-w-sm text-sm leading-7 text-white/60 sm:text-base sm:max-w-md">
+              AI 추천부터 업체 연결·예약 확정까지,
+              하나의 플랫폼에서 경조사를 완성하세요.
+            </p>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>입점 업체 샘플</CardTitle>
-                  <CardDescription>역할 기반 사용자 구조에 승인 상태를 더해 업체 가입 흐름을 최소 범위로 확장했습니다.</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {data.vendors.map((vendor) => (
-                    <article key={vendor.id} className="rounded-3xl border bg-white/90 p-5">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h3 className="text-lg font-semibold">{vendor.companyName ?? vendor.name}</h3>
-                          <p className="text-sm text-muted-foreground">{vendor.name}</p>
-                        </div>
-                        <div className="flex flex-col items-end gap-2">
-                          <Badge variant="outline">Vendor</Badge>
-                          <Badge className={statusTone[vendor.vendorApprovalStatus] ?? "bg-muted text-muted-foreground"}>
-                            {statusLabels[vendor.vendorApprovalStatus] ?? vendor.vendorApprovalStatus}
-                          </Badge>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-                        <MapPin className="h-4 w-4" />
-                        <span>{vendor.location ?? "지역 정보 준비 중"}</span>
-                      </div>
-                      <p className="mt-3 text-sm leading-6 text-muted-foreground">{vendor.bio ?? "소개 문구 없음"}</p>
-                      <div className="mt-4 flex gap-2 text-xs text-muted-foreground">
-                        <Badge className="bg-primary/10 text-primary hover:bg-primary/10">
-                          예약 {vendor._count.vendorReservations}건
-                        </Badge>
-                        <Badge className="bg-accent/15 text-accent hover:bg-accent/15">
-                          리뷰 {vendor._count.receivedReviews}건
-                        </Badge>
-                      </div>
-                    </article>
-                  ))}
-                </CardContent>
-              </Card>
-            </>
-          ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle>데이터베이스 준비 안내</CardTitle>
-                <CardDescription>{data.message}</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                {setupCommands.map((command) => (
-                  <div
-                    key={command}
-                    className="rounded-2xl border border-dashed border-border bg-background/70 px-4 py-3 font-mono text-sm"
-                  >
-                    {command}
+            {/* CTA buttons */}
+            <div className="relative z-10 mb-16 flex flex-wrap items-center justify-center gap-3">
+            <Link
+              href={isLoggedIn ? defaultWorkspaceHref : "/signup"}
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl px-7 text-sm font-semibold transition-all duration-200 hover:-translate-y-1 hover:shadow-xl active:translate-y-0"
+              style={{ background: "#C4977A", color: "#fff", boxShadow: "0 16px 40px -12px rgba(196,151,122,0.7)" }}
+            >
+              시작하기
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link
+              href={publicVendorHref}
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/30 bg-white/10 px-7 text-sm font-semibold text-white backdrop-blur-sm transition-all duration-200 hover:-translate-y-1 hover:bg-white/20 active:translate-y-0"
+            >
+              더 알아보기
+            </Link>
+          </div>
+          </AnimatedHeroContent>
+
+          {/* Scroll cue */}
+          <div className="relative z-10 animate-bounce text-white/35">
+            <ChevronDown className="h-5 w-5" />
+          </div>
+        </section>
+
+        {/* ─── Feature Cards ───────────────────────────────────── */}
+        <section className="relative bg-background py-20">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+            <AnimatedSectionHeader eyebrow="Services" title="경조사의 모든 것을 한 곳에서" center />
+            <AnimatedCardGrid>
+              {[
+                <FeatureCard key="plan" emoji="🎊" title="행사 관리" description="결혼·장례 일정을 한 곳에서 체계적으로 관리하세요." href={isLoggedIn ? defaultWorkspaceHref : "/login?callbackUrl=/plans"} />,
+                <FeatureCard key="money" emoji="💸" title="축의금·부의금" description="투명한 금전 관리로 경조사 예산을 한눈에 파악하세요." href={isLoggedIn ? defaultWorkspaceHref : "/login?callbackUrl=/plans"} />,
+                <FeatureCard key="vendor" emoji="🏢" title="업체 연결" description="검증된 업체와 바로 연결하고 견적을 요청하세요." href={publicVendorHref} />,
+              ]}
+            </AnimatedCardGrid>
+          </div>
+        </section>
+
+        {/* ─── Event type selection ─────────────────────────────── */}
+        <section className="border-y border-border/40 bg-white/40 py-20">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+            <div className="mb-12">
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground/55">Get Started</p>
+              <h2 className="font-[var(--font-display)] text-3xl font-bold text-foreground sm:text-4xl">
+                어떤 경조사를 준비하시나요?
+              </h2>
+            </div>
+
+            <div className="grid gap-5 sm:grid-cols-2">
+              {/* Wedding card */}
+              <Link
+                href={weddingHref}
+                className="group relative overflow-hidden rounded-[2.5rem] border border-amber-200/70 shadow-sm shadow-amber-100/40 transition-all duration-500 hover:-translate-y-3 hover:shadow-2xl hover:shadow-rose-200/40"
+              >
+                <div className="absolute inset-0 surface-wedding" />
+                <div className="pointer-events-none absolute -right-12 -top-12 h-44 w-44 rounded-full bg-rose-200/40 blur-3xl transition-all duration-500 group-hover:scale-150 group-hover:bg-rose-200/60" />
+                <div className="pointer-events-none absolute -bottom-6 left-8 h-28 w-28 rounded-full bg-amber-200/30 blur-2xl" />
+
+                <div className="relative p-8 sm:p-10">
+                  <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-600 shadow-lg shadow-rose-300/50 transition-all duration-300 group-hover:scale-110">
+                    <Heart className="h-6 w-6 text-white" />
                   </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>폴더 구조 제안</CardTitle>
-              <CardDescription>Step 2에서 회원가입/로그인과 서버 액션을 자연스럽게 확장할 수 있도록 최소 구조만 잡았습니다.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {plannedFolders.map(([path, description]) => (
-                <div key={path} className="rounded-2xl border bg-white/90 px-4 py-4">
-                  <p className="font-mono text-sm font-medium text-foreground">{path}</p>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
+                  <p className="mb-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.32em] text-rose-500/80">Wedding 💍</p>
+                  <h2 className="mb-3 font-[var(--font-display)] text-3xl font-bold text-foreground">결혼 준비</h2>
+                  <p className="mb-7 text-sm leading-6 text-rose-900/50">
+                    따뜻한 웨딩 컨셉부터 예식장·케이터링·촬영까지<br className="hidden sm:block" />
+                    설레는 하루를 함께 만들어 드립니다.
+                  </p>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-rose-600 transition-all duration-200 group-hover:gap-3.5">
+                    결혼 준비 시작하기
+                    <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                  </div>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
+              </Link>
 
-          {data.ready && (
-            <>
-              <Card>
-                <CardHeader>
-                  <CardTitle>최신 게시글 샘플</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {data.posts.map((post) => (
-                    <article key={post.id} className="rounded-2xl border bg-white/90 px-4 py-4">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline">{post.category}</Badge>
-                        <Badge className={post.isPublished ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}>
-                          {post.isPublished ? "공개" : "비공개"}
-                        </Badge>
-                      </div>
-                      <h3 className="mt-3 text-base font-semibold">{post.title}</h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        작성자 {post.author.name} · {formatDate(post.publishedAt)}
-                      </p>
-                    </article>
-                  ))}
-                </CardContent>
-              </Card>
+              {/* Funeral card */}
+              <Link
+                href={funeralHref}
+                className="group relative overflow-hidden rounded-[2.5rem] border border-indigo-200/60 shadow-sm shadow-indigo-100/30 transition-all duration-500 hover:-translate-y-3 hover:shadow-2xl hover:shadow-indigo-200/30"
+              >
+                <div className="absolute inset-0 surface-funeral" />
+                <div className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full bg-indigo-300/30 blur-3xl transition-all duration-500 group-hover:scale-150 group-hover:bg-indigo-300/50" />
+                <div className="pointer-events-none absolute -bottom-6 left-8 h-28 w-28 rounded-full bg-slate-200/40 blur-2xl" />
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>초대장 샘플</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {data.invitations.map((invitation) => (
-                    <article key={invitation.id} className="rounded-2xl border bg-white/90 px-4 py-4">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <h3 className="font-semibold">{invitation.recipientName}</h3>
-                        <Badge className={statusTone[invitation.rsvpStatus] ?? "bg-muted text-muted-foreground"}>
-                          {statusLabels[invitation.rsvpStatus] ?? invitation.rsvpStatus}
-                        </Badge>
-                      </div>
-                      <p className="mt-2 text-sm text-muted-foreground">{invitation.eventPlan.title}</p>
-                      <p className="mt-1 text-sm text-muted-foreground">발송일 {formatDate(invitation.sentAt)}</p>
-                    </article>
-                  ))}
-                </CardContent>
-              </Card>
-            </>
-          )}
-        </div>
-      </section>
-    </main>
-  );
-}
+                <div className="relative p-8 sm:p-10">
+                  <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-900 shadow-lg shadow-indigo-400/30 transition-all duration-300 group-hover:scale-110">
+                    <Shield className="h-6 w-6 text-white" />
+                  </div>
+                  <p className="mb-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.32em] text-indigo-400/80">Funeral 🕯️</p>
+                  <h2 className="mb-3 font-[var(--font-display)] text-3xl font-bold text-foreground">장례 준비</h2>
+                  <p className="mb-7 text-sm leading-6 text-indigo-900/50">
+                    단계별 안내와 신뢰 있는 업체 연결로<br className="hidden sm:block" />
+                    소중한 마무리를 함께 준비합니다.
+                  </p>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700 transition-all duration-200 group-hover:gap-3.5">
+                    장례 준비 안내받기
+                    <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                  </div>
+                </div>
+              </Link>
+            </div>
+          </div>
+        </section>
 
-function HeroStat({
-  icon: Icon,
-  label,
-  value
-}: {
-  icon: typeof Database;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-3xl border border-white/70 bg-white/75 p-4 shadow-sm">
-      <div className="flex items-center gap-3">
-        <div className="rounded-2xl bg-primary/10 p-2 text-primary">
-          <Icon className="h-5 w-5" />
-        </div>
-        <div className="space-y-1">
-          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
-          <p className="text-sm font-medium text-foreground">{value}</p>
-        </div>
-      </div>
+        {/* ─── How it works ────────────────────────────────────── */}
+        <section className="bg-white/60 py-20">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+            <AnimatedSectionHeader eyebrow="How it works" title="세 단계로 완성하는 준비" center className="mb-14" />
+            <AnimatedStepGrid>
+              {[
+                <FlowStep key="01" step="01" icon={Sparkles} title="행사 정보 + AI 추천" description="행사 규모, 지역, 예산을 입력하면 AI가 최적 컨셉과 준비 타임라인을 제안합니다." accent="rose" />,
+                <FlowStep key="02" step="02" icon={HeartHandshake} title="업체에 견적 요청" description="추천 업체 목록에서 필요한 곳을 선택해 견적 요청을 한 번에 보냅니다." accent="primary" />,
+                <FlowStep key="03" step="03" icon={BadgeCheck} title="제안 비교 + 확정" description="받은 제안을 비교하고 최적의 업체를 선택해 예약을 확정합니다." accent="emerald" />,
+              ]}
+            </AnimatedStepGrid>
+          </div>
+        </section>
+
+        {/* ─── For whom ────────────────────────────────────────── */}
+        <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:px-8">
+          <AnimatedSectionHeader eyebrow="For whom" title="두 가지 역할, 하나의 플랫폼" />
+
+          <div className="grid gap-5 sm:grid-cols-2">
+            <RoleCard
+              icon={Users}
+              role="일반 사용자"
+              title="경조사를 준비하는 분"
+              items={["AI 추천 컨셉 확인", "업체 견적 요청 발송", "받은 제안 비교 · 예약 확정", "비용 현황 및 일정 관리"]}
+              href={isLoggedIn ? defaultWorkspaceHref : "/login?callbackUrl=/plans"}
+              ctaText="준비 시작하기"
+              colorScheme="primary"
+            />
+            <RoleCard
+              icon={Building2}
+              role="업체 사용자"
+              title="서비스를 제공하는 업체"
+              items={["들어온 요청 Inbox 확인", "견적 · 일정 응답 보내기", "확정 예약 일정 관리", "진행 중 요청 상태 관리"]}
+              href={isLoggedIn ? defaultWorkspaceHref : "/signup"}
+              ctaText="업체로 가입하기"
+              colorScheme="neutral"
+            />
+          </div>
+        </section>
+
+        {/* ─── Demo bar ────────────────────────────────────────── */}
+        <section className="border-t border-border/40 bg-gradient-to-br from-[#1a2640] to-[#2d3e5c] py-10">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-wrap items-center gap-6 sm:gap-8">
+              <div className="shrink-0">
+                <p className="text-sm font-bold text-white/90">데모 계정으로 바로 체험</p>
+                <p className="mt-0.5 text-xs text-white/45">
+                  비밀번호:{" "}
+                  <code className="rounded-md bg-white/10 px-1.5 py-0.5 font-mono text-xs text-white/80">demo1234</code>
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <DemoChip role="일반 사용자" email="planner@yeon.local" />
+                <DemoChip role="웨딩 홀" email="venue@yeon.local" />
+                <DemoChip role="장례 의전" email="memorial@yeon.local" />
+              </div>
+              <div className="ml-auto flex gap-2">
+                {isLoggedIn ? (
+                  <Link className={buttonVariants({ variant: "ghost", size: "sm" }) + " text-white/70 hover:bg-white/10 hover:text-white"} href={defaultWorkspaceHref}>
+                    {isVendor ? "업체 대시보드" : "내 플랜"}
+                  </Link>
+                ) : (
+                  <>
+                    <Link className={buttonVariants({ variant: "ghost", size: "sm" }) + " text-white/70 hover:bg-white/10 hover:text-white"} href="/login">로그인</Link>
+                    <Link href="/signup" className="inline-flex h-9 items-center justify-center rounded-2xl bg-white px-4 text-sm font-semibold text-foreground shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/90 hover:shadow-md active:translate-y-0">
+                      가입하기
+                    </Link>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ─── Footer ──────────────────────────────────────────── */}
+        <footer className="border-t border-border/30 bg-white/40 py-8">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="relative h-7 w-[46px] overflow-hidden">
+                  <Image src="/yeon-logo.png" alt="YeON" fill className="object-contain" />
+                </div>
+                <div className="leading-none">
+                  <p className="font-[var(--font-display)] text-sm font-semibold text-foreground">YeON</p>
+                  <p className="text-[10px] text-muted-foreground/70">사람과 마음을 잇다</p>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground/55">© 2026 YeON. All rights reserved.</p>
+            </div>
+          </div>
+        </footer>
+      </main>
     </div>
   );
 }
 
-function SummaryCard({
-  label,
-  value
-}: {
-  label: string;
-  value: string;
-}) {
+function FeatureCard({ emoji, title, description, href }: { emoji: string; title: string; description: string; href: string }) {
   return (
-    <Card>
-      <CardContent className="p-6">
-        <p className="text-sm text-muted-foreground">{label}</p>
-        <p className="mt-2 font-[var(--font-display)] text-3xl font-semibold">{value}</p>
-      </CardContent>
-    </Card>
+    <Link
+      href={href}
+      className="group flex flex-col rounded-3xl bg-white/80 backdrop-blur border border-border/60 p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-border"
+    >
+      <span className="mb-4 text-3xl">{emoji}</span>
+      <h3 className="mb-2 font-[var(--font-display)] text-lg font-bold text-foreground">{title}</h3>
+      <p className="text-sm leading-6 text-muted-foreground">{description}</p>
+    </Link>
+  );
+}
+
+function FlowStep({
+  step,
+  icon: Icon,
+  title,
+  description,
+  accent
+}: {
+  step: string;
+  icon: typeof Sparkles;
+  title: string;
+  description: string;
+  accent: "rose" | "primary" | "emerald";
+}) {
+  const accentStyles = {
+    rose: { wrap: "bg-rose-50 border-rose-200/60", icon: "text-rose-600", num: "text-rose-300/70" },
+    primary: { wrap: "bg-primary/5 border-primary/20", icon: "text-primary", num: "text-primary/30" },
+    emerald: { wrap: "bg-emerald-50 border-emerald-200/60", icon: "text-emerald-600", num: "text-emerald-300/70" },
+  }[accent];
+
+  return (
+    <div className="relative z-10 flex flex-col items-center text-center">
+      <div className={`relative mb-6 flex h-[5.5rem] w-[5.5rem] flex-col items-center justify-center gap-0.5 overflow-hidden rounded-3xl border shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md ${accentStyles.wrap}`}>
+        <span className={`font-mono text-[9px] font-black uppercase tracking-widest ${accentStyles.num}`}>{step}</span>
+        <Icon className={`h-6 w-6 ${accentStyles.icon}`} />
+      </div>
+      <h3 className="mb-2.5 font-[var(--font-display)] text-base font-bold text-foreground">{title}</h3>
+      <p className="mx-auto max-w-[18rem] text-sm leading-6 text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
+function RoleCard({
+  icon: Icon,
+  role,
+  title,
+  items,
+  href,
+  ctaText,
+  colorScheme
+}: {
+  icon: typeof Users;
+  role: string;
+  title: string;
+  items: string[];
+  href: string;
+  ctaText: string;
+  colorScheme: "primary" | "neutral";
+}) {
+  const scheme = {
+    primary: {
+      iconWrap: "bg-primary/10 text-primary",
+      badge: "bg-primary/10 text-primary hover:bg-primary/10",
+      dot: "bg-primary/30",
+      border: "hover:border-primary/20",
+    },
+    neutral: {
+      iconWrap: "bg-slate-100 text-slate-600",
+      badge: "bg-slate-100 text-slate-600 hover:bg-slate-100",
+      dot: "bg-slate-300",
+      border: "hover:border-slate-300",
+    }
+  }[colorScheme];
+
+  return (
+    <div className={`group flex flex-col rounded-[2rem] border border-border/60 bg-white/90 p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg sm:p-8 ${scheme.border}`}>
+      <div className={`mb-4 inline-flex w-fit rounded-xl p-3 transition-transform duration-300 group-hover:scale-110 ${scheme.iconWrap}`}>
+        <Icon className="h-5 w-5" />
+      </div>
+      <Badge className={`mb-3 w-fit ${scheme.badge}`}>{role}</Badge>
+      <h3 className="mb-4 font-[var(--font-display)] text-xl font-bold text-foreground">{title}</h3>
+      <ul className="mb-7 flex-1 space-y-3">
+        {items.map((item) => (
+          <li key={item} className="flex items-center gap-2.5 text-sm text-muted-foreground">
+            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${scheme.dot}`} />
+            {item}
+          </li>
+        ))}
+      </ul>
+      <Link href={href} className={buttonVariants({ variant: colorScheme === "primary" ? "default" : "outline", size: "sm" })}>
+        {ctaText}
+        <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+      </Link>
+    </div>
+  );
+}
+
+function DemoChip({ role, email }: { role: string; email: string }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/8 px-3.5 py-2.5 backdrop-blur-sm transition-all duration-200 hover:border-white/20 hover:bg-white/12">
+      <p className="text-[11px] font-semibold text-white/85">{role}</p>
+      <p className="mt-0.5 font-mono text-[10px] text-white/45">{email}</p>
+    </div>
   );
 }

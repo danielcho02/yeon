@@ -4,6 +4,10 @@ import CredentialsProviderModule from "next-auth/providers/credentials";
 import { VendorApprovalStatus, UserRole } from "@/generated/prisma/client";
 import { verifyPassword } from "@/lib/auth/password";
 import { normalizeEmail } from "@/lib/auth/validation";
+import {
+  ensureDemoData,
+  isDemoCredentialEmail
+} from "@/lib/demo/ensure-demo-data";
 import { prisma } from "@/lib/prisma";
 
 const CredentialsProvider =
@@ -42,6 +46,14 @@ export const authOptions = {
 
         if (!email || !password) {
           throw new Error("이메일과 비밀번호를 모두 입력해 주세요.");
+        }
+
+        if (isDemoCredentialEmail(email)) {
+          try {
+            await ensureDemoData(prisma);
+          } catch (err) {
+            console.error("[ensureDemoData] seed failed, skipping:", err);
+          }
         }
 
         const user = await prisma.user.findUnique({

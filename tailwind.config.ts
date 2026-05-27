@@ -31,7 +31,27 @@ const config: Config = {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))"
-        }
+        },
+        wedding: {
+          primary: "#f43f5e",
+          "primary-light": "#fda4af",
+          "primary-dark": "#be123c",
+          background: "#fff7ed",
+          accent: "#d97706",
+          "accent-light": "#fcd34d",
+          surface: "#fff1f2",
+          muted: "#fce7f3",
+        },
+        funeral: {
+          primary: "#475569",
+          "primary-light": "#94a3b8",
+          "primary-dark": "#1e293b",
+          background: "#f8fafc",
+          accent: "#1e3a5f",
+          "accent-light": "#3b82f6",
+          surface: "#f1f5f9",
+          muted: "#e2e8f0",
+        },
       },
       borderRadius: {
         lg: "1rem",

@@ -6,6 +6,7 @@
   :root {
     --font-body: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
     --font-display: "Space Grotesk", "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+    --font-serif: "Noto Serif KR", "Nanum Myeongjo", serif;
     --background: 30 42% 97%;
     --foreground: 224 24% 20%;
     --card: 0 0% 100%;
@@ -27,17 +28,263 @@
 
   html {
     scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   body {
     @apply min-h-screen bg-background text-foreground antialiased;
+    font-family: var(--font-body);
     background-image:
-      radial-gradient(circle at top left, rgba(205, 163, 138, 0.24), transparent 34%),
-      radial-gradient(circle at top right, rgba(74, 82, 108, 0.18), transparent 30%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(249, 242, 235, 0.96));
+      radial-gradient(circle at 15% 8%, rgba(212, 165, 120, 0.14), transparent 38%),
+      radial-gradient(circle at 88% 6%, rgba(74, 82, 108, 0.10), transparent 34%),
+      radial-gradient(circle at 50% 95%, rgba(205, 163, 138, 0.08), transparent 40%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(249, 242, 235, 0.97));
   }
 
   ::selection {
     background: rgba(205, 163, 138, 0.28);
+  }
+
+  /* Thin custom scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.22); }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  /* ─── Glass ──────────────────────────────────────────────── */
+  .glass {
+    @apply border border-white/60 bg-white/80 backdrop-blur;
+  }
+
+  .glass-strong {
+    @apply border border-white/75 bg-white/92 backdrop-blur-md;
+  }
+
+  .glass-dark {
+    @apply border border-white/10 bg-white/5 backdrop-blur;
+  }
+
+  /* ─── Wedding / Funeral surfaces ─────────────────────────── */
+  .surface-wedding {
+    background: linear-gradient(135deg, #fdf8f0 0%, #fdf2e6 50%, #fce3d0 100%);
+  }
+
+  .surface-funeral {
+    background: linear-gradient(135deg, #f0f4fa 0%, #e6edf8 50%, #d8e3f2 100%);
+  }
+
+  /* ─── Elevation / Interaction ────────────────────────────── */
+  .soft-elevate {
+    @apply transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-lg;
+  }
+
+  .card-interactive {
+    @apply transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-sm;
+  }
+
+  .card-selectable {
+    @apply cursor-pointer transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  }
+
+  .card-lift {
+    @apply transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-xl;
+  }
+
+  .card-lift-strong {
+    @apply transition-all duration-400 ease-out hover:-translate-y-3 hover:shadow-2xl;
+  }
+
+  .link-hover {
+    @apply transition-all duration-200 hover:-translate-y-0.5;
+  }
+
+  /* ─── Dashboard grid ─────────────────────────────────────── */
+  .dashboard-grid {
+    background-image:
+      linear-gradient(rgba(118, 132, 156, 0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(118, 132, 156, 0.07) 1px, transparent 1px);
+    background-position: center;
+    background-size: 24px 24px;
+  }
+
+  /* ─── Glow effects ───────────────────────────────────────── */
+  .section-glow {
+    box-shadow: 0 28px 80px -48px rgba(67, 84, 122, 0.38);
+  }
+
+  .wedding-glow {
+    box-shadow: 0 20px 60px -20px rgba(225, 29, 72, 0.18);
+  }
+
+  .funeral-glow {
+    box-shadow: 0 20px 60px -20px rgba(45, 62, 112, 0.18);
+  }
+
+  /* ─── Text gradients ─────────────────────────────────────── */
+  .text-gradient-wedding {
+    background: linear-gradient(135deg, #be123c 0%, #e11d48 50%, #c47b45 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .text-gradient-funeral {
+    background: linear-gradient(135deg, #1e3a6e 0%, #2d4270 55%, #3d5a9a 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .text-gradient-brand {
+    background: linear-gradient(135deg, #2d3e5c 0%, #4a526c 50%, #2d3e5c 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* ─── Stagger delays ─────────────────────────────────────── */
+  .delay-75  { animation-delay: 75ms; }
+  .delay-150 { animation-delay: 150ms; }
+  .delay-225 { animation-delay: 225ms; }
+  .delay-300 { animation-delay: 300ms; }
+  .delay-400 { animation-delay: 400ms; }
+  .delay-500 { animation-delay: 500ms; }
+
+  /* ─── Animations ─────────────────────────────────────────── */
+  .animate-fade-in {
+    animation: fade-in 0.32s ease-out both;
+  }
+
+  .animate-slide-up {
+    animation: slide-up 0.36s ease-out both;
+  }
+
+  .animate-slide-in-right {
+    animation: slide-in-right 0.3s ease-out both;
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.28s ease-out both;
+  }
+
+  .animate-entrance {
+    animation: entrance 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .animate-float {
+    animation: float 8s ease-in-out infinite;
+  }
+
+  .animate-float-slow {
+    animation: float 12s ease-in-out infinite;
+  }
+
+  .animate-float-delayed {
+    animation: float 10s ease-in-out 2s infinite;
+  }
+
+  .animate-pulse-soft {
+    animation: pulse-soft 3s ease-in-out infinite;
+  }
+
+  .animate-shimmer {
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%);
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+  }
+
+  /* ─── Logo animations ────────────────────────────────────── */
+  .animate-logo-entrance {
+    animation: logo-entrance 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .animate-logo-float {
+    animation: logo-float 7s ease-in-out infinite;
+  }
+
+  .animate-logo-glow {
+    animation: logo-glow 4s ease-in-out infinite;
+  }
+}
+
+/* ─── Keyframes ──────────────────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(14px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes entrance {
+  from { opacity: 0; transform: translateY(20px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-14px); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+@keyframes logo-entrance {
+  from {
+    opacity: 0;
+    transform: scale(0.82) translateY(16px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes logo-float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  35%       { transform: translateY(-10px) rotate(0.4deg); }
+  65%       { transform: translateY(-6px) rotate(-0.3deg); }
+}
+
+@keyframes logo-glow {
+  0%, 100% {
+    filter:
+      drop-shadow(0 0 8px rgba(196, 151, 122, 0.35))
+      drop-shadow(0 0 20px rgba(196, 151, 122, 0.15))
+      drop-shadow(0 4px 16px rgba(44, 52, 85, 0.2));
+  }
+  50% {
+    filter:
+      drop-shadow(0 0 16px rgba(196, 151, 122, 0.6))
+      drop-shadow(0 0 40px rgba(196, 151, 122, 0.25))
+      drop-shadow(0 4px 24px rgba(44, 52, 85, 0.35));
   }
 }

@@ -7,6 +7,11 @@ import {
 import { hashPassword } from "@/lib/auth/password";
 import { consumeSignupVerificationCode } from "@/lib/auth/verification-store";
 import {
+  getQuoteServiceModuleEventType,
+  getVendorSupportedEventTypes,
+  getVendorSupportedServiceModules
+} from "@/lib/step3.shared";
+import {
   formatPhoneNumber,
   isValidEmail,
   isValidPassword,
@@ -27,6 +32,8 @@ type SignupBody = {
   companyName?: string;
   location?: string;
   bio?: string;
+  supportedEventTypes?: unknown;
+  supportedServiceModules?: unknown;
 };
 
 export async function POST(request: Request) {
@@ -40,14 +47,24 @@ export async function POST(request: Request) {
     const passwordConfirm = body.passwordConfirm ?? "";
     const verificationCode = body.verificationCode?.trim() ?? "";
     const companyName = body.companyName?.trim() ?? "";
+    const accountName = role === UserRole.VENDOR ? companyName : name;
     const location = body.location?.trim() ?? "";
     const bio = body.bio?.trim() ?? "";
+    const supportedEventTypes = getVendorSupportedEventTypes({
+      supportedEventTypes: body.supportedEventTypes
+    });
+    const supportedServiceModules = getVendorSupportedServiceModules({
+      supportedServiceModules: body.supportedServiceModules
+    });
 
-    if (name.length < 2) {
+    if (accountName.length < 2) {
       return NextResponse.json(
         {
           ok: false,
-          message: "이름은 2자 이상 입력해 주세요."
+          message:
+            role === UserRole.VENDOR
+              ? "업체명은 2자 이상 입력해 주세요."
+              : "이름은 2자 이상 입력해 주세요."
         },
         { status: 400 }
       );
@@ -113,6 +130,42 @@ export async function POST(request: Request) {
       );
     }
 
+    if (role === UserRole.VENDOR && supportedEventTypes.length === 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "지원 행사 유형을 하나 이상 선택해 주세요."
+        },
+        { status: 400 }
+      );
+    }
+
+    if (role === UserRole.VENDOR && supportedServiceModules.length === 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "지원 서비스 모듈을 하나 이상 선택해 주세요."
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      role === UserRole.VENDOR &&
+      supportedServiceModules.some((module) => {
+        const eventType = getQuoteServiceModuleEventType(module);
+        return !eventType || !supportedEventTypes.includes(eventType);
+      })
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "지원 행사 유형과 서비스 모듈이 일치하지 않습니다."
+        },
+        { status: 400 }
+      );
+    }
+
     if (role === UserRole.VENDOR && !location) {
       return NextResponse.json(
         {
@@ -164,7 +217,7 @@ export async function POST(request: Request) {
     const user = await prisma.user.create({
       data: {
         email,
-        name,
+        name: accountName,
         passwordHash,
         role,
         phone,
@@ -172,6 +225,10 @@ export async function POST(request: Request) {
         companyName: role === UserRole.VENDOR ? companyName : null,
         location: location || null,
         bio: bio || null,
+        supportedEventTypes:
+          role === UserRole.VENDOR ? supportedEventTypes : undefined,
+        supportedServiceModules:
+          role === UserRole.VENDOR ? supportedServiceModules : undefined,
         vendorApprovalStatus:
           role === UserRole.VENDOR
             ? VendorApprovalStatus.PENDING
