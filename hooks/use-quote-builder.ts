@@ -95,14 +95,19 @@ export function buildModulesFromVendorData(modules: VendorServiceModuleData[]): 
       category: m.category as string,
       categoryLabel: MODULE_CATEGORY_LABELS[m.category as string] ?? m.category,
       price: m.price,
-      pricingType: 'FLAT' as const,
+      pricingType: m.pricingType,
     }))
 }
 
-export function buildBasePackageFromVendorData(modules: VendorServiceModuleData[]): BasePackage | null {
+export function buildBasePackageFromVendorData(
+  modules: VendorServiceModuleData[],
+  guestCount = 1
+): BasePackage | null {
   const baseModules = modules.filter((m) => m.isBaseIncluded && m.isActive)
   if (baseModules.length === 0) return null
-  const price = baseModules.reduce((sum, m) => sum + m.price, 0)
+  const price = baseModules.reduce((sum, m) => {
+    return sum + (m.pricingType === 'PER_GUEST' ? m.price * guestCount : m.price)
+  }, 0)
   return {
     id: 'vendor-base',
     name: '기본 패키지',

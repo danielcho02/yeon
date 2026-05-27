@@ -120,58 +120,10 @@ export async function PATCH(request: Request, context: RouteContext) {
   const notes = typeof body.notes === "string" ? body.notes.trim() : "";
 
   if (action === "confirm") {
-    if (reservation.status === ReservationStatus.CONFIRMED) {
-      return Response.json({ error: "이미 확정된 예약입니다." }, { status: 400 });
-    }
-
-    const invalidTransitionResponse = getInvalidTransitionResponse(
-      reservation.status,
-      "CONFIRMED"
+    return Response.json(
+      { error: "일반 사용자는 견적 수락만 할 수 있습니다. 예약 확정은 업체가 진행합니다." },
+      { status: 400 }
     );
-    if (invalidTransitionResponse) return invalidTransitionResponse;
-
-    if (reservation.status !== ReservationStatus.PENDING || !reservation.confirmedAmount) {
-      return Response.json(
-        { error: "확정할 제안 금액이 아직 없습니다." },
-        { status: 400 }
-      );
-    }
-
-    await prisma.$transaction(async (tx) => {
-      if (reservation.quoteRequestId) {
-        const quoteRequest = await tx.quoteRequest.findFirst({
-          where: {
-            id: reservation.quoteRequestId,
-            plan: {
-              ownerId: session.user.id
-            }
-          },
-          select: { id: true, status: true }
-        });
-
-        if (quoteRequest && quoteRequest.status !== QuoteStatus.ACCEPTED) {
-          assertQuoteTransition(mapSharedQuoteStatus(quoteRequest.status), "ACCEPTED");
-          await tx.quoteRequest.update({
-            where: { id: quoteRequest.id },
-            data: { status: QuoteStatus.ACCEPTED }
-          });
-        }
-      }
-
-      await tx.reservation.update({
-        where: {
-          id: reservation.id
-        },
-        data: {
-          status: ReservationStatus.CONFIRMED,
-          confirmedAmount: reservation.confirmedAmount
-        }
-      });
-    });
-
-    revalidateReservationViews(reservation.eventPlanId);
-
-    return Response.json({ ok: true });
   }
 
   if (!serviceDateInput) {

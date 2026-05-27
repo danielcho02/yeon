@@ -19,6 +19,7 @@ import type {
   AcceptQuoteResponsePayload,
   AcceptQuoteResult,
   CreateQuoteRequestPayload,
+  QuoteRequestForVendorDTO,
   QuoteRequestData,
   QuoteRequestWithResponses,
   QuoteResponseData,
@@ -84,6 +85,7 @@ const createQuoteRequestSchema = z.object({
   vendorId: z.string().min(1),
   requirements: z.string().trim().min(1),
   selectedModuleIds: z.array(z.string().min(1)).min(1),
+  guestCount: z.number().int().positive().optional(),
   preferredDate: z.string().trim().min(1).optional(),
   budget: z.number().int().nonnegative().optional()
 });
@@ -121,6 +123,37 @@ function calculateModulesTotal(modules: QuoteResponseModules) {
   );
 }
 
+function inferVendorModulePricingType(module: {
+  category: string;
+  name: string;
+  description: string | null;
+}): "FLAT" | "PER_GUEST" {
+  const text = `${module.name} ${module.description ?? ""}`.toLowerCase();
+  const looksPerGuest =
+    /1인|인당|명당|\/인|\/명|per guest|per person/.test(text);
+
+  if ((module.category === "CATERING" || module.category === "MEAL") && looksPerGuest) {
+    return "PER_GUEST";
+  }
+
+  return "FLAT";
+}
+
+function calculateRequestModuleTotal(
+  modules: Array<{
+    category: string;
+    name: string;
+    description: string | null;
+    price: number;
+  }>,
+  guestCount: number
+) {
+  return modules.reduce((sum, module) => {
+    const pricingType = inferVendorModulePricingType(module);
+    return sum + (pricingType === "PER_GUEST" ? module.price * guestCount : module.price);
+  }, 0);
+}
+
 function getReservationServiceName(modules: QuoteResponseModules) {
   return modules.basePackage.name || modules.includedModules[0]?.name || "모듈형 견적 예약";
 }
@@ -130,20 +163,89 @@ function getReservationServiceCategory(modules: QuoteResponseModules) {
 }
 
 function buildReservationOptions(
-  modules: Array<{ id: string; name: string; price: number }>
+  modules: Array<{
+    id: string;
+    name: string;
+    category: string;
+    description: string | null;
+    price: number;
+  }>,
+  guestCount: number
 ) {
-  return modules.map((module) => ({
-    catalogKey: module.id,
-    name: module.name,
-    price: module.price,
-    pricingType: "FLAT"
-  }));
+  return modules.map((module) => {
+    const pricingType = inferVendorModulePricingType(module);
+    return {
+      catalogKey: module.id,
+      name: module.name,
+      price: module.price,
+      pricingType,
+      ...(pricingType === "PER_GUEST"
+        ? { quantity: guestCount, subtotal: module.price * guestCount }
+        : {})
+    };
+  });
 }
 
 function buildRequestServiceName(modules: Array<{ name: string }>) {
   if (modules.length === 0) return "모듈형 견적 요청";
   if (modules.length === 1) return modules[0].name;
   return `${modules[0].name} 외 ${modules.length - 1}개`;
+}
+
+function mapVendorServiceModuleData(module: {
+  id: string;
+  vendorId: string;
+  name: string;
+  category: string;
+  price: number;
+  description: string | null;
+  isBaseIncluded: boolean;
+  isActive: boolean;
+  sortOrder: number;
+}): VendorServiceModuleData {
+  return {
+    id: module.id,
+    vendorId: module.vendorId,
+    name: module.name,
+    category: module.category as VendorServiceModuleData["category"],
+    price: module.price,
+    pricingType: inferVendorModulePricingType(module),
+    description: module.description,
+    isBaseIncluded: module.isBaseIncluded,
+    isActive: module.isActive,
+    sortOrder: module.sortOrder
+  };
+}
+
+function stringArrayFromJson(value: Prisma.JsonValue | null): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+async function attachSelectedModuleDetails<
+  T extends { selectedModules: Prisma.JsonValue | null }
+>(requests: T[]): Promise<Array<T & { selectedModuleDetails: VendorServiceModuleData[] }>> {
+  const moduleIds = Array.from(
+    new Set(requests.flatMap((request) => stringArrayFromJson(request.selectedModules)))
+  );
+
+  if (moduleIds.length === 0) {
+    return requests.map((request) => ({ ...request, selectedModuleDetails: [] }));
+  }
+
+  const modules = await prisma.vendorServiceModule.findMany({
+    where: { id: { in: moduleIds } },
+    orderBy: [{ category: "asc" }, { sortOrder: "asc" }]
+  });
+  const moduleMap = new Map(modules.map((module) => [module.id, mapVendorServiceModuleData(module)]));
+
+  return requests.map((request) => ({
+    ...request,
+    selectedModuleDetails: stringArrayFromJson(request.selectedModules)
+      .map((id) => moduleMap.get(id))
+      .filter((module): module is VendorServiceModuleData => Boolean(module))
+  }));
 }
 
 export async function createQuoteRequest(
@@ -180,9 +282,33 @@ export async function createQuoteRequest(
       return actionError("업체를 찾을 수 없습니다.", "VENDOR_NOT_FOUND");
     }
 
+    const activeRequest = await prisma.quoteRequest.findFirst({
+      where: {
+        planId: plan.id,
+        vendorId: vendor.id,
+        status: {
+          in: [
+            PrismaQuoteStatus.PENDING,
+            PrismaQuoteStatus.RESPONDED,
+            PrismaQuoteStatus.ACCEPTED
+          ]
+        }
+      },
+      select: { id: true, status: true }
+    });
+
+    if (activeRequest) {
+      return actionError(
+        "이미 진행 중인 견적 요청이 있습니다.",
+        "QUOTE_REQUEST_ALREADY_EXISTS"
+      );
+    }
+
+    const selectedModuleIds = Array.from(new Set(parsed.data.selectedModuleIds));
+
     const modules = await prisma.vendorServiceModule.findMany({
       where: {
-        id: { in: parsed.data.selectedModuleIds },
+        id: { in: selectedModuleIds },
         vendorId: vendor.id,
         isActive: true
       },
@@ -198,15 +324,14 @@ export async function createQuoteRequest(
       orderBy: [{ isBaseIncluded: "desc" }, { sortOrder: "asc" }]
     });
 
-    if (modules.length !== new Set(parsed.data.selectedModuleIds).size) {
+    if (modules.length !== selectedModuleIds.length) {
       return actionError("선택한 모듈이 유효하지 않습니다.", "INVALID_MODULES");
     }
 
     const preferredDate = parseActionDate(parsed.data.preferredDate);
-    const quotedAmount =
-      parsed.data.budget ??
-      modules.reduce((sum, module) => sum + module.price, 0) ??
-      plan.budget;
+    const guestCount = parsed.data.guestCount ?? plan.guestTarget ?? 1;
+    const budget = parsed.data.budget ?? plan.budget ?? null;
+    const quotedAmount = calculateRequestModuleTotal(modules, guestCount);
 
     const request = await prisma.$transaction(async (tx) => {
       const created = await tx.quoteRequest.create({
@@ -214,9 +339,9 @@ export async function createQuoteRequest(
           planId: plan.id,
           vendorId: vendor.id,
           requirements: parsed.data.requirements,
-          selectedModules: parsed.data.selectedModuleIds,
+          selectedModules: selectedModuleIds,
           preferredDate,
-          budget: parsed.data.budget ?? null,
+          budget,
           status: PrismaQuoteStatus.PENDING
         }
       });
@@ -230,10 +355,13 @@ export async function createQuoteRequest(
           serviceCategory: modules[0]?.category ?? null,
           description: parsed.data.requirements,
           serviceDate: preferredDate ?? plan.scheduledAt ?? null,
-          guestCount: plan.guestTarget,
+          guestCount,
           quotedAmount,
           confirmedAmount: null,
-          selectedServiceOptions: buildReservationOptions(modules) as Prisma.InputJsonValue,
+          selectedServiceOptions: buildReservationOptions(
+            modules,
+            guestCount
+          ) as Prisma.InputJsonValue,
           status: PrismaReservationStatus.PENDING,
           notes: parsed.data.requirements
         }
@@ -273,10 +401,19 @@ export async function submitQuoteResponse(
 
     const currentStatus = mapQuoteStatus(request.status);
 
-    if (currentStatus === "PENDING") {
-      assertQuoteTransition(currentStatus, "RESPONDED");
-    } else if (currentStatus !== "RESPONDED") {
+    if (currentStatus !== "PENDING") {
       return actionError("응답 가능한 견적 요청이 아닙니다.", "INVALID_QUOTE_STATUS");
+    }
+
+    assertQuoteTransition(currentStatus, "RESPONDED");
+
+    const existingResponse = await prisma.quoteResponse.findFirst({
+      where: { requestId: request.id, vendorId: vendor.id },
+      select: { id: true }
+    });
+
+    if (existingResponse) {
+      return actionError("이미 제출한 견적 응답이 있습니다.", "QUOTE_RESPONSE_ALREADY_EXISTS");
     }
 
     const totalPrice = calculateModulesTotal(parsed.data.modules);
@@ -377,9 +514,11 @@ export async function acceptQuoteResponse(
 
     const currentStatus = mapQuoteStatus(response.request.status);
 
-    if (currentStatus !== "ACCEPTED") {
-      assertQuoteTransition(currentStatus, "ACCEPTED");
+    if (currentStatus === "ACCEPTED") {
+      return actionError("이미 수락된 견적 요청입니다.", "QUOTE_ALREADY_ACCEPTED");
     }
+
+    assertQuoteTransition(currentStatus, "ACCEPTED");
 
     const modules = response.modules as unknown as QuoteResponseModules;
     const serviceDate =
@@ -389,13 +528,10 @@ export async function acceptQuoteResponse(
       null;
 
     const result = await prisma.$transaction(async (tx) => {
-      const quoteRequest =
-        currentStatus === "ACCEPTED"
-          ? response.request
-          : await tx.quoteRequest.update({
-              where: { id: response.requestId },
-              data: { status: PrismaQuoteStatus.ACCEPTED }
-            });
+      const quoteRequest = await tx.quoteRequest.update({
+        where: { id: response.requestId },
+        data: { status: PrismaQuoteStatus.ACCEPTED }
+      });
 
       const existingReservation = response.reservation ?? response.request.reservation;
       const reservation = existingReservation
@@ -584,18 +720,55 @@ export async function getQuotesByPlan(
     const requests = await prisma.quoteRequest.findMany({
       where: { planId: plan.id },
       include: {
+        vendor: true,
+        plan: {
+          select: {
+            id: true,
+            title: true,
+            type: true,
+            scheduledAt: true,
+            region: true,
+            guestTarget: true,
+            budget: true
+          }
+        },
+        reservation: {
+          include: {
+            vendor: true,
+            quoteResponse: {
+              include: { vendor: true }
+            }
+          }
+        },
         responses: {
-          include: { vendor: true },
+          include: {
+            vendor: true,
+            reservation: {
+              include: {
+                vendor: true,
+                quoteResponse: {
+                  include: { vendor: true }
+                }
+              }
+            }
+          },
           orderBy: { createdAt: "desc" }
         }
       },
       orderBy: { createdAt: "desc" }
     });
+    const requestsWithModules = await attachSelectedModuleDetails(requests);
 
-    return actionSuccess(requests.map(mapQuoteRequestWithResponses));
+    return actionSuccess(requestsWithModules.map(mapQuoteRequestWithResponses));
   } catch (error) {
     return actionError(getActionError(error), "GET_QUOTES_BY_PLAN_FAILED");
   }
+}
+
+export async function getQuoteRequestsByPlan(
+  planId: string
+): Promise<ActionResult<QuoteRequestWithResponses[]>> {
+  return getQuotesByPlan(planId);
 }
 
 export async function getVendorServiceModules(
@@ -611,35 +784,68 @@ export async function getVendorServiceModules(
       orderBy: [{ category: "asc" }, { sortOrder: "asc" }]
     });
 
-    return actionSuccess(
-      modules.map((m) => ({
-        id: m.id,
-        vendorId: m.vendorId,
-        name: m.name,
-        category: m.category,
-        price: m.price,
-        description: m.description,
-        isBaseIncluded: m.isBaseIncluded,
-        isActive: m.isActive,
-        sortOrder: m.sortOrder
-      }))
-    );
+    return actionSuccess(modules.map(mapVendorServiceModuleData));
   } catch (error) {
     return actionError(getActionError(error), "GET_VENDOR_MODULES_FAILED");
   }
 }
 
-export async function getVendorQuoteRequests(): Promise<ActionResult<QuoteRequestData[]>> {
+export async function getQuoteRequestsForVendor(): Promise<
+  ActionResult<QuoteRequestForVendorDTO[]>
+> {
   try {
     const vendor = await requireVendorUser();
 
     const requests = await prisma.quoteRequest.findMany({
       where: { vendorId: vendor.id },
+      include: {
+        vendor: true,
+        plan: {
+          select: {
+            id: true,
+            title: true,
+            type: true,
+            scheduledAt: true,
+            region: true,
+            guestTarget: true,
+            budget: true
+          }
+        },
+        reservation: {
+          include: {
+            vendor: true,
+            quoteResponse: {
+              include: { vendor: true }
+            }
+          }
+        },
+        responses: {
+          include: {
+            vendor: true,
+            reservation: {
+              include: {
+                vendor: true,
+                quoteResponse: {
+                  include: { vendor: true }
+                }
+              }
+            }
+          },
+          orderBy: { createdAt: "desc" }
+        }
+      },
       orderBy: { createdAt: "desc" }
     });
+    const requestsWithModules = await attachSelectedModuleDetails(requests);
 
-    return actionSuccess(requests.map(mapQuoteRequest));
+    return actionSuccess(requestsWithModules.map(mapQuoteRequestWithResponses));
   } catch (error) {
     return actionError(getActionError(error), "GET_VENDOR_QUOTE_REQUESTS_FAILED");
   }
+}
+
+export async function getVendorQuoteRequests(): Promise<
+  ActionResult<QuoteRequestForVendorDTO[]>
+> {
+  return getQuoteRequestsForVendor();
 }

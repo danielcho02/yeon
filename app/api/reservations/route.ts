@@ -98,6 +98,22 @@ export async function POST(request: Request) {
     );
   }
 
+  const activeRequest = await prisma.quoteRequest.findFirst({
+    where: {
+      planId: plan.id,
+      vendorId,
+      status: { in: [QuoteStatus.PENDING, QuoteStatus.RESPONDED, QuoteStatus.ACCEPTED] }
+    },
+    select: { id: true }
+  });
+
+  if (activeRequest) {
+    return Response.json(
+      { error: "이미 진행 중인 견적 요청이 있습니다." },
+      { status: 409 }
+    );
+  }
+
   const { start, end } = getKstDayRange(serviceDateInput);
   const conflictingReservation = await prisma.reservation.findFirst({
     where: {

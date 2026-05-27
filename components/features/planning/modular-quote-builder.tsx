@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Check, ChevronDown, X, ShoppingBag } from 'lucide-react'
 import { type EventTheme, getThemeConfig } from '@/hooks/use-theme'
@@ -315,15 +315,24 @@ export function ModularQuoteBuilder({
   // Base packages: from real data (isBaseIncluded) or fallback MOCK
   const basePackages = useMemo((): BasePackage[] => {
     if (vendorModules && vendorModules.length > 0) {
-      const derived = buildBasePackageFromVendorData(vendorModules)
+      const derived = buildBasePackageFromVendorData(vendorModules, guestCount)
       return derived ? [derived] : []
     }
     return MOCK_BASE_PACKAGES[eventType]
-  }, [vendorModules, eventType])
+  }, [vendorModules, guestCount, eventType])
 
   const builder = useQuoteBuilder(guestCount)
   const [activeCategory, setActiveCategory] = useState<string>('all')
   const [sheetOpen, setSheetOpen] = useState(false)
+  const { basePackage, setBasePackage } = builder
+
+  useEffect(() => {
+    if (!basePackage) return
+    const refreshed = basePackages.find((pkg) => pkg.id === basePackage.id)
+    if (refreshed && refreshed.price !== basePackage.price) {
+      setBasePackage(refreshed)
+    }
+  }, [basePackage, basePackages, setBasePackage])
 
   const filtered = activeCategory === 'all'
     ? allModules

@@ -53,7 +53,7 @@ SELECT
     "guestCount",
     "id",
     "notes",
-    "quoteResponseId",
+    NULL AS "quoteResponseId",
     "quotedAmount",
     "selectedServiceOptions",
     "serviceCategory",

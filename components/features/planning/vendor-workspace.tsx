@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { confirmReservation } from "@/app/actions/reservation";
 import { formatCurrency, formatDate } from "@/lib/format";
 import {
   getEventTypeLabel,
@@ -72,6 +73,13 @@ export function VendorWorkspace({
   const inProgressReservations = useMemo(
     () => reservations.filter((r) => r.status === "PENDING" && r.confirmedAmount != null),
     [reservations]
+  );
+  const editableProposalReservations = useMemo(
+    () =>
+      [...inboxReservations, ...inProgressReservations].filter(
+        (r) => r.quoteRequestStatus !== "ACCEPTED"
+      ),
+    [inboxReservations, inProgressReservations]
   );
   const confirmedReservations = useMemo(
     () => reservations.filter((r) => r.status === "CONFIRMED" || r.status === "COMPLETED"),
@@ -165,6 +173,21 @@ export function VendorWorkspace({
     const payload = (await response.json()) as { error?: string };
     if (!response.ok) { setError(payload.error ?? "완료 처리에 실패했습니다."); return; }
     setMessage("예약을 완료 처리했습니다.");
+    startTransition(() => router.refresh());
+  }
+
+  async function confirmAcceptedReservation(reservationId: string) {
+    setMessage(null);
+    setError(null);
+
+    const result = await confirmReservation(reservationId);
+
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+
+    setMessage("예약을 최종 확정했습니다.");
     startTransition(() => router.refresh());
   }
 
@@ -415,7 +438,7 @@ export function VendorWorkspace({
                   value={proposalForm.reservationId}
                 >
                   <option value="">요청 선택</option>
-                  {[...inboxReservations, ...inProgressReservations].map((r) => (
+                  {editableProposalReservations.map((r) => (
                     <option key={r.id} value={r.id}>
                       {getQuoteServiceModuleLabel({
                         eventType: r.eventPlan.type,
@@ -491,6 +514,20 @@ export function VendorWorkspace({
                     <div className="mt-3 grid gap-1.5 text-sm text-muted-foreground">
                       <div className="flex items-center gap-2"><CalendarDays className="h-3.5 w-3.5 text-muted-foreground/55" />{formatDate(r.serviceDate)}</div>
                       <div className="flex items-center gap-2"><Wallet className="h-3.5 w-3.5 text-muted-foreground/55" />{formatCurrency(r.confirmedAmount)}</div>
+                    </div>
+                    <div className="mt-4">
+                      {r.quoteRequestStatus === "ACCEPTED" ? (
+                        <Button
+                          disabled={isPending}
+                          onClick={() => confirmAcceptedReservation(r.id)}
+                          size="sm"
+                        >
+                          <BadgeCheck className="mr-1.5 h-3.5 w-3.5" />
+                          예약 최종 확정
+                        </Button>
+                      ) : (
+                        <Badge variant="outline">사용자 견적 수락 대기</Badge>
+                      )}
                     </div>
                   </div>
                 ))

@@ -54,7 +54,10 @@ export type ReservationItem = {
   quotedAmount: number | null;
   confirmedAmount: number | null;
   notes: string | null;
-  status: "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
+  status: "PENDING" | "CONFIRMED" | "REJECTED" | "CHANGED" | "CANCELED" | "CANCELLED" | "COMPLETED";
+  quoteRequestId?: string | null;
+  quoteResponseId?: string | null;
+  quoteRequestStatus?: "PENDING" | "RESPONDED" | "ACCEPTED" | "CANCELED" | null;
   selectedServiceOptions?: Array<{
     catalogKey: string | null;
     name: string;

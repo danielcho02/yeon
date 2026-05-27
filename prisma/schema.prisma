@@ -350,6 +350,7 @@ model QuoteResponse {
   vendor      User         @relation("QuoteResponseVendor", fields: [vendorId], references: [id], onDelete: Cascade)
   reservation Reservation?
 
+  @@unique([requestId, vendorId])
   @@index([requestId])
   @@index([vendorId])
 }

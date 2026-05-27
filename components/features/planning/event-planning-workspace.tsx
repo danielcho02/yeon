@@ -43,6 +43,7 @@ import { ModularQuoteBuilder } from "./modular-quote-builder";
 import { QuoteComparison } from "./quote-comparison";
 import type { VendorServiceModuleData } from "@/types/vendor-module";
 import type { QuoteRequestWithResponses } from "@/types/quote";
+import type { BasePackage, QuoteModule } from "@/hooks/use-quote-builder";
 import { formatCurrency, formatDate } from "@/lib/format";
 import {
   getQuoteServiceModuleLabel,
@@ -388,19 +389,27 @@ export function EventPlanningWorkspace({
 
   // Handler for ModularQuoteBuilder's onRequestQuote callback
   async function handleModuleQuoteRequest(
-    modules: import("@/hooks/use-quote-builder").QuoteModule[]
+    modules: QuoteModule[],
+    basePackage: BasePackage | null
   ) {
     if (!plan || !selectedVendorId) return;
-    const selectedModuleIds = modules.map((m) => m.id).filter((id): id is string => Boolean(id));
+    const selectedModuleIds = Array.from(
+      new Set([
+        ...(basePackage?.includedModuleKeys ?? []),
+        ...modules.map((m) => m.id).filter((id): id is string => Boolean(id))
+      ])
+    );
     if (selectedModuleIds.length === 0) {
       showNotice("error", "최소 1개 이상의 항목을 선택해주세요.");
       return;
     }
+    const guestCount = Math.max(1, Number.parseInt(requestForm.guestCount, 10) || 1);
     const result = await createQuoteRequestAction({
       planId: plan.id,
       vendorId: selectedVendorId,
       requirements: requestForm.notes.trim() || "서비스 견적 요청",
       selectedModuleIds,
+      guestCount,
       preferredDate: requestForm.serviceDate || undefined,
       budget: plan.budget || undefined,
     });

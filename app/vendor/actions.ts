@@ -134,9 +134,26 @@ export async function acceptReservation(reservationId: string, confirmedAmount: 
         }
 
         const modules = buildLegacyResponseModules(reservation, confirmedAmount);
+        const existingQuoteResponse = quoteResponseId
+          ? null
+          : await tx.quoteResponse.findFirst({
+              where: { requestId: quoteRequest.id, vendorId },
+              select: { id: true }
+            });
         const quoteResponse = quoteResponseId
           ? await tx.quoteResponse.update({
               where: { id: quoteResponseId },
+              data: {
+                basePrice: confirmedAmount,
+                modules: modules as Prisma.InputJsonValue,
+                totalPrice: confirmedAmount,
+                note: reservation.notes
+              },
+              select: { id: true }
+            })
+          : existingQuoteResponse
+          ? await tx.quoteResponse.update({
+              where: { id: existingQuoteResponse.id },
               data: {
                 basePrice: confirmedAmount,
                 modules: modules as Prisma.InputJsonValue,

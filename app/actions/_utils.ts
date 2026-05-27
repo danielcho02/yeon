@@ -15,6 +15,7 @@ import type {
 import type { ReservationData, ReservationStatus } from "@/types/reservation";
 import type { TransactionData, TransactionType } from "@/types/transaction";
 import type { VendorProfileData } from "@/types/user";
+import type { VendorServiceModuleData } from "@/types/vendor-module";
 
 type SessionUser = {
   id: string;
@@ -45,6 +46,16 @@ type PlanLike = {
   updatedAt: Date;
 };
 
+type QuoteRequestPlanLike = {
+  id: string;
+  title: string;
+  type: string;
+  scheduledAt: Date | null;
+  region: string | null;
+  guestTarget: number | null;
+  budget: number | null;
+};
+
 type QuoteRequestLike = {
   id: string;
   planId: string;
@@ -55,6 +66,10 @@ type QuoteRequestLike = {
   budget: number | null;
   status: string;
   createdAt: Date;
+  vendor?: VendorLike;
+  plan?: QuoteRequestPlanLike;
+  reservation?: ReservationLike | null;
+  selectedModuleDetails?: VendorServiceModuleData[];
 };
 
 type QuoteResponseLike = {
@@ -170,7 +185,13 @@ export function mapQuoteStatus(status: string): QuoteStatus {
 }
 
 export function mapReservationStatus(status: string): ReservationStatus {
-  if (status === "CONFIRMED" || status === "REJECTED" || status === "CHANGED" || status === "CANCELED") {
+  if (
+    status === "CONFIRMED" ||
+    status === "REJECTED" ||
+    status === "CHANGED" ||
+    status === "CANCELED" ||
+    status === "COMPLETED"
+  ) {
     return status;
   }
 
@@ -263,6 +284,20 @@ export function mapQuoteRequestWithResponses(
 ): QuoteRequestWithResponses {
   return {
     ...mapQuoteRequest(request),
+    vendor: request.vendor ? mapVendorProfile(request.vendor) : undefined,
+    plan: request.plan
+      ? {
+          id: request.plan.id,
+          title: request.plan.title,
+          eventType: request.plan.type,
+          eventDate: request.plan.scheduledAt?.toISOString() ?? null,
+          location: request.plan.region,
+          guestCount: request.plan.guestTarget,
+          budget: request.plan.budget
+        }
+      : undefined,
+    selectedModuleDetails: request.selectedModuleDetails,
+    reservation: request.reservation ? mapReservation(request.reservation) : null,
     responses: request.responses.map(mapQuoteResponse)
   };
 }

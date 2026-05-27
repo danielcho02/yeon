@@ -70,6 +70,19 @@ export async function createQuoteRequest(formData: FormData) {
     return { error: "해당 행사 유형을 지원하지 않는 업체입니다." };
   }
 
+  const activeRequest = await prisma.quoteRequest.findFirst({
+    where: {
+      planId: plan.id,
+      vendorId: vendor.id,
+      status: { in: [QuoteStatus.PENDING, QuoteStatus.RESPONDED, QuoteStatus.ACCEPTED] }
+    },
+    select: { id: true }
+  });
+
+  if (activeRequest) {
+    return { error: "이미 진행 중인 견적 요청이 있습니다." };
+  }
+
   // Fetch selected services to build snapshot + validate ownership
   const selectedServices = await prisma.vendorService.findMany({
     where: {

@@ -263,6 +263,29 @@ async function main() {
   });
   checks.duplicate_quote_response_reservation_rejected = true;
 
+  await expectReject("duplicate quote response for request/vendor", async () => {
+    await prisma.quoteResponse.create({
+      data: {
+        requestId: created.requestId,
+        vendorId: vendor.id,
+        basePrice: quotedAmount,
+        modules: {
+          basePackage: {
+            name: "Duplicate response should fail",
+            price: quotedAmount,
+            description: "Duplicate response should fail"
+          },
+          includedModules: [],
+          optionalModules: [],
+          excludedModules: []
+        },
+        totalPrice: quotedAmount,
+        note: "Duplicate response should fail"
+      }
+    });
+  });
+  checks.duplicate_quote_response_rejected = true;
+
   const getQuotesByPlanShape = await prisma.quoteRequest.findMany({
     where: { planId: plan.id, id: created.requestId },
     include: {

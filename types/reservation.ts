@@ -6,7 +6,8 @@ export type ReservationStatus =
   | "CONFIRMED"
   | "REJECTED"
   | "CHANGED"
-  | "CANCELED";
+  | "CANCELED"
+  | "COMPLETED";
 
 export interface ReservationData {
   id: string;

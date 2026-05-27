@@ -281,9 +281,26 @@ export async function PATCH(request: Request, context: RouteContext) {
       }
 
       const modules = buildQuoteResponseModules(reservation, confirmedAmount, notes);
+      const existingQuoteResponse = quoteResponseId
+        ? null
+        : await tx.quoteResponse.findFirst({
+            where: { requestId: quoteRequest.id, vendorId: vendor.id },
+            select: { id: true }
+          });
       const quoteResponse = quoteResponseId
         ? await tx.quoteResponse.update({
             where: { id: quoteResponseId },
+            data: {
+              basePrice: confirmedAmount,
+              modules: modules as Prisma.InputJsonValue,
+              totalPrice: confirmedAmount,
+              note: notes || null
+            },
+            select: { id: true }
+          })
+        : existingQuoteResponse
+        ? await tx.quoteResponse.update({
+            where: { id: existingQuoteResponse.id },
             data: {
               basePrice: confirmedAmount,
               modules: modules as Prisma.InputJsonValue,

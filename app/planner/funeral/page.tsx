@@ -103,6 +103,13 @@ export default async function FuneralPlannerPage({
         confirmedAmount: true,
         notes: true,
         status: true,
+        quoteRequestId: true,
+        quoteResponseId: true,
+        quoteRequest: {
+          select: {
+            status: true
+          }
+        },
         selectedServiceOptions: true,
         eventPlan: {
           select: { id: true, title: true, type: true, region: true, scheduledAt: true, hostName: true, honoreeName: true }
@@ -153,7 +160,10 @@ export default async function FuneralPlannerPage({
           quotedAmount: r.quotedAmount,
           confirmedAmount: r.confirmedAmount,
           notes: r.notes,
-          status: r.status as "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED",
+          status: r.status as ReservationItem["status"],
+          quoteRequestId: r.quoteRequestId,
+          quoteResponseId: r.quoteResponseId,
+          quoteRequestStatus: r.quoteRequest?.status ?? null,
           selectedServiceOptions: r.selectedServiceOptions as ReservationItem["selectedServiceOptions"] ?? null,
           eventPlan: {
             id: r.eventPlan.id,

@@ -1,216 +1,217 @@
 # Codex STATUS
 
-작성 기준: 현재 repository 실제 코드 확인. `docs/Claude_STATUS.md`는 읽기 전용으로만 참고했고 수정하지 않았다. `PM-instruction.txt`는 repo 내에서 찾을 수 없어 확인 필요다.
+작성 기준: 2026-05-27, `codex/step3-main-logic-rewrite` 브랜치 실제 코드와 로컬 검증 결과 기준. `docs/Claude_STATUS.md`는 읽기 전용으로만 확인했다. `PM-instruction.txt`는 repo root에 없어 확인하지 못했다.
 
-## 1. 현재 백엔드 상태 요약
+## 1. 현재 백엔드 상태
 
-일반 사용자 -> 업체 -> 일반 사용자 견적/예약 흐름은 DB/action/API 기준으로 bridge 구조가 잡혀 있다. 핵심은 새 `QuoteRequest` 모델과 legacy vendor dashboard의 `Reservation` 모델을 `Reservation.quoteRequestId`로 연결한 것이다.
+Step 3 견적 요청의 표준 흐름은 다음 데이터 계약으로 정리되어 있다.
 
-표준 생성 흐름:
+1. 일반 사용자가 Step 3에서 업체와 모듈을 선택한다.
+2. `createQuoteRequest()`가 `QuoteRequest(PENDING)`와 `Reservation(PENDING, quoteRequestId)` placeholder를 함께 만든다.
+3. 업체 dashboard는 로그인한 업체의 `Reservation`/`QuoteRequest` 연결 데이터를 조회해 요청을 본다.
+4. 업체가 견적을 제출하면 `QuoteResponse`가 생성되고 `QuoteRequest.status=RESPONDED`가 된다.
+5. 일반 사용자는 `getQuotesByPlan()`/`getQuoteRequestsByPlan()`으로 응답을 조회한다.
+6. 일반 사용자가 `acceptQuoteResponse()`를 호출하면 `QuoteRequest.status=ACCEPTED`가 되고 기존 placeholder `Reservation(PENDING)`이 재사용된다.
+7. 업체가 `confirmReservation()`을 호출해야 `Reservation(CONFIRMED)`가 된다.
 
-1. 일반 사용자가 `createQuoteRequest()` 또는 legacy 요청 API/action을 호출한다.
-2. 백엔드는 `QuoteRequest(PENDING)`와 `Reservation(PENDING, quoteRequestId, confirmedAmount=null)` placeholder를 함께 만든다.
-3. `/vendor/dashboard`는 기존처럼 `Reservation`을 조회해도 새 요청을 볼 수 있다.
-4. 업체가 응답하면 `QuoteResponse`가 생성되고 `QuoteRequest.status=RESPONDED`로 바뀐다.
-5. 연결된 `Reservation`에는 `quoteResponseId`, `confirmedAmount`, `quotedAmount`가 채워진다.
-6. 일반 사용자가 `acceptQuoteResponse({ quoteResponseId })`를 호출하면 `QuoteRequest.status=ACCEPTED`가 되고 기존 placeholder `Reservation`을 재사용한다.
-7. 업체가 `confirmReservation(reservationId)`를 호출하면 `Reservation.status=CONFIRMED`가 된다.
+중요한 상태 표현:
 
-빌드 통과뿐 아니라 [scripts/verify-quote-flow.ts](/home/daniel/yeon/scripts/verify-quote-flow.ts:1)로 위 흐름의 DB smoke 검증을 반복 실행할 수 있다.
+- 일반 사용자 액션은 “견적 수락”이다.
+- 견적 수락 직후 상태는 “업체 최종 확정 대기”이며 `Reservation(PENDING)`이다.
+- “예약 확정 완료”는 업체가 최종 확정한 `Reservation(CONFIRMED)`에서만 표시해야 한다.
 
-## 2. 실제 수정/추가된 백엔드 파일
+## 2. 수정된 action 목록
 
-- `prisma/schema.prisma`: `Reservation.quoteRequestId @unique`와 `QuoteRequest.reservation` 관계 추가.
-- `prisma/migrations/20260511000000_add_reservation_quote_request_bridge/migration.sql`: bridge 관계 재현용 migration 추가.
-- `prisma/seed.ts`: QA용 상태 4종 보강: 요청만 보냄, 업체 응답함, 사용자 수락함, 업체 확정함.
-- `scripts/verify-quote-flow.ts`: backend smoke verification 스크립트 추가.
-- `types/reservation.ts`: `ReservationData.quoteRequestId` 추가.
-- `app/actions/_utils.ts`: reservation mapper가 `quoteRequestId`를 반환.
-- `app/actions/quote.ts`: 새 quote request 생성/업체 응답/사용자 수락 시 reservation bridge 동기화.
-- `app/actions/plan.ts`: placeholder reservation을 수락 전 확정 예약처럼 오인하지 않도록 `getPlansWithQuoteStatus()` 상태 계산 보정.
-- `app/actions/reservation.ts`: `confirmReservation()`이 연결 quote request의 `ACCEPTED` 상태를 요구.
-- `app/api/vendor/reservations/[reservationId]/route.ts`: vendor dashboard legacy 응답 API가 `QuoteResponse`와 `QuoteRequest.status`를 함께 갱신.
-- `app/api/reservations/[reservationId]/route.ts`: legacy 일반 사용자 confirm/cancel route가 연결 quote request 상태도 함께 갱신.
-- `app/api/reservations/route.ts`: legacy reservation 생성 API도 `QuoteRequest + Reservation placeholder`를 함께 생성.
-- `app/vendor/actions.ts`: legacy vendor server actions도 quote response/status 동기화.
-- `app/vendors/actions.ts`: legacy vendor detail 요청 action도 quote request placeholder 구조로 동기화.
-- `docs/Codex_STATUS.md`: 현재 문서.
+- `app/actions/quote.ts createQuoteRequest(payload)`: active duplicate request 방지, `guestCount` 입력 지원, 선택 모듈의 인원 기반 예상금액 계산, base package 포함 모듈 저장.
+- `app/actions/quote.ts getQuotesByPlan(planId)`: vendor, plan summary, selected module detail, reservation, responses를 포함한 DTO 반환.
+- `app/actions/quote.ts getQuoteRequestsByPlan(planId)`: `getQuotesByPlan()` alias.
+- `app/actions/quote.ts getQuoteRequestsForVendor()`: 로그인 업체 기준 요청/응답/플랜/모듈 detail 조회.
+- `app/actions/quote.ts getVendorQuoteRequests()`: vendor 조회 alias.
+- `app/actions/quote.ts getVendorServiceModules(vendorId)`: `pricingType` 포함 DTO 반환.
+- `app/actions/quote.ts submitQuoteResponse(payload)`: 같은 `requestId + vendorId` 중복 응답 차단.
+- `app/actions/quote.ts acceptQuoteResponse(payload)`: 이미 수락된 QuoteRequest 재수락 차단, 기존 reservation 재사용.
+- `app/actions/reservation.ts confirmReservation(reservationId)`: 업체 최종 확정 표준 action으로 vendor dashboard에 연결됨.
+- `app/api/reservations/[reservationId]/route.ts`: 일반 사용자 legacy `confirm` API가 `CONFIRMED`를 만들지 못하도록 차단.
+- `app/api/vendor/reservations/[reservationId]/route.ts`, `app/vendor/actions.ts`: legacy vendor 응답 경로가 기존 QuoteResponse를 update하도록 보강.
+- `app/api/reservations/route.ts`, `app/vendors/actions.ts`: legacy 견적 요청 경로도 active duplicate request를 차단.
 
-## 3. Prisma Schema / Migration / DB 상태
+## 3. 수정된 타입 목록
 
-현재 로컬 DB 확인 결과:
+- `types/quote.ts`: `QuoteRequestDTO`, `QuoteResponseDTO`, `QuoteRequestWithResponsesDTO`, `QuoteRequestForVendorDTO`, `CreateQuoteRequestInput`, `SubmitQuoteResponseInput`, `AcceptQuoteResponseInput`, `QuoteLineItemDTO`, `VendorModuleDTO`, `QuoteRequestStatus`, `QuoteResponseStatus` alias 추가.
+- `types/quote.ts`: `CreateQuoteRequestPayload.guestCount` 추가.
+- `types/quote.ts`: `QuoteRequestWithResponses`에 `vendor`, `plan`, `selectedModuleDetails`, `reservation` optional field 추가.
+- `types/vendor-module.ts`: `VendorServiceModuleData.pricingType` 추가.
+- `types/reservation.ts`: `ReservationStatus`에 `COMPLETED` 포함.
+- `components/features/planning/workspace-types.ts`: `ReservationItem`에 `quoteRequestId`, `quoteResponseId`, `quoteRequestStatus` 추가.
 
-- `Reservation.quoteRequestId` 컬럼 존재.
-- `Reservation_quoteRequestId_key` unique index 존재.
-- `Reservation.quoteRequestId -> QuoteRequest.id` FK 존재.
-- `npx prisma migrate status` 최종 결과: `Database schema is up to date!`
+## 4. QuoteRequest 생성 흐름
 
-이번 작업 중 처리:
+`createQuoteRequest(payload)` 필수/주요 입력:
 
-- 기존 로컬 DB는 이미 `npx prisma db push`로 schema가 반영된 상태였다.
-- migration 파일을 추가한 뒤, 현재 로컬 DB에는 같은 변경이 이미 존재하므로 `npx prisma migrate resolve --applied 20260511000000_add_reservation_quote_request_bridge`로 migration 기록을 맞췄다.
+- `planId`
+- `vendorId`
+- `requirements`
+- `selectedModuleIds`
+- `guestCount`
+- `preferredDate`
+- `budget`
 
-개발 환경 전략:
+서버 동작:
 
-- 현재 이 workspace처럼 이미 `db push`로 반영된 DB: `npx prisma migrate resolve --applied 20260511000000_add_reservation_quote_request_bridge` 후 `npx prisma migrate status`로 확인.
-- 깨끗한 새 DB 또는 pre-bridge DB: `npx prisma migrate dev` 또는 배포 환경에서는 `npx prisma migrate deploy`.
-- 로컬 QA 재구성: `npx prisma generate && npx prisma db seed && node --import tsx scripts/verify-quote-flow.ts`.
+- 로그인 사용자가 GENERAL인지 확인한다.
+- plan owner와 `WEDDING | FUNERAL` plan인지 확인한다.
+- vendor가 활성 승인 업체인지 확인한다.
+- 같은 plan/vendor에 `PENDING | RESPONDED | ACCEPTED` 요청이 있으면 `QUOTE_REQUEST_ALREADY_EXISTS`를 반환한다.
+- 선택 모듈이 해당 vendor의 active `VendorServiceModule`인지 검증한다.
+- `CATERING`/`MEAL` 모듈 중 `1인`, `인당`, `/인`, `/명` 등 인원 기반 문구가 있는 항목은 `PER_GUEST`로 계산한다.
+- `QuoteRequest(PENDING)`와 `Reservation(PENDING, quoteRequestId)` placeholder를 transaction으로 생성한다.
 
-## 4. Quote Flow 상태
+프론트 연결:
 
-허용 Quote 전이:
+- `event-planning-workspace.tsx`가 `guestCount`를 action으로 전달한다.
+- `modular-quote-builder.tsx`의 base package만 선택한 경우에도 `includedModuleKeys`가 `selectedModuleIds`에 포함된다.
+- 모바일 하단 “견적 요청” 버튼도 동일한 `onRequestQuote` 경로를 사용한다.
 
-- `PENDING -> RESPONDED`
-- `PENDING -> CANCELED`
-- `RESPONDED -> ACCEPTED`
-- `RESPONDED -> CANCELED`
+## 5. Vendor QuoteRequest 조회 흐름
 
-`createQuoteRequest(payload)`:
+권장 action:
 
-- 입력: `CreateQuoteRequestPayload`
-- 반환: `ActionResult<QuoteRequestData>`
-- 생성: `QuoteRequest(PENDING)` + `Reservation(PENDING, quoteRequestId, confirmedAmount=null)`
-- 중복 방지: `Reservation.quoteRequestId @unique`로 QuoteRequest 하나에 placeholder 하나만 허용.
+- `getQuoteRequestsForVendor()`
 
-`submitQuoteResponse(payload)`:
+반환 DTO:
 
-- 입력: `SubmitQuoteResponsePayload`
-- 반환: `ActionResult<QuoteResponseData>`
-- 동작: `QuoteResponse` 생성, `QuoteRequest.status=RESPONDED`, 연결 reservation에 `quoteResponseId`, `confirmedAmount`, `quotedAmount` 동기화.
-- 중복 방지: `Reservation.quoteResponseId @unique`로 QuoteResponse 하나에 reservation 하나만 연결.
+- `QuoteRequestWithResponsesDTO[]`
+- 각 item에 request, vendor, plan summary, selected module detail, linked reservation, responses 포함.
 
-`acceptQuoteResponse(payload)`:
+현재 vendor dashboard:
 
-- 입력: `{ quoteResponseId, reservedDate? }`
-- 반환: `ActionResult<AcceptQuoteResult>`
-- 동작: `QuoteRequest.status=ACCEPTED`, 기존 placeholder reservation 재사용. 없을 때만 새 reservation 생성.
-- 수락 후 다음 상태: `reservation_pending`.
+- `/vendor/dashboard`는 기존 `Reservation` 기반 UI를 유지한다.
+- page query에 `quoteRequest.status`, `quoteRequestId`, `quoteResponseId`를 포함해 업체가 “사용자 수락 대기”와 “예약 최종 확정”을 구분할 수 있다.
 
-## 5. Reservation Flow 상태
+## 6. QuoteResponse 제출 흐름
 
-허용 Reservation 전이:
+표준 action:
 
-- `PENDING -> CONFIRMED`
-- `PENDING -> REJECTED`
-- `PENDING -> CANCELED`
-- `CONFIRMED -> CHANGED`
-- `CONFIRMED -> CANCELED`
-- `CHANGED -> CONFIRMED`
+- `submitQuoteResponse({ requestId, basePrice, modules, totalPrice, note })`
 
-중요 actor 모델:
+서버 동작:
 
-- 일반 사용자 화면의 “견적 수락”은 `acceptQuoteResponse()`다.
-- 일반 사용자 화면에서 이 상태를 “예약 확정”이라고 부르면 안 된다. 수락 직후 reservation은 `PENDING`이며 의미는 “업체 최종 확정 대기”다.
-- 업체만 `confirmReservation(reservationId)`로 최종 확정해야 한다. 이유는 업체가 실제 일정/서비스 제공 가능성을 최종 승인해야 하고, 백엔드는 연결 `QuoteRequest.status=ACCEPTED`가 아니면 confirm을 거부한다.
+- 로그인 사용자가 VENDOR인지 확인한다.
+- 해당 요청이 로그인 업체의 `QuoteRequest(PENDING)`인지 확인한다.
+- 이미 같은 `requestId + vendorId` 응답이 있으면 `QUOTE_RESPONSE_ALREADY_EXISTS`를 반환한다.
+- `QuoteResponse`를 만들고 `QuoteRequest.status=RESPONDED`로 전이한다.
+- 연결 placeholder reservation에 `quoteResponseId`, `quotedAmount`, `confirmedAmount`, 모듈 breakdown을 동기화한다.
 
-잘못된 흐름 방지:
+DB 보강:
 
-- 업체는 사용자 수락 전 `confirmReservation()`으로 `CONFIRMED`를 만들 수 없다.
-- 일반 사용자는 견적 수락 없이 새 표준 action 기준으로 `CONFIRMED`에 도달할 수 없다.
-- terminal/cancel 계열 재전이는 state-machine에서 차단된다.
+- `QuoteResponse(requestId, vendorId)` unique index 추가.
+- `scripts/verify-quote-flow.ts`에 duplicate QuoteResponse 차단 smoke check 추가.
 
-## 6. Legacy/New 경로 정합성
+## 7. QuoteResponse 수락 흐름
 
-새 경로:
+표준 action:
 
-- `app/actions/quote.ts createQuoteRequest`: quote request와 reservation placeholder 함께 생성.
-- `app/actions/quote.ts submitQuoteResponse`: quote response와 reservation 동기화.
-- `app/actions/quote.ts acceptQuoteResponse`: 기존 reservation 재사용.
-- `app/actions/plan.ts getPlansWithQuoteStatus`: `/plans` 표준 조회.
-- `app/actions/reservation.ts confirmReservation`: 업체 최종 확정 표준 action.
+- `acceptQuoteResponse({ quoteResponseId, reservedDate? })`
 
-legacy 호환 경로:
+서버 동작:
 
-- `app/api/vendor/reservations/[reservationId]/route.ts`: vendor dashboard 기존 UI가 호출. 이제 quote response/status를 같이 동기화한다.
-- `app/api/reservations/[reservationId]/route.ts`: 일반 사용자 legacy confirm/cancel route. 유지하되 새 표준 수락 흐름은 아니다.
-- `app/api/reservations/route.ts`: legacy reservation 생성 API도 quote request placeholder를 만든다.
-- `app/vendor/actions.ts`: legacy vendor action도 quote response/status를 동기화한다.
-- `app/vendors/actions.ts`: legacy vendor detail 요청도 quote request placeholder를 만든다.
+- 로그인 사용자가 GENERAL인지 확인한다.
+- 응답이 현재 사용자의 plan에 속하는지 확인한다.
+- `QuoteRequest(RESPONDED)`만 `ACCEPTED`로 전이한다.
+- 이미 `ACCEPTED`인 요청은 `QUOTE_ALREADY_ACCEPTED`를 반환한다.
+- 기존 `Reservation(PENDING)` placeholder를 재사용하고 `quoteResponseId`를 연결한다.
+- 반환 `nextAction`은 `reservation_pending` 또는 이미 확정된 경우 `confirmed`다.
 
-## 7. Claude가 의존해야 하는 데이터 계약
+## 8. Reservation 연결 흐름
 
-`/plans`
+`Reservation(PENDING)` 생성:
 
-- 표준 action: `getPlansWithQuoteStatus()`.
-- 반환: `ActionResult<PlanDashboardData[]>`.
-- placeholder reservation은 수락 전에는 `reservation_pending`으로 계산하지 않는다.
+- `createQuoteRequest()` 시점에 placeholder로 생성된다.
+- `acceptQuoteResponse()`는 새 reservation을 중복 생성하지 않고 placeholder를 재사용한다.
 
-`vendor dashboard`
+`Reservation(CONFIRMED)` 생성:
 
-- 현재 UI가 legacy `Reservation` 조회를 계속 사용해도 동작한다.
-- 신규 권장 조회: 가능하면 향후 `getVendorQuoteRequests()` 또는 quote-aware vendor 조회 action으로 전환.
-- 현재 응답 경로: `/api/vendor/reservations/[reservationId]`는 백엔드에서 `QuoteResponse`까지 동기화한다.
-- 최종 확정 표준 action: `confirmReservation(reservationId)`.
+- 업체만 `confirmReservation(reservationId)`로 확정할 수 있다.
+- vendor dashboard의 진행 중 제안 카드에서 `quoteRequestStatus === "ACCEPTED"`이면 “예약 최종 확정” 버튼이 표시된다.
+- 일반 사용자 legacy confirm route는 더 이상 `CONFIRMED`를 만들 수 없다.
 
-`Step 3 견적 요청`
+## 9. Seed 데이터 상태
 
-- 표준 action: `createQuoteRequest(payload)`.
-- legacy fallback: `app/vendors/actions.ts createQuoteRequest(FormData)`도 같은 bridge 구조로 동기화된다.
+`npm run db:seed` 후 확인된 상태:
 
-`Step 4 견적 수락`
+- `users=6`
+- `eventPlans=2`
+- `reservations=4`
+- `vendorServiceModules=16`
+- `quoteRequests=5`
+- `quoteResponses=3`
 
-- 표준 action: `acceptQuoteResponse({ quoteResponseId, reservedDate? })`.
-- 이 action의 성공은 “예약 확정”이 아니라 “견적 수락 및 업체 확정 대기”다.
+Demo 계정:
 
-## 8. Seed 데이터 상태
+- 일반 사용자: `planner@yeon.local / demo1234`
+- 업체 사용자: `venue@yeon.local / demo1234`
+- 업체 사용자: `catering@yeon.local / demo1234`
 
-`npx prisma db seed` 후 포함되는 QA 상태:
+## 10. 검증 결과
 
-- 요청만 보낸 상태: `QuoteRequest(PENDING)` + `Reservation(PENDING, quoteRequestId, confirmedAmount=null)`.
-- 업체가 응답한 상태: `QuoteRequest(RESPONDED)` + `QuoteResponse` + `Reservation.quoteResponseId/confirmedAmount`.
-- 사용자가 수락한 상태: `QuoteRequest(ACCEPTED)` + `Reservation(PENDING)`.
-- 업체가 확정한 상태: seed에는 legacy/확정 확인용 `Reservation(CONFIRMED)` 상태가 포함된다.
-
-현재 seed 결과: `users=6`, `eventPlans=2`, `reservations=4`, `vendorServiceModules=16`, `quoteRequests=5`, `quoteResponses=3`.
-
-## 9. Backend Smoke Verification
-
-실행 명령:
-
-```bash
-node --import tsx scripts/verify-quote-flow.ts
-```
-
-검증 항목:
-
-- quote request 생성.
-- reservation placeholder 생성.
-- duplicate placeholder 차단.
-- vendor dashboard inbox 조건으로 조회 가능.
-- vendor quote request 조건으로 조회 가능.
-- 사용자 수락 전 업체 confirm 차단.
-- quote response 생성.
-- quote request `RESPONDED` 반영.
-- reservation `quoteResponseId`, `confirmedAmount`, `quotedAmount` 동기화.
-- duplicate quote response reservation 차단.
-- `getQuotesByPlan` shape에 responded quote 포함.
-- `/plans` dashboard shape에 response 포함.
-- placeholder를 수락 전 확정 예약처럼 보지 않음.
-- accept 후 기존 placeholder 재사용.
-- accept 후 next action은 `reservation_pending`.
-- confirm 후 plan dashboard shape에 `CONFIRMED` 표시.
-- invalid re-transition 차단.
-
-최신 실행 결과: `[verify-quote-flow] success`.
-
-## 10. 아직 남은 작업
-
-1. Claude 필요: vendor dashboard에서 사용자 수락 후 `confirmReservation(reservationId)`를 호출하는 최종 확정 UI 연결.
-2. Claude 필요: Step 4 수락 버튼이 `acceptQuoteResponse({ quoteResponseId })`를 호출하고 성공 후 “업체 확정 대기”로 표시되는지 브라우저 QA.
-3. 백엔드 정책 확인 필요: optional modules를 `totalPrice`에 포함할 기준.
-4. 백엔드 정책 확인 필요: plan 단위 accepted quote를 하나만 허용할지, 수락 시 다른 vendor 요청을 자동 취소할지 여부.
-5. 추후 정리: `ReservationStatus.CANCELLED`와 `CANCELED` 단일화.
-
-## 11. 검증 결과
+실행 완료:
 
 - `npx prisma generate`: 통과.
-- `npx prisma db seed`: 통과.
+- `npm run db:seed`: 통과.
 - `node --import tsx scripts/verify-quote-flow.ts`: 통과.
-- `npx tsc --noEmit`: 통과.
-- `npm run lint`: 통과. `✔ No ESLint warnings or errors`.
-- `npm run build`: 통과. Next.js production build 성공.
-- `npx prisma migrate status`: 통과. `Database schema is up to date!`
+- `npx tsc --noEmit --incremental false`: 통과.
+- `npm run lint`: 통과, `✔ No ESLint warnings or errors`.
+- `npm run build`: 통과.
+- `npx prisma migrate status`: 통과, `Database schema is up to date!`.
+- `DATABASE_URL=file:/tmp/yeon-migrate-check-step3.db npx prisma migrate deploy`: 통과.
 
-## 12. 다음 작업 규칙
+주의:
 
-다음 작업 시작 전 반드시 docs/Claude_STATUS.md와 docs/Codex_STATUS.md를 먼저 읽고, 작업 완료 후 이 파일을 최신 코드 기준으로 갱신한다.
+- 기존 로컬 DB는 이전 작업에서 `db push`로 이미 일부 schema가 반영된 상태였다.
+- `npx prisma migrate dev`는 reset을 요구했으므로 실행하지 않았다.
+- 대신 duplicate 데이터가 없음을 확인한 뒤 `QuoteResponse_requestId_vendorId_key`를 로컬 DB에 안전하게 추가하고 migration을 applied로 기록했다.
+
+## 11. 수동 QA 시나리오
+
+1. `planner@yeon.local / demo1234` 로그인.
+2. `/planner` 또는 `/planner/wedding` 진입.
+3. Step 3 “견적 요청”에서 업체 선택.
+4. 모듈 또는 기본 패키지 선택.
+5. 하객 수를 확인하고 견적 요청 제출.
+6. 예상 데이터 변화: `QuoteRequest(PENDING)` 생성, `Reservation(PENDING, quoteRequestId, confirmedAmount=null)` 생성.
+7. `venue@yeon.local / demo1234` 또는 `catering@yeon.local / demo1234` 로그인.
+8. `/vendor/dashboard`에서 새 요청 확인.
+9. 견적 금액/가능 일정/메모 입력 후 견적 제안 제출.
+10. 예상 데이터 변화: `QuoteResponse` 생성, `QuoteRequest(RESPONDED)`, reservation에 `quoteResponseId`와 금액 동기화.
+11. `planner@yeon.local` 재로그인.
+12. Step 4에서 견적 비교 및 응답 반영 확인.
+13. “이 견적 수락하기” 클릭.
+14. 예상 데이터 변화: `QuoteRequest(ACCEPTED)`, `Reservation(PENDING)` 유지, 화면 문구는 “업체 최종 확정 대기”.
+15. 업체 계정으로 재로그인.
+16. `/vendor/dashboard` 진행 중 제안에서 “예약 최종 확정” 클릭.
+17. 예상 데이터 변화: `Reservation(CONFIRMED)`.
+18. 일반 사용자 화면에서 “예약 확정 완료” 상태 확인.
+
+## 12. 프론트가 의존해야 하는 DTO/action 목록
+
+- Step 3 module load: `getVendorServiceModules(vendorId)` → `VendorModuleDTO[]`
+- Step 3 submit: `createQuoteRequest(input)` → `QuoteRequestDTO`
+- Step 4 quote list: `getQuotesByPlan(planId)` 또는 `getQuoteRequestsByPlan(planId)` → `QuoteRequestWithResponsesDTO[]`
+- Step 4 accept: `acceptQuoteResponse(input)` → `AcceptQuoteResult`
+- Vendor inbox/detail: `getQuoteRequestsForVendor()` → `QuoteRequestForVendorDTO[]`
+- Vendor response: `submitQuoteResponse(input)` → `QuoteResponseDTO`
+- Vendor final confirmation: `confirmReservation(reservationId)` → `ReservationData`
+
+## 13. 남은 문제
+
+- 실제 브라우저 클릭 QA는 아직 수동으로 필요하다.
+- `VendorServiceModule`에는 schema-level `pricingType` 컬럼이 없어서 현재는 서버가 이름/설명 문구로 `PER_GUEST`를 추론한다. 장기적으로는 schema에 명시 컬럼을 추가하는 편이 더 안정적이다.
+- plan 단위로 하나의 업체만 최종 수락할지, 여러 업체/모듈 조합을 수락할 수 있게 둘지는 제품 정책 결정이 필요하다.
+- `ReservationStatus.CANCELED`와 `CANCELLED`가 공존한다. 이번 작업에서는 표준 action은 `CANCELED`, legacy route는 기존 호환을 유지했다.
+
+## 14. Claude/UI 담당자가 이어서 해야 할 작업
+
+- 위 수동 QA 시나리오를 브라우저에서 끝까지 실행한다.
+- Step 4에서 `ACCEPTED` 상태가 “예약 확정 완료”가 아니라 “업체 최종 확정 대기”로만 노출되는지 확인한다.
+- Vendor dashboard에서 `quoteRequestStatus === "ACCEPTED"`인 진행 중 제안에만 “예약 최종 확정” 버튼이 보이는지 확인한다.
+- base package만 선택한 Step 3 요청이 실제 DB에 생성되는지 UI에서 확인한다.
