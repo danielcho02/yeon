@@ -17,16 +17,20 @@ export interface VendorQuoteItem {
 }
 
 export interface VendorQuote {
+  requestId: string
+  responseId: string
   vendorId: string
   vendorName: string
   totalPrice: number
   respondedAt: string
+  canAccept: boolean
+  isAccepted: boolean
   items: VendorQuoteItem[]
   note?: string
 }
 
 // Map QuoteRequestWithResponses[] → VendorQuote[]
-function mapToVendorQuotes(requests: QuoteRequestWithResponses[]): VendorQuote[] {
+export function mapQuoteRequestsToVendorQuotes(requests: QuoteRequestWithResponses[]): VendorQuote[] {
   const quotes: VendorQuote[] = []
   for (const req of requests) {
     if (req.status !== 'RESPONDED' && req.status !== 'ACCEPTED') continue
@@ -55,10 +59,14 @@ function mapToVendorQuotes(requests: QuoteRequestWithResponses[]): VendorQuote[]
         })
       }
       quotes.push({
+        requestId: req.id,
+        responseId: resp.id,
         vendorId: resp.vendorId,
         vendorName: resp.vendor?.companyName ?? '업체',
         totalPrice: resp.totalPrice,
         respondedAt: resp.createdAt,
+        canAccept: req.status === 'RESPONDED',
+        isAccepted: req.status === 'ACCEPTED',
         items,
         note: resp.note ?? undefined,
       })
@@ -73,7 +81,9 @@ interface QuoteComparisonProps {
   planId?: string
   theme: EventTheme
   guestCount?: number
-  onAccept?: (vendorId: string) => void
+  isLoading?: boolean
+  isAccepting?: boolean
+  onAccept?: (quoteResponseId: string) => void
 }
 
 export function QuoteComparison({
@@ -81,6 +91,8 @@ export function QuoteComparison({
   planId,
   theme,
   guestCount = 100,
+  isLoading: isLoadingProp = false,
+  isAccepting = false,
   onAccept,
 }: QuoteComparisonProps) {
   const config = getThemeConfig(theme)
@@ -90,20 +102,21 @@ export function QuoteComparison({
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    if (!planId) return
+    if (!planId || quoteProp) return
     let cancelled = false
     setIsLoading(true)
     getQuotesByPlan(planId).then((result) => {
       if (cancelled) return
       if (result.success) {
-        setFetchedQuotes(mapToVendorQuotes(result.data))
+        setFetchedQuotes(mapQuoteRequestsToVendorQuotes(result.data))
       }
       setIsLoading(false)
     })
     return () => { cancelled = true }
-  }, [planId])
+  }, [planId, quoteProp])
 
   const quotes = useMemo(() => quoteProp ?? fetchedQuotes ?? [], [quoteProp, fetchedQuotes])
+  const showLoading = isLoadingProp || isLoading
 
   // Collect unique category/module metadata
   const allModuleKeys = useMemo(() => {
@@ -145,7 +158,7 @@ export function QuoteComparison({
     [quotes]
   )
 
-  if (isLoading) {
+  if (showLoading) {
     return (
       <div className="flex min-h-48 items-center justify-center rounded-2xl border border-dashed border-gray-200">
         <p className="text-sm text-gray-400">견적 응답을 불러오는 중...</p>
@@ -170,7 +183,7 @@ export function QuoteComparison({
               서비스 항목
             </th>
             {quotes.map((q) => (
-              <th key={q.vendorId} className="min-w-40 px-4 py-3 text-center">
+              <th key={q.responseId} className="min-w-40 px-4 py-3 text-center">
                 <div className="flex flex-col items-center gap-1">
                   <span className="font-semibold" style={{ color: config.primaryDark }}>{q.vendorName}</span>
                   {q.totalPrice === lowestTotal && (
@@ -221,7 +234,7 @@ export function QuoteComparison({
                         const item = q.items.find((i) => i.moduleKey === key)
                         if (!item) {
                           return (
-                            <td key={q.vendorId} className="px-4 py-2.5 text-center text-gray-300">—</td>
+                            <td key={q.responseId} className="px-4 py-2.5 text-center text-gray-300">—</td>
                           )
                         }
                         const price = item.pricingType === 'PER_GUEST' ? item.price * guestCount : item.price
@@ -229,7 +242,7 @@ export function QuoteComparison({
                         const isMax = range && price === range.max && spread > 0
 
                         return (
-                          <td key={q.vendorId} className="px-4 py-2.5 text-center">
+                          <td key={q.responseId} className="px-4 py-2.5 text-center">
                             <div className="flex items-center justify-center gap-1">
                               {highSpread && isMin && <TrendingDown size={12} className="text-emerald-500" />}
                               {highSpread && isMax && <TrendingUp size={12} className="text-rose-400" />}
@@ -259,23 +272,28 @@ export function QuoteComparison({
           <tr className="border-t-2 border-gray-200">
             <td className="sticky left-0 bg-white px-4 py-3 text-sm font-semibold text-gray-700">총 견적</td>
             {quotes.map((q) => (
-              <td key={q.vendorId} className="px-4 py-3 text-center">
+              <td key={q.responseId} className="px-4 py-3 text-center">
                 <div
                   className="text-base font-bold"
                   style={{ color: q.totalPrice === lowestTotal ? config.primary : '#374151' }}
                 >
                   {q.totalPrice.toLocaleString('ko-KR')}원
                 </div>
-                {onAccept && (
+                {q.isAccepted ? (
+                  <span className="mt-2 inline-flex rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700">
+                    수락됨
+                  </span>
+                ) : onAccept && q.canAccept ? (
                   <button
                     type="button"
-                    onClick={() => onAccept(q.vendorId)}
-                    className="mt-2 rounded-lg px-4 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90"
+                    disabled={isAccepting}
+                    onClick={() => onAccept(q.responseId)}
+                    className="mt-2 rounded-lg px-4 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90 disabled:opacity-40"
                     style={{ backgroundColor: config.primary }}
                   >
-                    이 견적 선택
+                    {isAccepting ? '처리 중...' : '이 견적 수락'}
                   </button>
-                )}
+                ) : null}
               </td>
             ))}
           </tr>

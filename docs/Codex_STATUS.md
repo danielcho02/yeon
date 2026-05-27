@@ -1,6 +1,6 @@
 # Codex STATUS
 
-작성 기준: 2026-05-27, `codex/step3-main-logic-rewrite` 브랜치 실제 코드와 로컬 검증 결과 기준. `docs/Claude_STATUS.md`는 읽기 전용으로만 확인했다. `PM-instruction.txt`는 repo root에 없어 확인하지 못했다.
+작성 기준: 2026-05-28, `codex/step3-main-logic-rewrite` 브랜치 실제 코드와 로컬 검증 결과 기준. `docs/Claude_STATUS.md`는 읽기 전용으로만 확인했다. `PM-instruction.txt`는 repo root에 없어 확인하지 못했다.
 
 ## 1. 현재 백엔드 상태
 
@@ -215,3 +215,41 @@ Demo 계정:
 - Step 4에서 `ACCEPTED` 상태가 “예약 확정 완료”가 아니라 “업체 최종 확정 대기”로만 노출되는지 확인한다.
 - Vendor dashboard에서 `quoteRequestStatus === "ACCEPTED"`인 진행 중 제안에만 “예약 최종 확정” 버튼이 보이는지 확인한다.
 - base package만 선택한 Step 3 요청이 실제 DB에 생성되는지 UI에서 확인한다.
+
+## 15. 2026-05-28 Step 3/4 UX 연결 보강
+
+이번 보강은 디자인 개편이 아니라 실제 사용자 플로우의 끊김과 중복 액션 리스크를 줄이는 작업이다.
+
+수정된 프론트 연결부:
+
+- `components/features/planning/event-planning-workspace.tsx`
+  - Step 3 견적 요청 성공 후 `getQuotesByPlan(planId)`를 즉시 재조회해 요청됨 상태와 Step 4 비교 데이터가 같은 클라이언트 상태를 바라보게 했다.
+  - Step 4 `QuoteComparison`에 이미 보유한 `quoteRequestsData`를 DTO로 변환해 전달하도록 바꿔 중복 자동 fetch와 stale 화면 가능성을 줄였다.
+  - 견적 요청/견적 수락 처리 중 `isQuoteActionPending`으로 버튼을 잠그고, 중복 클릭으로 같은 요청/수락이 반복 호출되지 않게 했다.
+  - 성공 문구는 “견적 요청”, “업체 응답 대기”, “업체 최종 확정 대기” 흐름이 섞이지 않도록 조정했다.
+- `components/features/planning/quote-comparison.tsx`
+  - `mapQuoteRequestsToVendorQuotes()`를 export해 Step 4 parent 상태를 직접 표시할 수 있게 했다.
+  - 비교 테이블의 수락 버튼이 `vendorId`가 아니라 실제 `quoteResponseId`를 넘기도록 정리했다.
+  - 이미 수락된 응답은 `수락됨` badge와 disabled button으로 표시한다.
+  - `quotes` prop이 있으면 내부 fetch를 하지 않아 parent와 child가 서로 다른 응답 목록을 보여주는 문제를 방지한다.
+- `components/features/planning/modular-quote-builder.tsx`
+  - 데스크톱 요약 패널, 모바일 하단 바, 모바일 bottom sheet의 견적 요청 버튼에 `isSubmitting` 상태를 연결했다.
+  - 처리 중에는 “요청 보내는 중...”/“전송 중...” 문구와 disabled 상태로 중복 제출을 막는다.
+- `components/features/planning/vendor-workspace.tsx`
+  - 사용자가 수락한 제안(`quoteRequestStatus === "ACCEPTED"`)은 견적 금액/일정/메모 수정과 거절/재제안 버튼을 막았다.
+  - 수락된 제안에는 “예약 최종 확정” callout과 CTA를 별도로 노출해 업체의 다음 액션을 명확히 했다.
+  - 업체 견적 저장, 최종 확정, 완료 처리에는 reservation 단위 busy state를 적용해 중복 요청을 막았다.
+
+추가 검증 결과:
+
+- `npx tsc --noEmit --incremental false`: 통과.
+- `npm run lint`: 통과, `✔ No ESLint warnings or errors`.
+- `node --import tsx scripts/verify-quote-flow.ts`: 통과.
+- `npm run build`: 통과.
+
+남은 수동 QA:
+
+- 브라우저에서 Step 3 요청 직후 같은 화면에서 요청됨 표시가 즉시 반영되는지 확인한다.
+- 브라우저에서 Step 4 비교 테이블의 “이 견적 수락” 버튼이 실제 수락 후 즉시 `수락됨`으로 바뀌는지 확인한다.
+- 업체 dashboard에서 수락된 제안을 수정하려 할 수 없고 “예약 최종 확정”만 가능한지 확인한다.
+- 실제 세션 전환 후 planner/vendor 양쪽에서 같은 DB 상태가 일관되게 보이는지 확인한다.

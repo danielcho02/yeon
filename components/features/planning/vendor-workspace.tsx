@@ -122,6 +122,18 @@ export function VendorWorkspace({
   }));
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busyReservationId, setBusyReservationId] = useState<string | null>(null);
+  const selectedProposalReservation =
+    reservations.find((item) => item.id === proposalForm.reservationId) ?? null;
+  const isSelectedAcceptedProposal =
+    selectedProposalReservation?.quoteRequestStatus === "ACCEPTED";
+  const editableProposalIds = useMemo(
+    () => new Set(editableProposalReservations.map((reservation) => reservation.id)),
+    [editableProposalReservations]
+  );
+  const proposalSelectValue = editableProposalIds.has(proposalForm.reservationId)
+    ? proposalForm.reservationId
+    : "";
 
   function loadReservation(reservation: ReservationItem) {
     setSelectedReservationId(reservation.id);
@@ -141,54 +153,73 @@ export function VendorWorkspace({
 
   async function updateReservation(action: "quote" | "decline") {
     if (!proposalForm.reservationId) { setError("응답할 요청을 먼저 선택해 주세요."); return; }
+    if (isSelectedAcceptedProposal) {
+      setError("사용자가 이미 수락한 견적입니다. 이제 예약 최종 확정만 진행할 수 있습니다.");
+      return;
+    }
     if (action === "quote" && (!proposalForm.serviceDate || !proposalForm.confirmedAmount)) {
       setError("견적 금액과 가능 일정을 모두 입력해 주세요.");
       return;
     }
+    setBusyReservationId(proposalForm.reservationId);
     setMessage(null);
     setError(null);
 
-    const response = await fetch(`/api/vendor/reservations/${proposalForm.reservationId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, serviceDate: proposalForm.serviceDate, confirmedAmount: proposalForm.confirmedAmount, notes: proposalForm.notes })
-    });
+    try {
+      const response = await fetch(`/api/vendor/reservations/${proposalForm.reservationId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, serviceDate: proposalForm.serviceDate, confirmedAmount: proposalForm.confirmedAmount, notes: proposalForm.notes })
+      });
 
-    const payload = (await response.json()) as { error?: string };
-    if (!response.ok) { setError(payload.error ?? "응답 저장에 실패했습니다."); return; }
-    setMessage(action === "quote" ? "견적 제안을 보냈습니다." : "일정 불가로 응답했습니다.");
-    startTransition(() => router.refresh());
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) { setError(payload.error ?? "응답 저장에 실패했습니다."); return; }
+      setMessage(action === "quote" ? "견적 제안을 보냈습니다." : "일정 불가로 응답했습니다.");
+      startTransition(() => router.refresh());
+    } finally {
+      setBusyReservationId(null);
+    }
   }
 
   async function completeReservation(reservationId: string) {
+    setBusyReservationId(reservationId);
     setMessage(null);
     setError(null);
 
-    const response = await fetch(`/api/vendor/reservations/${reservationId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "complete" })
-    });
+    try {
+      const response = await fetch(`/api/vendor/reservations/${reservationId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "complete" })
+      });
 
-    const payload = (await response.json()) as { error?: string };
-    if (!response.ok) { setError(payload.error ?? "완료 처리에 실패했습니다."); return; }
-    setMessage("예약을 완료 처리했습니다.");
-    startTransition(() => router.refresh());
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) { setError(payload.error ?? "완료 처리에 실패했습니다."); return; }
+      setMessage("예약을 완료 처리했습니다.");
+      startTransition(() => router.refresh());
+    } finally {
+      setBusyReservationId(null);
+    }
   }
 
   async function confirmAcceptedReservation(reservationId: string) {
+    setBusyReservationId(reservationId);
     setMessage(null);
     setError(null);
 
-    const result = await confirmReservation(reservationId);
+    try {
+      const result = await confirmReservation(reservationId);
 
-    if (!result.success) {
-      setError(result.error);
-      return;
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+
+      setMessage("예약을 최종 확정했습니다.");
+      startTransition(() => router.refresh());
+    } finally {
+      setBusyReservationId(null);
     }
-
-    setMessage("예약을 최종 확정했습니다.");
-    startTransition(() => router.refresh());
   }
 
   const confirmedTotal = confirmedReservations.reduce(
@@ -435,7 +466,7 @@ export function VendorWorkspace({
                     const r = reservations.find((item) => item.id === e.target.value) ?? null;
                     if (r) loadReservation(r);
                   }}
-                  value={proposalForm.reservationId}
+                  value={proposalSelectValue}
                 >
                   <option value="">요청 선택</option>
                   {editableProposalReservations.map((r) => (
@@ -450,11 +481,30 @@ export function VendorWorkspace({
                 </select>
               </div>
 
+              {isSelectedAcceptedProposal && selectedProposalReservation && (
+                <div className="rounded-2xl border border-violet-200 bg-violet-50/70 px-4 py-3 text-sm text-violet-800">
+                  <p className="font-semibold">사용자가 이 견적을 수락했습니다.</p>
+                  <p className="mt-1 text-xs text-violet-700/80">
+                    견적 수정 대신 예약 최종 확정을 진행하세요.
+                  </p>
+                  <Button
+                    className="mt-3"
+                    disabled={busyReservationId === selectedProposalReservation.id}
+                    onClick={() => confirmAcceptedReservation(selectedProposalReservation.id)}
+                    size="sm"
+                  >
+                    <BadgeCheck className="mr-1.5 h-3.5 w-3.5" />
+                    {busyReservationId === selectedProposalReservation.id ? "확정 처리 중..." : "예약 최종 확정"}
+                  </Button>
+                </div>
+              )}
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="가능 일정" name="serviceDate">
                   <Input
                     id="serviceDate"
                     type="date"
+                    disabled={isSelectedAcceptedProposal}
                     value={proposalForm.serviceDate}
                     onChange={(e) => setProposalForm((c) => ({ ...c, serviceDate: e.target.value }))}
                   />
@@ -463,6 +513,7 @@ export function VendorWorkspace({
                   <Input
                     id="confirmedAmount"
                     inputMode="numeric"
+                    disabled={isSelectedAcceptedProposal}
                     value={proposalForm.confirmedAmount}
                     onChange={(e) => setProposalForm((c) => ({ ...c, confirmedAmount: e.target.value }))}
                   />
@@ -473,17 +524,18 @@ export function VendorWorkspace({
                 <Textarea
                   id="notes"
                   placeholder="상담 포인트, 포함 범위, 일정 안내를 적어주세요."
+                  disabled={isSelectedAcceptedProposal}
                   value={proposalForm.notes}
                   onChange={(e) => setProposalForm((c) => ({ ...c, notes: e.target.value }))}
                 />
               </Field>
 
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Button disabled={isPending} onClick={() => updateReservation("quote")} className="flex-1">
+                <Button disabled={isPending || isSelectedAcceptedProposal || busyReservationId === proposalForm.reservationId} onClick={() => updateReservation("quote")} className="flex-1">
                   <MessageSquareQuote className="mr-2 h-4 w-4" />
-                  견적 제안 보내기
+                  {busyReservationId === proposalForm.reservationId ? "저장 중..." : "견적 제안 보내기"}
                 </Button>
-                <Button disabled={isPending} onClick={() => updateReservation("decline")} variant="destructive">
+                <Button disabled={isPending || isSelectedAcceptedProposal || busyReservationId === proposalForm.reservationId} onClick={() => updateReservation("decline")} variant="destructive">
                   <XCircle className="mr-2 h-4 w-4" />
                   일정 불가
                 </Button>
@@ -509,7 +561,9 @@ export function VendorWorkspace({
                         </p>
                         <p className="mt-0.5 text-xs text-muted-foreground">{r.eventPlan.title}</p>
                       </div>
-                      <Badge className={theme.badge}>제안 발송</Badge>
+                      <Badge className={r.quoteRequestStatus === "ACCEPTED" ? "bg-violet-100 text-violet-700" : theme.badge}>
+                        {r.quoteRequestStatus === "ACCEPTED" ? "사용자 수락 완료" : "제안 발송"}
+                      </Badge>
                     </div>
                     <div className="mt-3 grid gap-1.5 text-sm text-muted-foreground">
                       <div className="flex items-center gap-2"><CalendarDays className="h-3.5 w-3.5 text-muted-foreground/55" />{formatDate(r.serviceDate)}</div>
@@ -518,12 +572,12 @@ export function VendorWorkspace({
                     <div className="mt-4">
                       {r.quoteRequestStatus === "ACCEPTED" ? (
                         <Button
-                          disabled={isPending}
+                          disabled={isPending || busyReservationId === r.id}
                           onClick={() => confirmAcceptedReservation(r.id)}
                           size="sm"
                         >
                           <BadgeCheck className="mr-1.5 h-3.5 w-3.5" />
-                          예약 최종 확정
+                          {busyReservationId === r.id ? "확정 처리 중..." : "예약 최종 확정"}
                         </Button>
                       ) : (
                         <Badge variant="outline">사용자 견적 수락 대기</Badge>
@@ -579,13 +633,13 @@ export function VendorWorkspace({
                       <p className="mt-0.5 text-xs text-muted-foreground">{r.eventPlan.title}</p>
                     </div>
                     <Button
-                      disabled={isPending || r.status === "COMPLETED"}
+                      disabled={isPending || busyReservationId === r.id || r.status === "COMPLETED"}
                       onClick={() => completeReservation(r.id)}
                       size="sm"
                       variant="outline"
                     >
                       <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                      완료 처리
+                      {busyReservationId === r.id ? "처리 중..." : "완료 처리"}
                     </Button>
                   </div>
 

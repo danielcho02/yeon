@@ -40,7 +40,7 @@ import {
   getVendorServiceModules,
 } from "@/app/actions/quote";
 import { ModularQuoteBuilder } from "./modular-quote-builder";
-import { QuoteComparison } from "./quote-comparison";
+import { QuoteComparison, mapQuoteRequestsToVendorQuotes } from "./quote-comparison";
 import type { VendorServiceModuleData } from "@/types/vendor-module";
 import type { QuoteRequestWithResponses } from "@/types/quote";
 import type { BasePackage, QuoteModule } from "@/hooks/use-quote-builder";
@@ -227,6 +227,7 @@ export function EventPlanningWorkspace({
   const [vendorModules, setVendorModules] = useState<VendorServiceModuleData[] | null>(null);
   const [vendorModuleError, setVendorModuleError] = useState(false);
   const [quoteRequestsData, setQuoteRequestsData] = useState<QuoteRequestWithResponses[] | null>(null);
+  const [isQuoteActionPending, setIsQuoteActionPending] = useState(false);
   const [confettiActive, setConfettiActive] = useState(false);
 
   function navigateStep(next: StepKey) {
@@ -258,6 +259,14 @@ export function EventPlanningWorkspace({
     return () => { cancelled = true; };
   }, [selectedVendorId]);
 
+  async function refreshQuoteRequests(planId: string) {
+    const result = await getQuotesByPlan(planId);
+    if (result.success) {
+      setQuoteRequestsData(result.data);
+    }
+    return result;
+  }
+
   // Load quote request/response data for the current plan (used in Step 4)
   useEffect(() => {
     if (!plan?.id) { setQuoteRequestsData(null); return; }
@@ -270,8 +279,18 @@ export function EventPlanningWorkspace({
   }, [plan?.id]);
 
   const requestedVendorIds = useMemo(
-    () => new Set(planReservations.map((r) => r.vendor.id)),
-    [planReservations]
+    () =>
+      new Set([
+        ...planReservations.map((r) => r.vendor.id),
+        ...(quoteRequestsData ?? [])
+          .filter((request) => request.status !== "CANCELED")
+          .map((request) => request.vendorId)
+      ]),
+    [planReservations, quoteRequestsData]
+  );
+  const comparisonQuotes = useMemo(
+    () => mapQuoteRequestsToVendorQuotes(quoteRequestsData ?? []),
+    [quoteRequestsData]
   );
 
   const vendorSvcsForForm = selectedVendor
@@ -379,12 +398,18 @@ export function EventPlanningWorkspace({
       formData.append("selectedItemIds", id);
     }
 
-    const result = await createQuoteRequestLegacy(formData);
-    if (result?.error) { showNotice("error", result.error); return; }
-    showNotice("success", "업체에 견적 요청을 보냈습니다.");
-    setCheckedServiceIds(new Set());
-    setRequestForm((c) => ({ ...c, notes: "" }));
-    startTransition(() => router.refresh());
+    setIsQuoteActionPending(true);
+    try {
+      const result = await createQuoteRequestLegacy(formData);
+      if (result?.error) { showNotice("error", result.error); return; }
+      showNotice("success", "견적 요청을 보냈습니다. 업체 응답이 오면 비교 화면에서 확인할 수 있습니다.");
+      setCheckedServiceIds(new Set());
+      setRequestForm((c) => ({ ...c, notes: "" }));
+      if (plan?.id) await refreshQuoteRequests(plan.id);
+      startTransition(() => router.refresh());
+    } finally {
+      setIsQuoteActionPending(false);
+    }
   }
 
   // Handler for ModularQuoteBuilder's onRequestQuote callback
@@ -404,34 +429,42 @@ export function EventPlanningWorkspace({
       return;
     }
     const guestCount = Math.max(1, Number.parseInt(requestForm.guestCount, 10) || 1);
-    const result = await createQuoteRequestAction({
-      planId: plan.id,
-      vendorId: selectedVendorId,
-      requirements: requestForm.notes.trim() || "서비스 견적 요청",
-      selectedModuleIds,
-      guestCount,
-      preferredDate: requestForm.serviceDate || undefined,
-      budget: plan.budget || undefined,
-    });
-    if (!result.success) { showNotice("error", result.error); return; }
-    showNotice("success", "업체에 견적 요청을 보냈습니다.");
-    startTransition(() => router.refresh());
+    setIsQuoteActionPending(true);
+    try {
+      const result = await createQuoteRequestAction({
+        planId: plan.id,
+        vendorId: selectedVendorId,
+        requirements: requestForm.notes.trim() || "서비스 견적 요청",
+        selectedModuleIds,
+        guestCount,
+        preferredDate: requestForm.serviceDate || undefined,
+        budget: plan.budget || undefined,
+      });
+      if (!result.success) { showNotice("error", result.error); return; }
+      showNotice("success", "견적 요청을 보냈습니다. 업체 응답이 오면 비교 화면에서 확인할 수 있습니다.");
+      await refreshQuoteRequests(plan.id);
+      startTransition(() => router.refresh());
+    } finally {
+      setIsQuoteActionPending(false);
+    }
   }
 
   async function handleAcceptQuote(quoteResponseId: string) {
-    const result = await acceptQuoteResponse({
-      quoteResponseId,
-      reservedDate: requestForm.serviceDate || undefined,
-    });
-    if (!result.success) { showNotice("error", result.error); return; }
-    showNotice("success", "견적을 수락했습니다. 업체의 최종 확정을 기다리는 중입니다.");
-    setConfettiActive(true);
-    setTimeout(() => setConfettiActive(false), 1600);
-    // Re-fetch quote data and refresh server-side reservation data
-    if (plan?.id) {
-      getQuotesByPlan(plan.id).then((r) => { if (r.success) setQuoteRequestsData(r.data); });
+    setIsQuoteActionPending(true);
+    try {
+      const result = await acceptQuoteResponse({
+        quoteResponseId,
+        reservedDate: requestForm.serviceDate || undefined,
+      });
+      if (!result.success) { showNotice("error", result.error); return; }
+      showNotice("success", "견적을 수락했습니다. 업체의 최종 확정을 기다리는 중입니다.");
+      setConfettiActive(true);
+      setTimeout(() => setConfettiActive(false), 1600);
+      if (plan?.id) await refreshQuoteRequests(plan.id);
+      startTransition(() => router.refresh());
+    } finally {
+      setIsQuoteActionPending(false);
     }
-    startTransition(() => router.refresh());
   }
 
   const totalCost = confirmedRes.reduce(
@@ -1083,6 +1116,7 @@ export function EventPlanningWorkspace({
                       theme={eventType === "WEDDING" ? "wedding" : "funeral"}
                       guestCount={Math.max(1, Number.parseInt(requestForm.guestCount, 10) || 1)}
                       vendorModules={vendorModules}
+                      isSubmitting={isQuoteActionPending}
                       onRequestQuote={handleModuleQuoteRequest}
                     />
                   ) : (
@@ -1198,11 +1232,11 @@ export function EventPlanningWorkspace({
 
                         <button
                           className={`flex items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-semibold ${theme.btnAccent}`}
-                          disabled={isPending || (vendorSvcsForForm.length > 0 && checkedServiceIds.size === 0)}
+                          disabled={isQuoteActionPending || isPending || (vendorSvcsForForm.length > 0 && checkedServiceIds.size === 0)}
                           type="submit"
                         >
                           <HeartHandshake className="h-4 w-4" />
-                          견적 요청 보내기
+                          {isQuoteActionPending ? "요청 보내는 중..." : "견적 요청 보내기"}
                         </button>
                       </div>
                     </form>
@@ -1278,12 +1312,15 @@ export function EventPlanningWorkspace({
               <div className="space-y-4">
                 <h2 className="font-[var(--font-display)] text-base font-bold text-foreground">견적 비교 및 수락</h2>
 
-                {/* Comparison table — auto-fetches when planId is available */}
+                {/* Comparison table */}
                 {plan && (
                   <QuoteComparison
-                    planId={plan.id}
+                    quotes={comparisonQuotes}
                     theme={eventType === "WEDDING" ? "wedding" : "funeral"}
                     guestCount={Math.max(1, Number.parseInt(requestForm.guestCount, 10) || 100)}
+                    isLoading={quoteRequestsData === null}
+                    isAccepting={isQuoteActionPending}
+                    onAccept={handleAcceptQuote}
                   />
                 )}
 
@@ -1341,12 +1378,12 @@ export function EventPlanningWorkspace({
                           <div className="mt-5">
                             <button
                               className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold ${theme.btnAccent}`}
-                              disabled={isPending}
+                              disabled={isQuoteActionPending || isPending}
                               onClick={() => handleAcceptQuote(resp.id)}
                               type="button"
                             >
                               <CheckCheck className="h-4 w-4" />
-                              이 견적 수락하기
+                              {isQuoteActionPending ? "수락 처리 중..." : "이 견적 수락하기"}
                             </button>
                           </div>
                         </div>

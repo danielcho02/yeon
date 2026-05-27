@@ -134,11 +134,13 @@ function SummaryPanel({
   builder,
   theme,
   guestCount,
+  isSubmitting = false,
   onRequestQuote,
 }: {
   builder: ReturnType<typeof useQuoteBuilder>
   theme: EventTheme
   guestCount: number
+  isSubmitting?: boolean
   onRequestQuote?: () => void
 }) {
   const config = getThemeConfig(theme)
@@ -210,12 +212,12 @@ function SummaryPanel({
 
       <button
         type="button"
-        disabled={selectedModules.length === 0 && !basePackage}
+        disabled={isSubmitting || (selectedModules.length === 0 && !basePackage)}
         onClick={onRequestQuote}
         className="w-full rounded-xl py-3 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-40"
         style={{ backgroundColor: config.primary }}
       >
-        견적 요청하기
+        {isSubmitting ? '요청 보내는 중...' : '견적 요청하기'}
       </button>
     </div>
   )
@@ -227,11 +229,13 @@ function MobileBottomBar({
   builder,
   theme,
   onOpen,
+  isSubmitting = false,
   onRequestQuote,
 }: {
   builder: ReturnType<typeof useQuoteBuilder>
   theme: EventTheme
   onOpen: () => void
+  isSubmitting?: boolean
   onRequestQuote?: () => void
 }) {
   const config = getThemeConfig(theme)
@@ -257,12 +261,12 @@ function MobileBottomBar({
         </button>
         <button
           type="button"
-          disabled={count === 0}
+          disabled={isSubmitting || count === 0}
           onClick={onRequestQuote}
           className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
           style={{ backgroundColor: config.primary }}
         >
-          견적 요청
+          {isSubmitting ? '전송 중...' : '견적 요청'}
         </button>
       </div>
     </div>
@@ -276,6 +280,7 @@ interface ModularQuoteBuilderProps {
   guestCount?: number
   /** Real vendor service modules from DB — when provided, replaces catalog+mock data */
   vendorModules?: VendorServiceModuleData[]
+  isSubmitting?: boolean
   onRequestQuote?: (modules: QuoteModule[], base: BasePackage | null) => void
 }
 
@@ -283,6 +288,7 @@ export function ModularQuoteBuilder({
   theme,
   guestCount = 100,
   vendorModules,
+  isSubmitting = false,
   onRequestQuote,
 }: ModularQuoteBuilderProps) {
   const config = getThemeConfig(theme)
@@ -435,14 +441,14 @@ export function ModularQuoteBuilder({
         {/* Desktop Summary Panel */}
         <div className="hidden w-72 shrink-0 lg:block">
           <div className="sticky top-4 rounded-2xl border border-gray-100 p-4 shadow-sm">
-            <SummaryPanel builder={builder} theme={theme} guestCount={guestCount} onRequestQuote={handleRequestQuote} />
+            <SummaryPanel builder={builder} theme={theme} guestCount={guestCount} isSubmitting={isSubmitting} onRequestQuote={handleRequestQuote} />
           </div>
         </div>
       </div>
 
       {/* Mobile Bottom Bar */}
       <div className="h-24 lg:hidden" />
-      <MobileBottomBar builder={builder} theme={theme} onOpen={() => setSheetOpen(true)} onRequestQuote={handleRequestQuote} />
+      <MobileBottomBar builder={builder} theme={theme} onOpen={() => setSheetOpen(true)} isSubmitting={isSubmitting} onRequestQuote={handleRequestQuote} />
 
       {/* Mobile Bottom Sheet */}
       <AnimatePresence>
@@ -473,6 +479,7 @@ export function ModularQuoteBuilder({
                 builder={builder}
                 theme={theme}
                 guestCount={guestCount}
+                isSubmitting={isSubmitting}
                 onRequestQuote={() => { setSheetOpen(false); handleRequestQuote() }}
               />
             </motion.div>
