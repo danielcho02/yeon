@@ -217,6 +217,45 @@ First Load JS shared  87.3 kB
 
 ---
 
+## 13. Planner Step Refresh Routing Fix (2026-05-29)
+
+**커밋**: `Fix planner step refresh routing`
+
+**수정 내용**: step=3/4 새로고침 실패 + cross-plan redirect 버그 수정
+
+### 수정 파일 3개
+
+| 파일 | 수정 내용 |
+|---|---|
+| `app/planner/wedding/page.tsx` | planId 조기 cross-type 검증 추가: planId가 FUNERAL plan이면 `/planner/funeral?planId=...&step=...`로 redirect |
+| `app/planner/funeral/page.tsx` | 동일 로직 반대 방향: planId가 WEDDING plan이면 `/planner/wedding?planId=...&step=...`로 redirect |
+| `components/features/planning/event-planning-workspace.tsx` | `resolvedInitialStep`에서 `requestedStep === "booking" && !hasQuoteOrReservationState → "vendors"` fallback 제거 + `hasQuoteOrReservationState` 상수 제거 |
+
+### 처리 방식
+
+- **planId 검증**: 메인 쿼리 실행 **전에** `prisma.eventPlan.findFirst({ id, ownerId })` 단건 조회로 `type` 확인. mismatch면 즉시 redirect (메인 3개 쿼리 절약).
+- **step 유지**: URL step 파라미터를 redirect URL에 포함. `parseInitialStep(params.step)` 사용.
+- **step=4 보존**: `resolvedInitialStep`이 URL step을 더 이상 override하지 않음. URL step이 1~4이면 그대로 사용.
+
+### 브라우저 재확인 필요 항목
+
+1. `/planner/wedding?planId=WEDDING_ID&step=3` 새로고침 → step 3 유지 확인
+2. `/planner/wedding?planId=WEDDING_ID&step=4` 새로고침 → step 4 유지 확인
+3. `/planner/funeral?planId=FUNERAL_ID&step=3` 새로고침 → step 3 유지 확인
+4. `/planner/funeral?planId=FUNERAL_ID&step=4` 새로고침 → step 4 유지 확인
+5. `/planner/wedding?planId=FUNERAL_ID&step=3` → `/planner/funeral?...&step=3` redirect 확인
+6. `/planner/funeral?planId=WEDDING_ID&step=3` → `/planner/wedding?...&step=3` redirect 확인
+
+### 검증 결과 (2026-05-29)
+
+```
+npx tsc --noEmit     → 출력 없음 (0 오류)
+npm run lint         → ✔ No ESLint warnings or errors
+npm run build        → 전체 라우트 컴파일 성공
+```
+
+---
+
 ## 10. 다음 작업 규칙
 
 다음 작업 시작 전 반드시 `docs/Claude_STATUS.md`와 `docs/Codex_STATUS.md`를 먼저 읽고, 작업 완료 후 이 파일을 최신 코드 기준으로 갱신한다.

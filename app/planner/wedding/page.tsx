@@ -49,6 +49,21 @@ export default async function WeddingPlannerPage({
     redirect("/vendor/dashboard");
   }
 
+  // Cross-type guard: if planId belongs to a FUNERAL plan, redirect before heavy queries
+  if (params?.planId) {
+    const planIdValue = params.planId;
+    const typeCheck = await withPrismaRetry(() =>
+      prisma.eventPlan.findFirst({
+        where: { id: planIdValue, ownerId: session.user.id },
+        select: { id: true, type: true }
+      })
+    );
+    if (typeCheck?.type === "FUNERAL") {
+      const step = parseInitialStep(params.step);
+      redirect(`/planner/funeral?planId=${typeCheck.id}${step ? `&step=${step}` : ""}`);
+    }
+  }
+
   const [plans, vendors, reservations] = await withPrismaRetry(() =>
     Promise.all([
       prisma.eventPlan.findMany({

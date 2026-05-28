@@ -232,12 +232,6 @@ export function EventPlanningWorkspace({
     () => planReservations.filter((r) => r.status === "CONFIRMED" || r.status === "COMPLETED"),
     [planReservations]
   );
-  const hasQuoteOrReservationState =
-    pendingRequests.length > 0 ||
-    proposals.length > 0 ||
-    pendingFinalConfirmations.length > 0 ||
-    confirmedRes.length > 0;
-
   const completedSteps = useMemo<StepKey[]>(() => {
     const done: StepKey[] = [];
     if (plan) done.push("setup");
@@ -262,12 +256,9 @@ export function EventPlanningWorkspace({
 
     if (!requestedStep) return planStateInitialStep;
     if (!plan) return "setup";
-    if (requestedStep === "booking" && !hasQuoteOrReservationState) {
-      return "vendors";
-    }
 
     return requestedStep;
-  }, [initialStep, plan, hasQuoteOrReservationState, planStateInitialStep]);
+  }, [initialStep, plan, planStateInitialStep]);
 
   const [activeStep, setActiveStep] = useState<StepKey>(resolvedInitialStep);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
