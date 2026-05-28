@@ -218,6 +218,48 @@ Demo 계정:
 
 ## 15. 2026-05-28 Step 3/4 UX 연결 보강
 
+## 16. 2026-05-29 Auth Runtime QA Blocker
+
+Domain Mapping Browser QA 중 `/api/auth/signout?callbackUrl=%2Flogin`에서 `Cannot find module './vendor-chunks/jose.js'` Server Error가 발생했다.
+
+확인 결과:
+
+- `package.json`/`package-lock.json`에는 `next-auth`가 존재한다.
+- `npm ls next-auth`: `next-auth@4.24.14`.
+- `npm ls jose`: `next-auth` 하위 `jose@4.15.9`.
+- `node_modules/jose`는 존재했다.
+- 오류 당시 `.next/server/vendor-chunks/jose.js`가 없었다.
+- auth route는 `app/api/auth/[...nextauth]/route.ts`의 기본 NextAuth handler다.
+- 별도 middleware 파일은 확인되지 않았다.
+
+조치:
+
+- `.next` cache를 삭제했다.
+- WSL 비로그인 셸에서는 Windows `npm`이 잡혀 `next dev`가 CMD/UNC 경로로 실패할 수 있음을 확인했다.
+- dev server 실행 시 `source ~/.nvm/nvm.sh; npm run dev` 형태로 Linux Node를 먼저 로드해야 한다.
+- `.next` 재생성 후 `/api/auth/signout?callbackUrl=%2Flogin`은 200 Sign Out page를 반환했고 `vendor-chunks/jose.js` Server Error는 재현되지 않았다.
+
+Chrome MCP QA 중 세션 고정 시 처리 방법:
+
+1. dev server를 중지한다.
+2. `rm -rf .next`를 실행한다.
+3. `source ~/.nvm/nvm.sh; npm run dev`로 dev server를 다시 띄운다.
+4. `/api/auth/signout?callbackUrl=%2Flogin`에 접속해 Sign Out page가 뜨는지 확인한다.
+5. Sign out 후 `/login`에서 원하는 demo 계정으로 다시 로그인한다.
+
+계정 전환 정상 확인:
+
+- `/api/auth/signout?callbackUrl=%2Flogin`: 200, Server Error 없음.
+- `/login`: 200, login input 표시.
+- `planner@yeon.local / demo1234`: `/plans` 접근 및 “내 행사 현황” marker 확인.
+- `venue@yeon.local / demo1234`: `/vendor/dashboard` 접근 및 “모먼트 가든” marker 확인.
+- `catering@yeon.local / demo1234`: `/vendor/dashboard` 접근 및 “오르세 플로럴” marker 확인.
+
+남은 주의:
+
+- Windows PowerShell에서 WSL 명령을 직접 실행하면 `PATH`에 Windows `npm`이 먼저 잡힐 수 있다.
+- Browser QA 전에는 WSL Linux Node가 활성화된 dev server인지 확인해야 한다.
+
 이번 보강은 디자인 개편이 아니라 실제 사용자 플로우의 끊김과 중복 액션 리스크를 줄이는 작업이다.
 
 수정된 프론트 연결부:
