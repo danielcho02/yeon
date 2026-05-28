@@ -15,7 +15,7 @@ export async function Nav() {
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
         <Link href="/" className="flex items-center gap-2.5 group">
           <div className="relative h-8 w-[52px] overflow-hidden transition-transform duration-200 group-hover:scale-105">
-            <Image src="/yeon-logo.png" alt="YeON" fill sizes="52px" className="object-contain" />
+            <Image src="/yeon-logo.png" alt="YeON" fill sizes="52px" priority className="object-contain" />
           </div>
           <div className="leading-none">
             <p className="text-[10px] uppercase tracking-[0.32em] text-muted-foreground/70">YeON</p>

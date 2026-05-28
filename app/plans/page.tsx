@@ -37,7 +37,7 @@ function getNextActionMeta(nextAction: PlanDashboardNextAction) {
         label: "업체 응답 대기",
         description: "견적 요청을 보냈습니다. 업체의 응답을 기다리는 중입니다.",
         badge: "bg-amber-100 text-amber-700",
-        cta: "요청 현황 보기",
+        cta: "견적 요청 현황 보기",
         ctaVariant: "amber",
         Icon: Clock,
       } as const;
@@ -47,7 +47,7 @@ function getNextActionMeta(nextAction: PlanDashboardNextAction) {
         label: "견적 비교 가능",
         description: "업체가 견적을 보냈습니다. 지금 비교하고 수락할 수 있습니다.",
         badge: "bg-blue-100 text-blue-700",
-        cta: "견적 비교하기",
+        cta: "받은 견적 확인",
         ctaVariant: "blue",
         Icon: Scale,
       } as const;
@@ -56,7 +56,7 @@ function getNextActionMeta(nextAction: PlanDashboardNextAction) {
         label: "업체 확정 대기",
         description: "견적을 수락했습니다. 업체의 최종 확정을 기다리는 중입니다.",
         badge: "bg-violet-100 text-violet-700",
-        cta: "진행 현황 보기",
+        cta: "예약 상태 확인",
         ctaVariant: "violet",
         Icon: Clock,
       } as const;
@@ -65,7 +65,7 @@ function getNextActionMeta(nextAction: PlanDashboardNextAction) {
         label: "예약 확정 완료",
         description: "예약이 최종 확정되었습니다.",
         badge: "bg-emerald-100 text-emerald-700",
-        cta: "행사 현황 보기",
+        cta: "확정 예약 확인",
         ctaVariant: "emerald",
         Icon: CheckCircle2,
       } as const;

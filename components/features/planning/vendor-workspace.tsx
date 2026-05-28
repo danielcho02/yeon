@@ -209,7 +209,7 @@ export function VendorWorkspace({
 
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) { setError(payload.error ?? "응답 저장에 실패했습니다."); return; }
-      setMessage(action === "quote" ? "견적 제안을 보냈습니다." : "일정 불가로 응답했습니다.");
+      setMessage(action === "quote" ? "견적 응답을 보냈습니다." : "일정 불가로 응답했습니다.");
       startTransition(() => router.refresh());
     } finally {
       setBusyReservationId(null);
@@ -252,7 +252,7 @@ export function VendorWorkspace({
         return;
       }
 
-      setMessage("예약을 최종 확정했습니다.");
+      setMessage("예약이 최종 확정되었습니다.");
       startTransition(() => router.refresh());
     } finally {
       setBusyReservationId(null);
@@ -684,7 +684,7 @@ export function VendorWorkspace({
               <Field label="응답 메모" name="notes">
                 <Textarea
                   id="notes"
-                  placeholder="상담 포인트, 포함 범위, 일정 안내를 적어주세요."
+                  placeholder="업체의 견적 안내 메시지를 입력해 주세요."
                   disabled={isSelectedAcceptedProposal}
                   value={proposalForm.notes}
                   onChange={(e) => setProposalForm((c) => ({ ...c, notes: e.target.value }))}
