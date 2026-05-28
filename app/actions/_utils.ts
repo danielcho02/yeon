@@ -93,6 +93,7 @@ type ReservationLike = {
   serviceDate: Date | null;
   quotedAmount: number | null;
   confirmedAmount: number | null;
+  vendorConfirmationDueAt?: Date | null;
   status: string;
   createdAt: Date;
   updatedAt: Date;
@@ -195,7 +196,6 @@ export function mapReservationStatus(status: string): ReservationStatus {
     return status;
   }
 
-  if (status === "CANCELLED") return "CANCELED";
   return "PENDING";
 }
 
@@ -311,6 +311,7 @@ export function mapReservation(reservation: ReservationLike): ReservationData {
     quoteResponseId: reservation.quoteResponseId,
     reservedDate: (reservation.serviceDate ?? reservation.createdAt).toISOString(),
     totalAmount: reservation.confirmedAmount ?? reservation.quotedAmount ?? 0,
+    vendorConfirmationDueAt: reservation.vendorConfirmationDueAt?.toISOString() ?? null,
     status: mapReservationStatus(reservation.status),
     createdAt: reservation.createdAt.toISOString(),
     updatedAt: reservation.updatedAt.toISOString(),

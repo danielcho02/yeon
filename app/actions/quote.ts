@@ -10,9 +10,21 @@ import {
   UserRole,
   VendorApprovalStatus
 } from "@/generated/prisma/client";
-import { actionError, actionSuccess, getActionError } from "@/lib/errors";
+import {
+  actionError,
+  actionSuccess,
+  getActionError,
+  isPrismaUniqueConstraintError
+} from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { assertQuoteTransition } from "@/lib/state-machine";
+import {
+  createWorkflowActivity,
+  createWorkflowNotification,
+  getPlanHref,
+  getVendorConfirmationDueAt,
+  getVendorDashboardHref
+} from "@/lib/workflow-events";
 
 import type { ActionResult } from "@/types/common";
 import type {
@@ -123,33 +135,36 @@ function calculateModulesTotal(modules: QuoteResponseModules) {
   );
 }
 
-function inferVendorModulePricingType(module: {
-  category: string;
-  name: string;
-  description: string | null;
-}): "FLAT" | "PER_GUEST" {
-  const text = `${module.name} ${module.description ?? ""}`.toLowerCase();
-  const looksPerGuest =
-    /1인|인당|명당|\/인|\/명|per guest|per person/.test(text);
+function isActiveQuoteRequestDuplicate(error: unknown) {
+  return isPrismaUniqueConstraintError(error, [
+    "QuoteRequest_active_planId_vendorId_key",
+    "planId",
+    "vendorId"
+  ]);
+}
 
-  if ((module.category === "CATERING" || module.category === "MEAL") && looksPerGuest) {
-    return "PER_GUEST";
-  }
+function isDuplicateQuoteResponse(error: unknown) {
+  return isPrismaUniqueConstraintError(error, [
+    "QuoteResponse_requestId_vendorId_key",
+    "requestId",
+    "vendorId"
+  ]);
+}
 
-  return "FLAT";
+function normalizeVendorModulePricingType(pricingType: string): "FLAT" | "PER_GUEST" {
+  return pricingType === "PER_GUEST" ? "PER_GUEST" : "FLAT";
 }
 
 function calculateRequestModuleTotal(
   modules: Array<{
     category: string;
-    name: string;
-    description: string | null;
     price: number;
+    pricingType: string;
   }>,
   guestCount: number
 ) {
   return modules.reduce((sum, module) => {
-    const pricingType = inferVendorModulePricingType(module);
+    const pricingType = normalizeVendorModulePricingType(module.pricingType);
     return sum + (pricingType === "PER_GUEST" ? module.price * guestCount : module.price);
   }, 0);
 }
@@ -167,13 +182,13 @@ function buildReservationOptions(
     id: string;
     name: string;
     category: string;
-    description: string | null;
     price: number;
+    pricingType: string;
   }>,
   guestCount: number
 ) {
   return modules.map((module) => {
-    const pricingType = inferVendorModulePricingType(module);
+    const pricingType = normalizeVendorModulePricingType(module.pricingType);
     return {
       catalogKey: module.id,
       name: module.name,
@@ -198,6 +213,7 @@ function mapVendorServiceModuleData(module: {
   name: string;
   category: string;
   price: number;
+  pricingType: string;
   description: string | null;
   isBaseIncluded: boolean;
   isActive: boolean;
@@ -209,7 +225,7 @@ function mapVendorServiceModuleData(module: {
     name: module.name,
     category: module.category as VendorServiceModuleData["category"],
     price: module.price,
-    pricingType: inferVendorModulePricingType(module),
+    pricingType: normalizeVendorModulePricingType(module.pricingType),
     description: module.description,
     isBaseIncluded: module.isBaseIncluded,
     isActive: module.isActive,
@@ -261,7 +277,15 @@ export async function createQuoteRequest(
 
     const plan = await prisma.eventPlan.findFirst({
       where: { id: parsed.data.planId, ownerId: user.id, type: { in: ["WEDDING", "FUNERAL"] } },
-      select: { id: true, type: true, scheduledAt: true, guestTarget: true, budget: true }
+      select: {
+        id: true,
+        ownerId: true,
+        title: true,
+        type: true,
+        scheduledAt: true,
+        guestTarget: true,
+        budget: true
+      }
     });
 
     if (!plan) {
@@ -275,7 +299,7 @@ export async function createQuoteRequest(
         vendorApprovalStatus: VendorApprovalStatus.APPROVED,
         isActive: true
       },
-      select: { id: true }
+      select: { id: true, name: true, companyName: true }
     });
 
     if (!vendor) {
@@ -317,6 +341,7 @@ export async function createQuoteRequest(
         name: true,
         category: true,
         price: true,
+        pricingType: true,
         description: true,
         isBaseIncluded: true,
         sortOrder: true
@@ -346,7 +371,7 @@ export async function createQuoteRequest(
         }
       });
 
-      await tx.reservation.create({
+      const reservation = await tx.reservation.create({
         data: {
           eventPlanId: plan.id,
           vendorId: vendor.id,
@@ -367,12 +392,51 @@ export async function createQuoteRequest(
         }
       });
 
+      await createWorkflowNotification(tx, {
+        userId: vendor.id,
+        type: "QUOTE_REQUEST_RECEIVED",
+        title: "새 견적 요청",
+        message: `${plan.title} 견적 요청이 도착했습니다.`,
+        href: getVendorDashboardHref(),
+        metadata: {
+          planId: plan.id,
+          quoteRequestId: created.id,
+          reservationId: reservation.id,
+          selectedModuleIds,
+          guestCount
+        }
+      });
+
+      await createWorkflowActivity(tx, {
+        actorId: user.id,
+        planId: plan.id,
+        vendorId: vendor.id,
+        quoteRequestId: created.id,
+        reservationId: reservation.id,
+        type: "QUOTE_REQUEST_CREATED",
+        message: "일반 사용자가 업체에 견적 요청을 보냈습니다.",
+        metadata: {
+          eventType: plan.type,
+          selectedModuleIds,
+          guestCount,
+          budget: budget ?? 0,
+          estimatedAmount: quotedAmount
+        }
+      });
+
       return created;
     });
 
     revalidateQuoteViews(plan.id, vendor.id);
     return actionSuccess(mapQuoteRequest(request));
   } catch (error) {
+    if (isActiveQuoteRequestDuplicate(error)) {
+      return actionError(
+        "이미 진행 중인 견적 요청이 있습니다.",
+        "QUOTE_REQUEST_ALREADY_EXISTS"
+      );
+    }
+
     return actionError(getActionError(error), "CREATE_QUOTE_REQUEST_FAILED");
   }
 }
@@ -391,6 +455,13 @@ export async function submitQuoteResponse(
     const request = await prisma.quoteRequest.findFirst({
       where: { id: parsed.data.requestId, vendorId: vendor.id },
       include: {
+        plan: {
+          select: {
+            id: true,
+            ownerId: true,
+            title: true
+          }
+        },
         reservation: true
       }
     });
@@ -398,14 +469,6 @@ export async function submitQuoteResponse(
     if (!request) {
       return actionError("견적 요청을 찾을 수 없습니다.", "NOT_FOUND");
     }
-
-    const currentStatus = mapQuoteStatus(request.status);
-
-    if (currentStatus !== "PENDING") {
-      return actionError("응답 가능한 견적 요청이 아닙니다.", "INVALID_QUOTE_STATUS");
-    }
-
-    assertQuoteTransition(currentStatus, "RESPONDED");
 
     const existingResponse = await prisma.quoteResponse.findFirst({
       where: { requestId: request.id, vendorId: vendor.id },
@@ -416,7 +479,23 @@ export async function submitQuoteResponse(
       return actionError("이미 제출한 견적 응답이 있습니다.", "QUOTE_RESPONSE_ALREADY_EXISTS");
     }
 
+    const currentStatus = mapQuoteStatus(request.status);
+
+    if (currentStatus !== "PENDING") {
+      return actionError("응답 가능한 견적 요청이 아닙니다.", "INVALID_QUOTE_STATUS");
+    }
+
+    assertQuoteTransition(currentStatus, "RESPONDED");
+
     const totalPrice = calculateModulesTotal(parsed.data.modules);
+    if (parsed.data.basePrice !== parsed.data.modules.basePackage.price) {
+      return actionError("기본 패키지 금액이 일치하지 않습니다.", "QUOTE_BASE_PRICE_MISMATCH");
+    }
+
+    if (parsed.data.totalPrice !== totalPrice) {
+      return actionError("견적 총액이 선택 항목 합계와 일치하지 않습니다.", "QUOTE_TOTAL_MISMATCH");
+    }
+
     const response = await prisma.$transaction(async (tx) => {
       const created = await tx.quoteResponse.create({
         data: {
@@ -441,12 +520,43 @@ export async function submitQuoteResponse(
           data: {
             quoteResponseId: created.id,
             quotedAmount: totalPrice,
-            confirmedAmount: totalPrice,
+            confirmedAmount: null,
             selectedServiceOptions: parsed.data.modules as Prisma.InputJsonValue,
             notes: parsed.data.note ?? request.reservation.notes
           }
         });
       }
+
+      await createWorkflowNotification(tx, {
+        userId: request.plan.ownerId,
+        type: "QUOTE_RESPONSE_RECEIVED",
+        title: "견적 응답 도착",
+        message: `${request.plan.title}에 대한 업체 견적이 도착했습니다.`,
+        href: getPlanHref(request.planId),
+        metadata: {
+          planId: request.planId,
+          vendorId: request.vendorId,
+          quoteRequestId: request.id,
+          quoteResponseId: created.id,
+          reservationId: request.reservation?.id ?? "",
+          totalPrice
+        }
+      });
+
+      await createWorkflowActivity(tx, {
+        actorId: vendor.id,
+        planId: request.planId,
+        vendorId: vendor.id,
+        quoteRequestId: request.id,
+        quoteResponseId: created.id,
+        reservationId: request.reservation?.id ?? null,
+        type: "QUOTE_RESPONSE_SUBMITTED",
+        message: "업체가 견적 응답을 제출했습니다.",
+        metadata: {
+          totalPrice,
+          hasNote: Boolean(parsed.data.note)
+        }
+      });
 
       return created;
     });
@@ -454,6 +564,10 @@ export async function submitQuoteResponse(
     revalidateQuoteViews(request.planId, request.vendorId);
     return actionSuccess(mapQuoteResponse(response));
   } catch (error) {
+    if (isDuplicateQuoteResponse(error)) {
+      return actionError("이미 제출한 견적 응답이 있습니다.", "QUOTE_RESPONSE_ALREADY_EXISTS");
+    }
+
     return actionError(getActionError(error), "SUBMIT_QUOTE_RESPONSE_FAILED");
   }
 }
@@ -518,6 +632,13 @@ export async function acceptQuoteResponse(
       return actionError("이미 수락된 견적 요청입니다.", "QUOTE_ALREADY_ACCEPTED");
     }
 
+    if (currentStatus !== "RESPONDED") {
+      return actionError(
+        "업체 응답이 도착한 견적만 수락할 수 있습니다.",
+        "INVALID_QUOTE_STATUS"
+      );
+    }
+
     assertQuoteTransition(currentStatus, "ACCEPTED");
 
     const modules = response.modules as unknown as QuoteResponseModules;
@@ -526,12 +647,17 @@ export async function acceptQuoteResponse(
       response.request.preferredDate ??
       response.request.plan.scheduledAt ??
       null;
+    const vendorConfirmationDueAt = getVendorConfirmationDueAt();
 
     const result = await prisma.$transaction(async (tx) => {
-      const quoteRequest = await tx.quoteRequest.update({
-        where: { id: response.requestId },
+      const accepted = await tx.quoteRequest.updateMany({
+        where: { id: response.requestId, status: PrismaQuoteStatus.RESPONDED },
         data: { status: PrismaQuoteStatus.ACCEPTED }
       });
+
+      if (accepted.count !== 1) {
+        throw new Error("이미 수락되었거나 수락할 수 없는 견적입니다.");
+      }
 
       const existingReservation = response.reservation ?? response.request.reservation;
       const reservation = existingReservation
@@ -542,7 +668,8 @@ export async function acceptQuoteResponse(
               quoteResponseId: response.id,
               serviceDate: existingReservation.serviceDate ?? serviceDate,
               quotedAmount: response.totalPrice,
-              confirmedAmount: existingReservation.confirmedAmount ?? response.totalPrice,
+              confirmedAmount: null,
+              vendorConfirmationDueAt,
               selectedServiceOptions: response.modules as Prisma.InputJsonValue,
               status: PrismaReservationStatus.PENDING,
               notes:
@@ -569,7 +696,8 @@ export async function acceptQuoteResponse(
               serviceDate,
               guestCount: response.request.plan.guestTarget,
               quotedAmount: response.totalPrice,
-              confirmedAmount: response.totalPrice,
+              confirmedAmount: null,
+              vendorConfirmationDueAt,
               selectedServiceOptions: response.modules as Prisma.InputJsonValue,
               status: PrismaReservationStatus.PENDING,
               notes: "견적 응답 수락으로 생성된 예약입니다. 업체 확정 대기 중입니다."
@@ -583,6 +711,40 @@ export async function acceptQuoteResponse(
               }
             }
           });
+
+      const quoteRequest = await tx.quoteRequest.findUniqueOrThrow({
+        where: { id: response.requestId }
+      });
+
+      await createWorkflowNotification(tx, {
+        userId: response.vendorId,
+        type: "QUOTE_RESPONSE_ACCEPTED",
+        title: "견적이 수락되었습니다",
+        message: `${response.request.plan.title} 견적이 수락되었습니다. 예약을 최종 확정해 주세요.`,
+        href: getVendorDashboardHref(),
+        metadata: {
+          planId: response.request.planId,
+          quoteRequestId: response.requestId,
+          quoteResponseId: response.id,
+          reservationId: reservation.id,
+          vendorConfirmationDueAt: vendorConfirmationDueAt.toISOString()
+        }
+      });
+
+      await createWorkflowActivity(tx, {
+        actorId: user.id,
+        planId: response.request.planId,
+        vendorId: response.vendorId,
+        quoteRequestId: response.requestId,
+        quoteResponseId: response.id,
+        reservationId: reservation.id,
+        type: "QUOTE_RESPONSE_ACCEPTED",
+        message: "일반 사용자가 견적 응답을 수락했고 업체 최종 확정을 기다립니다.",
+        metadata: {
+          totalPrice: response.totalPrice,
+          vendorConfirmationDueAt: vendorConfirmationDueAt.toISOString()
+        }
+      });
 
       return { quoteRequest, reservation };
     });
@@ -679,6 +841,7 @@ export async function calculateQuoteTotal(
   moduleIds: string[]
 ): Promise<ActionResult<{ totalPrice: number }>> {
   try {
+    await requireSessionUser();
     const parsed = idsSchema.safeParse(moduleIds);
 
     if (!parsed.success) {
@@ -689,6 +852,10 @@ export async function calculateQuoteTotal(
       where: { id: { in: parsed.data }, isActive: true },
       select: { price: true }
     });
+
+    if (modules.length !== parsed.data.length) {
+      return actionError("유효하지 않은 모듈이 포함되어 있습니다.", "INVALID_MODULES");
+    }
 
     return actionSuccess({
       totalPrice: modules.reduce((sum, module) => sum + module.price, 0)
@@ -775,6 +942,8 @@ export async function getVendorServiceModules(
   vendorId: string
 ): Promise<ActionResult<VendorServiceModuleData[]>> {
   try {
+    await requireSessionUser();
+
     if (!vendorId) {
       return actionError("업체 ID가 필요합니다.", "VALIDATION_ERROR");
     }

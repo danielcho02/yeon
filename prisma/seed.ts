@@ -41,6 +41,7 @@ async function createVendorModules(
     name: string;
     category: ModuleCategory;
     price: number;
+    pricingType?: "FLAT" | "PER_GUEST";
     description: string;
     isBaseIncluded?: boolean;
     sortOrder: number;
@@ -56,6 +57,7 @@ async function createVendorModules(
           name: module.name,
           category: module.category,
           price: module.price,
+          pricingType: module.pricingType ?? "FLAT",
           description: module.description,
           isBaseIncluded: module.isBaseIncluded ?? false,
           sortOrder: module.sortOrder,
@@ -172,6 +174,7 @@ async function seedModularQuoteData() {
       name: "하객 식사 1인",
       category: ModuleCategory.CATERING,
       price: 42_000,
+      pricingType: "PER_GUEST",
       description: "한식·양식 혼합 코스 1인",
       sortOrder: 5
     },
@@ -189,6 +192,7 @@ async function seedModularQuoteData() {
       name: "프리미엄 웨딩 뷔페",
       category: ModuleCategory.CATERING,
       price: 55_000,
+      pricingType: "PER_GUEST",
       description: "스테이크 라이브 스테이션 포함 1인",
       isBaseIncluded: true,
       sortOrder: 1
@@ -197,6 +201,7 @@ async function seedModularQuoteData() {
       name: "음료 바",
       category: ModuleCategory.CATERING,
       price: 9_000,
+      pricingType: "PER_GUEST",
       description: "논알코올 음료와 커피 1인",
       sortOrder: 2
     },
@@ -211,6 +216,7 @@ async function seedModularQuoteData() {
       name: "조문객 식사",
       category: ModuleCategory.MEAL,
       price: 15_000,
+      pricingType: "PER_GUEST",
       description: "국밥·반찬 세트 1인",
       isBaseIncluded: true,
       sortOrder: 4
@@ -353,7 +359,7 @@ async function seedModularQuoteData() {
       serviceDate: plusDays(45),
       guestCount: 160,
       quotedAmount: 2_100_000,
-      confirmedAmount: 2_100_000,
+      confirmedAmount: null,
       status: ReservationStatus.PENDING,
       notes: "촬영 원본은 2주 내 전달됩니다."
     }
@@ -486,7 +492,7 @@ async function seedModularQuoteData() {
       serviceDate: plusDays(12),
       guestCount: 50,
       quotedAmount: 750_000,
-      confirmedAmount: 750_000,
+      confirmedAmount: null,
       status: ReservationStatus.PENDING,
       notes: "당일 10명 단위 증감 가능합니다."
     }

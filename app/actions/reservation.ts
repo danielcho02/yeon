@@ -7,6 +7,12 @@ import { ReservationStatus as PrismaReservationStatus, UserRole } from "@/genera
 import { actionError, actionSuccess, getActionError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { assertReservationTransition } from "@/lib/state-machine";
+import {
+  createWorkflowActivity,
+  createWorkflowNotification,
+  getVendorConfirmationDueAt,
+  getPlanHref
+} from "@/lib/workflow-events";
 
 import type { ActionResult } from "@/types/common";
 import type { CreateReservationPayload, ReservationData } from "@/types/reservation";
@@ -56,7 +62,14 @@ async function getReservationForActor(reservationId: string, userId: string, isV
           vendor: true
         }
       },
-      quoteRequest: true
+      quoteRequest: true,
+      eventPlan: {
+        select: {
+          id: true,
+          ownerId: true,
+          title: true
+        }
+      }
     }
   });
 }
@@ -74,7 +87,7 @@ export async function createReservation(
 
     const plan = await prisma.eventPlan.findFirst({
       where: { id: parsed.data.planId, ownerId: user.id },
-      select: { id: true }
+      select: { id: true, ownerId: true, title: true }
     });
 
     if (!plan) {
@@ -126,24 +139,60 @@ export async function createReservation(
       }
     }
 
-    const reservation = await prisma.reservation.create({
-      data: {
-        eventPlanId: parsed.data.planId,
+    const vendorConfirmationDueAt = getVendorConfirmationDueAt();
+    const reservation = await prisma.$transaction(async (tx) => {
+      const created = await tx.reservation.create({
+        data: {
+          eventPlanId: parsed.data.planId,
+          vendorId: parsed.data.vendorId,
+          quoteRequestId,
+          quoteResponseId: parsed.data.quoteResponseId ?? null,
+          serviceName: "모듈형 견적 예약",
+          serviceDate: parseActionDate(parsed.data.reservedDate),
+          quotedAmount: parsed.data.totalAmount,
+          confirmedAmount: null,
+          vendorConfirmationDueAt,
+          status: PrismaReservationStatus.PENDING
+        },
+        include: {
+          vendor: true,
+          quoteResponse: {
+            include: { vendor: true }
+          }
+        }
+      });
+
+      await createWorkflowNotification(tx, {
+        userId: parsed.data.vendorId,
+        type: "RESERVATION_PENDING_CONFIRMATION",
+        title: "예약 최종 확정 요청",
+        message: `${plan.title} 예약 요청을 최종 확정해 주세요.`,
+        href: "/vendor/dashboard",
+        metadata: {
+          planId: plan.id,
+          reservationId: created.id,
+          quoteRequestId: quoteRequestId ?? "",
+          quoteResponseId: parsed.data.quoteResponseId ?? "",
+          vendorConfirmationDueAt: vendorConfirmationDueAt.toISOString()
+        }
+      });
+
+      await createWorkflowActivity(tx, {
+        actorId: user.id,
+        planId: plan.id,
         vendorId: parsed.data.vendorId,
         quoteRequestId,
         quoteResponseId: parsed.data.quoteResponseId ?? null,
-        serviceName: "모듈형 견적 예약",
-        serviceDate: parseActionDate(parsed.data.reservedDate),
-        quotedAmount: parsed.data.totalAmount,
-        confirmedAmount: null,
-        status: PrismaReservationStatus.PENDING
-      },
-      include: {
-        vendor: true,
-        quoteResponse: {
-          include: { vendor: true }
+        reservationId: created.id,
+        type: "RESERVATION_PENDING_CREATED",
+        message: "일반 사용자가 업체 최종 확정 대기 예약을 생성했습니다.",
+        metadata: {
+          totalAmount: parsed.data.totalAmount,
+          vendorConfirmationDueAt: vendorConfirmationDueAt.toISOString()
         }
-      }
+      });
+
+      return created;
     });
 
     revalidateReservationViews(reservation.eventPlanId);
@@ -175,18 +224,52 @@ export async function confirmReservation(
 
     assertReservationTransition(mapReservationStatus(reservation.status), "CONFIRMED");
 
-    const updated = await prisma.reservation.update({
-      where: { id: reservation.id },
-      data: {
-        status: PrismaReservationStatus.CONFIRMED,
-        confirmedAmount: reservation.confirmedAmount ?? reservation.quotedAmount ?? 0
-      },
-      include: {
-        vendor: true,
-        quoteResponse: {
-          include: { vendor: true }
+    const updated = await prisma.$transaction(async (tx) => {
+      const confirmed = await tx.reservation.update({
+        where: { id: reservation.id },
+        data: {
+          status: PrismaReservationStatus.CONFIRMED,
+          confirmedAmount: reservation.confirmedAmount ?? reservation.quotedAmount ?? 0,
+          vendorConfirmationDueAt: null
+        },
+        include: {
+          vendor: true,
+          quoteResponse: {
+            include: { vendor: true }
+          }
         }
-      }
+      });
+
+      await createWorkflowNotification(tx, {
+        userId: reservation.eventPlan.ownerId,
+        type: "RESERVATION_CONFIRMED",
+        title: "예약이 최종 확정되었습니다",
+        message: `${reservation.eventPlan.title} 예약이 업체에 의해 최종 확정되었습니다.`,
+        href: getPlanHref(reservation.eventPlanId),
+        metadata: {
+          planId: reservation.eventPlanId,
+          vendorId: reservation.vendorId,
+          quoteRequestId: reservation.quoteRequestId ?? "",
+          quoteResponseId: reservation.quoteResponseId ?? "",
+          reservationId: reservation.id
+        }
+      });
+
+      await createWorkflowActivity(tx, {
+        actorId: vendor.id,
+        planId: reservation.eventPlanId,
+        vendorId: reservation.vendorId,
+        quoteRequestId: reservation.quoteRequestId ?? null,
+        quoteResponseId: reservation.quoteResponseId ?? null,
+        reservationId: reservation.id,
+        type: "RESERVATION_CONFIRMED",
+        message: "업체가 예약을 최종 확정했습니다.",
+        metadata: {
+          confirmedAmount: reservation.confirmedAmount ?? reservation.quotedAmount ?? 0
+        }
+      });
+
+      return confirmed;
     });
 
     revalidateReservationViews(updated.eventPlanId);
@@ -219,18 +302,55 @@ export async function cancelReservation(
 
     assertReservationTransition(mapReservationStatus(reservation.status), "CANCELED");
 
-    const updated = await prisma.reservation.update({
-      where: { id: reservation.id },
-      data: {
-        status: PrismaReservationStatus.CANCELED,
-        notes: reason
-      },
-      include: {
-        vendor: true,
-        quoteResponse: {
-          include: { vendor: true }
+    const updated = await prisma.$transaction(async (tx) => {
+      const canceled = await tx.reservation.update({
+        where: { id: reservation.id },
+        data: {
+          status: PrismaReservationStatus.CANCELED,
+          vendorConfirmationDueAt: null,
+          notes: reason
+        },
+        include: {
+          vendor: true,
+          quoteResponse: {
+            include: { vendor: true }
+          }
         }
-      }
+      });
+
+      const actorIsVendor = user.role === UserRole.VENDOR;
+      await createWorkflowNotification(tx, {
+        userId: actorIsVendor ? reservation.eventPlan.ownerId : reservation.vendorId,
+        type: "RESERVATION_CANCELED",
+        title: "예약이 취소되었습니다",
+        message: `${reservation.eventPlan.title} 예약이 취소되었습니다.`,
+        href: actorIsVendor ? getPlanHref(reservation.eventPlanId) : "/vendor/dashboard",
+        metadata: {
+          planId: reservation.eventPlanId,
+          vendorId: reservation.vendorId,
+          quoteRequestId: reservation.quoteRequestId ?? "",
+          quoteResponseId: reservation.quoteResponseId ?? "",
+          reservationId: reservation.id,
+          reason
+        }
+      });
+
+      await createWorkflowActivity(tx, {
+        actorId: user.id,
+        planId: reservation.eventPlanId,
+        vendorId: reservation.vendorId,
+        quoteRequestId: reservation.quoteRequestId ?? null,
+        quoteResponseId: reservation.quoteResponseId ?? null,
+        reservationId: reservation.id,
+        type: "RESERVATION_CANCELED",
+        message: "예약이 취소되었습니다.",
+        metadata: {
+          actorRole: user.role,
+          reason
+        }
+      });
+
+      return canceled;
     });
 
     revalidateReservationViews(updated.eventPlanId);

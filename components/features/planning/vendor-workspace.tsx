@@ -5,6 +5,7 @@ import {
   BadgeCheck,
   CalendarDays,
   CheckCircle2,
+  Clock,
   ClipboardList,
   Heart,
   Inbox,
@@ -66,13 +67,17 @@ export function VendorWorkspace({
   const [activePanel, setActivePanel] = useState<PanelKey>("inbox");
 
   const inboxReservations = useMemo(() => {
-    const base = reservations.filter((r) => r.status === "PENDING" && r.confirmedAmount == null);
+    const base = reservations.filter((r) => r.status === "PENDING" && r.quoteResponseId == null);
     if (!supportedEventTypes || supportedEventTypes.length === 0) return base;
     return base.filter((r) => !r.eventPlan.type || supportedEventTypes.includes(r.eventPlan.type));
   }, [reservations, supportedEventTypes]);
   const inProgressReservations = useMemo(
-    () => reservations.filter((r) => r.status === "PENDING" && r.confirmedAmount != null),
+    () => reservations.filter((r) => r.status === "PENDING" && r.quoteResponseId != null),
     [reservations]
+  );
+  const acceptedProposalReservations = useMemo(
+    () => inProgressReservations.filter((r) => r.quoteRequestStatus === "ACCEPTED"),
+    [inProgressReservations]
   );
   const editableProposalReservations = useMemo(
     () =>
@@ -113,7 +118,7 @@ export function VendorWorkspace({
   const [proposalForm, setProposalForm] = useState(() => ({
     reservationId: selectedReservation?.id ?? "",
     serviceDate: asDateInput(selectedReservation?.serviceDate ?? null),
-    confirmedAmount: selectedReservation?.confirmedAmount
+    proposalAmount: selectedReservation?.confirmedAmount
       ? String(selectedReservation.confirmedAmount)
       : selectedReservation?.quotedAmount
       ? String(selectedReservation.quotedAmount)
@@ -140,7 +145,7 @@ export function VendorWorkspace({
     setProposalForm({
       reservationId: reservation.id,
       serviceDate: asDateInput(reservation.serviceDate),
-      confirmedAmount: reservation.confirmedAmount
+      proposalAmount: reservation.confirmedAmount
         ? String(reservation.confirmedAmount)
         : reservation.quotedAmount
         ? String(reservation.quotedAmount)
@@ -157,7 +162,7 @@ export function VendorWorkspace({
       setError("사용자가 이미 수락한 견적입니다. 이제 예약 최종 확정만 진행할 수 있습니다.");
       return;
     }
-    if (action === "quote" && (!proposalForm.serviceDate || !proposalForm.confirmedAmount)) {
+    if (action === "quote" && (!proposalForm.serviceDate || !proposalForm.proposalAmount)) {
       setError("견적 금액과 가능 일정을 모두 입력해 주세요.");
       return;
     }
@@ -169,7 +174,12 @@ export function VendorWorkspace({
       const response = await fetch(`/api/vendor/reservations/${proposalForm.reservationId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, serviceDate: proposalForm.serviceDate, confirmedAmount: proposalForm.confirmedAmount, notes: proposalForm.notes })
+        body: JSON.stringify({
+          action,
+          serviceDate: proposalForm.serviceDate,
+          proposalAmount: proposalForm.proposalAmount,
+          notes: proposalForm.notes
+        })
       });
 
       const payload = (await response.json()) as { error?: string };
@@ -289,15 +299,36 @@ export function VendorWorkspace({
             <div className="space-y-2">
               <StatusRow done={inboxReservations.length > 0} label="새 요청 확인" />
               <StatusRow done={inProgressReservations.length > 0} label="견적 제안 발송" />
+              <StatusRow done={acceptedProposalReservations.length > 0} label="예약 최종 확정 필요" />
               <StatusRow done={confirmedReservations.length > 0} label="확정 예약 관리" />
             </div>
 
-            {inboxReservations.length > 0 && (
-              <div className="mt-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
-                <TrendingUp className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-                <p className="text-xs text-amber-700">
-                  <span className="font-bold">{inboxReservations.length}건</span>의 새 요청이 대기 중입니다.
-                </p>
+            {(inboxReservations.length > 0 || acceptedProposalReservations.length > 0) && (
+              <div className="mt-4 space-y-2">
+                {acceptedProposalReservations.length > 0 && (
+                  <button
+                    className="flex w-full items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-left transition-colors hover:bg-violet-100/70"
+                    onClick={() => setActivePanel("proposals")}
+                    type="button"
+                  >
+                    <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-violet-700" />
+                    <p className="text-xs text-violet-800">
+                      <span className="font-bold">{acceptedProposalReservations.length}건</span>은 사용자가 수락했습니다. 예약 최종 확정을 진행하세요.
+                    </p>
+                  </button>
+                )}
+                {inboxReservations.length > 0 && (
+                  <button
+                    className="flex w-full items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-left transition-colors hover:bg-amber-100/70"
+                    onClick={() => setActivePanel("inbox")}
+                    type="button"
+                  >
+                    <TrendingUp className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                    <p className="text-xs text-amber-700">
+                      <span className="font-bold">{inboxReservations.length}건</span>의 새 요청이 대기 중입니다.
+                    </p>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -487,6 +518,11 @@ export function VendorWorkspace({
                   <p className="mt-1 text-xs text-violet-700/80">
                     견적 수정 대신 예약 최종 확정을 진행하세요.
                   </p>
+                  {selectedProposalReservation.vendorConfirmationDueAt && (
+                    <p className="mt-1 text-xs font-semibold text-violet-800">
+                      확정 요청 기한: {formatDate(selectedProposalReservation.vendorConfirmationDueAt)}
+                    </p>
+                  )}
                   <Button
                     className="mt-3"
                     disabled={busyReservationId === selectedProposalReservation.id}
@@ -509,13 +545,13 @@ export function VendorWorkspace({
                     onChange={(e) => setProposalForm((c) => ({ ...c, serviceDate: e.target.value }))}
                   />
                 </Field>
-                <Field label="견적 금액 (원)" name="confirmedAmount">
+                <Field label="견적 금액 (원)" name="proposalAmount">
                   <Input
-                    id="confirmedAmount"
+                    id="proposalAmount"
                     inputMode="numeric"
                     disabled={isSelectedAcceptedProposal}
-                    value={proposalForm.confirmedAmount}
-                    onChange={(e) => setProposalForm((c) => ({ ...c, confirmedAmount: e.target.value }))}
+                    value={proposalForm.proposalAmount}
+                    onChange={(e) => setProposalForm((c) => ({ ...c, proposalAmount: e.target.value }))}
                   />
                 </Field>
               </div>
@@ -567,7 +603,13 @@ export function VendorWorkspace({
                     </div>
                     <div className="mt-3 grid gap-1.5 text-sm text-muted-foreground">
                       <div className="flex items-center gap-2"><CalendarDays className="h-3.5 w-3.5 text-muted-foreground/55" />{formatDate(r.serviceDate)}</div>
-                      <div className="flex items-center gap-2"><Wallet className="h-3.5 w-3.5 text-muted-foreground/55" />{formatCurrency(r.confirmedAmount)}</div>
+                      <div className="flex items-center gap-2"><Wallet className="h-3.5 w-3.5 text-muted-foreground/55" />{formatCurrency(r.confirmedAmount ?? r.quotedAmount)}</div>
+                      {r.quoteRequestStatus === "ACCEPTED" && r.vendorConfirmationDueAt && (
+                        <div className="flex items-center gap-2 font-semibold text-violet-700">
+                          <Clock className="h-3.5 w-3.5" />
+                          확정 요청 기한: {formatDate(r.vendorConfirmationDueAt)}
+                        </div>
+                      )}
                     </div>
                     <div className="mt-4">
                       {r.quoteRequestStatus === "ACCEPTED" ? (

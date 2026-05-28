@@ -11,6 +11,7 @@ import {
   VendorApprovalStatus
 } from "@/generated/prisma/client";
 import { getServerAuthSession } from "@/lib/auth/session";
+import { isPrismaUniqueConstraintError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { assertQuoteTransition } from "@/lib/state-machine";
 import {
@@ -79,12 +80,12 @@ function mapQuoteStatus(status: QuoteStatus) {
 
 function buildLegacyResponseModules(
   reservation: Awaited<ReturnType<typeof requireOwnedReservation>>,
-  confirmedAmount: number
+  proposalAmount: number
 ) {
   return {
     basePackage: {
       name: reservation.serviceName,
-      price: confirmedAmount,
+      price: proposalAmount,
       description: reservation.notes ?? reservation.description ?? "업체가 제출한 견적 제안입니다."
     },
     includedModules: [],
@@ -103,7 +104,15 @@ function revalidateReservationViews(eventPlanId: string) {
   revalidatePath("/planner/funeral");
 }
 
-export async function acceptReservation(reservationId: string, confirmedAmount: number) {
+function isDuplicateQuoteResponse(error: unknown) {
+  return isPrismaUniqueConstraintError(error, [
+    "QuoteResponse_requestId_vendorId_key",
+    "requestId",
+    "vendorId"
+  ]);
+}
+
+export async function acceptReservation(reservationId: string, proposalAmount: number) {
   const vendorId = await requireVendor();
   const reservation = await requireOwnedReservation(reservationId, vendorId);
 
@@ -111,87 +120,96 @@ export async function acceptReservation(reservationId: string, confirmedAmount: 
     throw new Error("응답 가능한 요청이 아닙니다.");
   }
 
-  if (!Number.isFinite(confirmedAmount) || confirmedAmount <= 0) {
-    throw new Error("확정 금액을 입력해 주세요.");
+  if (!Number.isFinite(proposalAmount) || proposalAmount <= 0) {
+    throw new Error("견적 금액을 입력해 주세요.");
   }
 
-  await prisma.$transaction(async (tx) => {
-    let quoteResponseId = reservation.quoteResponseId;
+  try {
+    await prisma.$transaction(async (tx) => {
+      let quoteResponseId = reservation.quoteResponseId;
 
-    if (reservation.quoteRequestId) {
-      const quoteRequest = await tx.quoteRequest.findFirst({
-        where: { id: reservation.quoteRequestId, vendorId },
-        select: { id: true, status: true }
-      });
-
-      if (quoteRequest) {
-        const quoteStatus = mapQuoteStatus(quoteRequest.status);
-
-        if (quoteStatus === "PENDING") {
-          assertQuoteTransition(quoteStatus, "RESPONDED");
-        } else if (quoteStatus !== "RESPONDED") {
-          throw new Error("응답 가능한 견적 요청이 아닙니다.");
-        }
-
-        const modules = buildLegacyResponseModules(reservation, confirmedAmount);
-        const existingQuoteResponse = quoteResponseId
-          ? null
-          : await tx.quoteResponse.findFirst({
-              where: { requestId: quoteRequest.id, vendorId },
-              select: { id: true }
-            });
-        const quoteResponse = quoteResponseId
-          ? await tx.quoteResponse.update({
-              where: { id: quoteResponseId },
-              data: {
-                basePrice: confirmedAmount,
-                modules: modules as Prisma.InputJsonValue,
-                totalPrice: confirmedAmount,
-                note: reservation.notes
-              },
-              select: { id: true }
-            })
-          : existingQuoteResponse
-          ? await tx.quoteResponse.update({
-              where: { id: existingQuoteResponse.id },
-              data: {
-                basePrice: confirmedAmount,
-                modules: modules as Prisma.InputJsonValue,
-                totalPrice: confirmedAmount,
-                note: reservation.notes
-              },
-              select: { id: true }
-            })
-          : await tx.quoteResponse.create({
-              data: {
-                requestId: quoteRequest.id,
-                vendorId,
-                basePrice: confirmedAmount,
-                modules: modules as Prisma.InputJsonValue,
-                totalPrice: confirmedAmount,
-                note: reservation.notes
-              },
-              select: { id: true }
-            });
-
-        quoteResponseId = quoteResponse.id;
-
-        await tx.quoteRequest.update({
-          where: { id: quoteRequest.id },
-          data: { status: QuoteStatus.RESPONDED }
+      if (reservation.quoteRequestId) {
+        const quoteRequest = await tx.quoteRequest.findFirst({
+          where: { id: reservation.quoteRequestId, vendorId },
+          select: { id: true, status: true }
         });
+
+        if (quoteRequest) {
+          const quoteStatus = mapQuoteStatus(quoteRequest.status);
+
+          if (quoteStatus === "PENDING") {
+            assertQuoteTransition(quoteStatus, "RESPONDED");
+          } else if (quoteStatus !== "RESPONDED") {
+            throw new Error("응답 가능한 견적 요청이 아닙니다.");
+          }
+
+          const modules = buildLegacyResponseModules(reservation, proposalAmount);
+          const existingQuoteResponse = quoteResponseId
+            ? null
+            : await tx.quoteResponse.findFirst({
+                where: { requestId: quoteRequest.id, vendorId },
+                select: { id: true }
+              });
+          const quoteResponse = quoteResponseId
+            ? await tx.quoteResponse.update({
+                where: { id: quoteResponseId },
+                data: {
+                  basePrice: proposalAmount,
+                  modules: modules as Prisma.InputJsonValue,
+                  totalPrice: proposalAmount,
+                  note: reservation.notes
+                },
+                select: { id: true }
+              })
+            : existingQuoteResponse
+            ? await tx.quoteResponse.update({
+                where: { id: existingQuoteResponse.id },
+                data: {
+                  basePrice: proposalAmount,
+                  modules: modules as Prisma.InputJsonValue,
+                  totalPrice: proposalAmount,
+                  note: reservation.notes
+                },
+                select: { id: true }
+              })
+            : await tx.quoteResponse.create({
+                data: {
+                  requestId: quoteRequest.id,
+                  vendorId,
+                  basePrice: proposalAmount,
+                  modules: modules as Prisma.InputJsonValue,
+                  totalPrice: proposalAmount,
+                  note: reservation.notes
+                },
+                select: { id: true }
+              });
+
+          quoteResponseId = quoteResponse.id;
+
+          await tx.quoteRequest.update({
+            where: { id: quoteRequest.id },
+            data: { status: QuoteStatus.RESPONDED }
+          });
+        }
       }
+
+      await tx.reservation.update({
+        where: { id: reservation.id },
+        data: {
+          quoteResponseId,
+          status: ReservationStatus.PENDING,
+          quotedAmount: proposalAmount,
+          confirmedAmount: null,
+        },
+      });
+    });
+  } catch (error) {
+    if (isDuplicateQuoteResponse(error)) {
+      throw new Error("이미 제출한 견적 응답이 있습니다.");
     }
 
-    await tx.reservation.update({
-      where: { id: reservation.id },
-      data: {
-        quoteResponseId,
-        status: ReservationStatus.PENDING,
-        confirmedAmount,
-      },
-    });
-  });
+    throw error;
+  }
 
   revalidateReservationViews(reservation.eventPlanId);
 }
@@ -223,7 +241,8 @@ export async function rejectReservation(reservationId: string, reason: string) {
     await tx.reservation.update({
       where: { id: reservation.id },
       data: {
-        status: ReservationStatus.CANCELLED,
+        status: ReservationStatus.CANCELED,
+        vendorConfirmationDueAt: null,
         notes: reason,
       },
     });

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { QuoteStatus, ReservationStatus, UserRole } from "@/generated/prisma/client";
 import { getServerAuthSession } from "@/lib/auth/session";
+import { isPrismaUniqueConstraintError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { mvpEventTypes } from "@/lib/step3.server";
 import {
@@ -11,6 +12,11 @@ import {
   parseDateOnlyToKst,
   vendorSupportsAnyServiceModule
 } from "@/lib/step3.shared";
+import {
+  createWorkflowActivity,
+  createWorkflowNotification,
+  getVendorDashboardHref
+} from "@/lib/workflow-events";
 
 function revalidateReservationViews(eventPlanId: string) {
   revalidatePath("/account");
@@ -20,6 +26,14 @@ function revalidateReservationViews(eventPlanId: string) {
   revalidatePath("/planner/wedding");
   revalidatePath("/planner/funeral");
   revalidatePath("/vendor/dashboard");
+}
+
+function isActiveQuoteRequestDuplicate(error: unknown) {
+  return isPrismaUniqueConstraintError(error, [
+    "QuoteRequest_active_planId_vendorId_key",
+    "planId",
+    "vendorId"
+  ]);
 }
 
 export async function createQuoteRequest(formData: FormData) {
@@ -47,7 +61,7 @@ export async function createQuoteRequest(formData: FormData) {
       ownerId: session.user.id,
       type: { in: mvpEventTypes }
     },
-    select: { id: true, type: true, scheduledAt: true, guestTarget: true }
+    select: { id: true, title: true, type: true, scheduledAt: true, guestTarget: true }
   });
   if (!plan) return { error: "유효하지 않은 플랜입니다." };
 
@@ -163,36 +177,75 @@ export async function createQuoteRequest(formData: FormData) {
 
   const serviceDate = serviceDateRaw ? parseDateOnlyToKst(serviceDateRaw) : plan.scheduledAt;
 
-  await prisma.$transaction(async (tx) => {
-    const quoteRequest = await tx.quoteRequest.create({
-      data: {
+  try {
+    await prisma.$transaction(async (tx) => {
+      const quoteRequest = await tx.quoteRequest.create({
+        data: {
+          planId: plan.id,
+          vendorId: vendor.id,
+          requirements: message ?? serviceName,
+          selectedModules: selectedItemIds,
+          preferredDate: serviceDate,
+          budget: quotedAmount,
+          status: QuoteStatus.PENDING
+        }
+      });
+
+      const reservation = await tx.reservation.create({
+        data: {
+          eventPlanId: plan.id,
+          vendorId: vendor.id,
+          quoteRequestId: quoteRequest.id,
+          serviceName,
+          serviceCategory: primaryModule,
+          description: message,
+          serviceDate,
+          guestCount,
+          quotedAmount,
+          selectedServiceOptions,
+          status: ReservationStatus.PENDING,
+          notes: message
+        }
+      });
+
+      await createWorkflowNotification(tx, {
+        userId: vendor.id,
+        type: "QUOTE_REQUEST_RECEIVED",
+        title: "새 견적 요청",
+        message: `${plan.title} 견적 요청이 도착했습니다.`,
+        href: getVendorDashboardHref(),
+        metadata: {
+          planId: plan.id,
+          vendorId: vendor.id,
+          quoteRequestId: quoteRequest.id,
+          reservationId: reservation.id,
+          selectedItemIds,
+          guestCount
+        }
+      });
+
+      await createWorkflowActivity(tx, {
+        actorId: session.user.id,
         planId: plan.id,
         vendorId: vendor.id,
-        requirements: message ?? serviceName,
-        selectedModules: selectedItemIds,
-        preferredDate: serviceDate,
-        budget: quotedAmount,
-        status: QuoteStatus.PENDING
-      }
-    });
-
-    await tx.reservation.create({
-      data: {
-        eventPlanId: plan.id,
-        vendorId: vendor.id,
         quoteRequestId: quoteRequest.id,
-        serviceName,
-        serviceCategory: primaryModule,
-        description: message,
-        serviceDate,
-        guestCount,
-        quotedAmount,
-        selectedServiceOptions,
-        status: ReservationStatus.PENDING,
-        notes: message
-      }
+        reservationId: reservation.id,
+        type: "QUOTE_REQUEST_CREATED",
+        message: "일반 사용자가 업체에 견적 요청을 보냈습니다.",
+        metadata: {
+          selectedItemIds,
+          guestCount,
+          quotedAmount
+        }
+      });
     });
-  });
+  } catch (error) {
+    if (isActiveQuoteRequestDuplicate(error)) {
+      return { error: "이미 진행 중인 견적 요청이 있습니다." };
+    }
+
+    throw error;
+  }
 
   revalidateReservationViews(eventPlanId);
 

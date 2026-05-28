@@ -17,6 +17,7 @@ export interface ReservationData {
   quoteResponseId: string | null;
   reservedDate: string;
   totalAmount: number;
+  vendorConfirmationDueAt: string | null;
   status: ReservationStatus;
   createdAt: string;
   updatedAt: string;

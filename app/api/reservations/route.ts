@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 
 import { QuoteStatus, ReservationStatus, UserRole } from "@/generated/prisma/client";
 import { getServerAuthSession } from "@/lib/auth/session";
+import { isPrismaUniqueConstraintError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { mvpEventTypes } from "@/lib/step3.server";
 import {
@@ -11,6 +12,19 @@ import {
   parseDateOnlyToKst,
   vendorSupportsServiceModule
 } from "@/lib/step3.shared";
+import {
+  createWorkflowActivity,
+  createWorkflowNotification,
+  getVendorDashboardHref
+} from "@/lib/workflow-events";
+
+function isActiveQuoteRequestDuplicate(error: unknown) {
+  return isPrismaUniqueConstraintError(error, [
+    "QuoteRequest_active_planId_vendorId_key",
+    "planId",
+    "vendorId"
+  ]);
+}
 
 export async function POST(request: Request) {
   const session = await getServerAuthSession();
@@ -59,6 +73,7 @@ export async function POST(request: Request) {
     select: {
       id: true,
       type: true,
+      title: true,
       budget: true
     }
   });
@@ -157,34 +172,76 @@ export async function POST(request: Request) {
 
   const serviceDate = parseDateOnlyToKst(serviceDateInput);
 
-  await prisma.$transaction(async (tx) => {
-    const quoteRequest = await tx.quoteRequest.create({
-      data: {
+  try {
+    await prisma.$transaction(async (tx) => {
+      const quoteRequest = await tx.quoteRequest.create({
+        data: {
+          planId: eventPlanId,
+          vendorId,
+          requirements: notes || serviceName,
+          selectedModules: [serviceId || serviceModuleOption.value],
+          preferredDate: serviceDate,
+          budget: quotedAmount,
+          status: QuoteStatus.PENDING
+        }
+      });
+
+      const reservation = await tx.reservation.create({
+        data: {
+          eventPlanId,
+          vendorId,
+          quoteRequestId: quoteRequest.id,
+          serviceName,
+          serviceCategory: serviceModuleOption.value,
+          serviceDate,
+          guestCount,
+          quotedAmount,
+          notes: notes || null,
+          status: ReservationStatus.PENDING
+        }
+      });
+
+      await createWorkflowNotification(tx, {
+        userId: vendorId,
+        type: "QUOTE_REQUEST_RECEIVED",
+        title: "새 견적 요청",
+        message: `${plan.title} 견적 요청이 도착했습니다.`,
+        href: getVendorDashboardHref(),
+        metadata: {
+          planId: eventPlanId,
+          vendorId,
+          quoteRequestId: quoteRequest.id,
+          reservationId: reservation.id,
+          serviceModule: serviceModuleOption.value
+        }
+      });
+
+      await createWorkflowActivity(tx, {
+        actorId: session.user.id,
         planId: eventPlanId,
         vendorId,
-        requirements: notes || serviceName,
-        selectedModules: [serviceId || serviceModuleOption.value],
-        preferredDate: serviceDate,
-        budget: quotedAmount,
-        status: QuoteStatus.PENDING
-      }
-    });
-
-    await tx.reservation.create({
-      data: {
-        eventPlanId,
-        vendorId,
         quoteRequestId: quoteRequest.id,
-        serviceName,
-        serviceCategory: serviceModuleOption.value,
-        serviceDate,
-        guestCount,
-        quotedAmount,
-        notes: notes || null,
-        status: ReservationStatus.PENDING
-      }
+        reservationId: reservation.id,
+        type: "QUOTE_REQUEST_CREATED",
+        message: "일반 사용자가 API 경로로 견적 요청을 보냈습니다.",
+        metadata: {
+          serviceModule: serviceModuleOption.value,
+          serviceId,
+          guestCount: guestCount ?? 0,
+          quotedAmount: quotedAmount ?? 0
+        }
+      });
     });
-  });
+  } catch (error) {
+    if (isActiveQuoteRequestDuplicate(error)) {
+      return Response.json(
+        { error: "이미 진행 중인 견적 요청이 있습니다." },
+        { status: 409 }
+      );
+    }
+
+    throw error;
+  }
 
   revalidatePath("/account");
   revalidatePath("/plans");

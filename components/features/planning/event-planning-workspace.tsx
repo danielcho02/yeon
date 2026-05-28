@@ -150,6 +150,18 @@ function asDateInput(v: string | null) {
   return new Date(v).toISOString().slice(0, 10);
 }
 
+type QuoteRequestStatusItem = {
+  id: string;
+  vendorName: string;
+  serviceLabel: string;
+  statusLabel: string;
+  statusTone: string;
+  helperText: string;
+  amount: number | null;
+  canReview: boolean;
+  vendorConfirmationDueAt?: string | null;
+};
+
 const moduleSelectClassName =
   "h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
@@ -192,11 +204,11 @@ export function EventPlanningWorkspace({
     [reservations, plan]
   );
   const pendingRequests = useMemo(
-    () => planReservations.filter((r) => r.status === "PENDING" && r.confirmedAmount == null),
+    () => planReservations.filter((r) => r.status === "PENDING" && r.quoteResponseId == null),
     [planReservations]
   );
   const proposals = useMemo(
-    () => planReservations.filter((r) => r.status === "PENDING" && r.confirmedAmount != null),
+    () => planReservations.filter((r) => r.status === "PENDING" && r.quoteResponseId != null),
     [planReservations]
   );
   const confirmedRes = useMemo(
@@ -292,6 +304,114 @@ export function EventPlanningWorkspace({
     () => mapQuoteRequestsToVendorQuotes(quoteRequestsData ?? []),
     [quoteRequestsData]
   );
+  const requestStatusItems = useMemo<QuoteRequestStatusItem[]>(() => {
+    if (quoteRequestsData !== null) {
+      return quoteRequestsData
+        .filter((request) => request.status !== "CANCELED")
+        .map((request) => {
+          const latestResponse = request.responses[0] ?? null;
+          const moduleNames = request.selectedModuleDetails?.map((module) => module.name) ?? [];
+          const serviceLabel =
+            moduleNames.length > 1
+              ? `${moduleNames[0]} 외 ${moduleNames.length - 1}개`
+              : moduleNames[0] ?? request.requirements;
+          const reservationStatus = request.reservation?.status ?? null;
+          const isConfirmed = reservationStatus === "CONFIRMED" || reservationStatus === "COMPLETED";
+
+          if (isConfirmed) {
+            return {
+              id: request.id,
+              vendorName: request.vendor?.companyName ?? "업체",
+              serviceLabel,
+              statusLabel: "예약 확정 완료",
+              statusTone: "bg-emerald-100 text-emerald-700",
+              helperText: "업체가 예약을 최종 확정했습니다.",
+              amount: request.reservation?.totalAmount ?? latestResponse?.totalPrice ?? request.budget,
+              canReview: true
+            };
+          }
+
+          if (request.status === "ACCEPTED") {
+            const dueAt = request.reservation?.vendorConfirmationDueAt ?? null;
+            return {
+              id: request.id,
+              vendorName: request.vendor?.companyName ?? "업체",
+              serviceLabel,
+              statusLabel: "업체 최종 확정 대기",
+              statusTone: "bg-violet-100 text-violet-700",
+              helperText: dueAt
+                ? `견적은 수락됐고, 업체가 ${formatDate(dueAt)}까지 예약을 확정해야 완료됩니다.`
+                : "견적은 수락됐고, 업체가 예약을 확정해야 완료됩니다.",
+              amount: latestResponse?.totalPrice ?? request.reservation?.totalAmount ?? request.budget,
+              canReview: true,
+              vendorConfirmationDueAt: dueAt
+            };
+          }
+
+          if (request.status === "RESPONDED") {
+            return {
+              id: request.id,
+              vendorName: request.vendor?.companyName ?? "업체",
+              serviceLabel,
+              statusLabel: "견적 도착",
+              statusTone: "bg-sky-100 text-sky-700",
+              helperText: "견적 비교 화면에서 금액과 포함 항목을 확인하세요.",
+              amount: latestResponse?.totalPrice ?? request.reservation?.totalAmount ?? request.budget,
+              canReview: true
+            };
+          }
+
+          return {
+            id: request.id,
+            vendorName: request.vendor?.companyName ?? "업체",
+            serviceLabel,
+            statusLabel: "업체 응답 대기",
+            statusTone: "bg-amber-100 text-amber-700",
+            helperText: "업체가 견적을 보내면 비교 화면에서 확인할 수 있습니다.",
+            amount: request.budget ?? request.reservation?.totalAmount ?? null,
+            canReview: false
+          };
+        });
+    }
+
+    return planReservations.map((reservation) => {
+      const meta = getQuoteStatusMeta(reservation);
+      const isAccepted = reservation.quoteRequestStatus === "ACCEPTED";
+      const isConfirmed = reservation.status === "CONFIRMED" || reservation.status === "COMPLETED";
+      const dueAt = reservation.vendorConfirmationDueAt;
+      return {
+        id: reservation.id,
+        vendorName: reservation.vendor.companyName ?? reservation.vendor.name,
+        serviceLabel: getQuoteServiceModuleLabel({
+          eventType: reservation.eventPlan.type,
+          serviceCategory: reservation.serviceCategory,
+          serviceName: reservation.serviceName
+        }),
+        statusLabel: isConfirmed
+          ? "예약 확정 완료"
+          : isAccepted
+            ? "업체 최종 확정 대기"
+            : meta.label,
+        statusTone: isConfirmed
+          ? "bg-emerald-100 text-emerald-700"
+          : isAccepted
+            ? "bg-violet-100 text-violet-700"
+            : meta.tone,
+        helperText: isConfirmed
+          ? "업체가 예약을 최종 확정했습니다."
+          : isAccepted
+            ? dueAt
+              ? `견적은 수락됐고, 업체가 ${formatDate(dueAt)}까지 예약을 확정해야 완료됩니다.`
+              : "견적은 수락됐고, 업체가 예약을 확정해야 완료됩니다."
+            : reservation.quoteResponseId != null
+              ? "견적 비교 화면에서 금액과 포함 항목을 확인하세요."
+              : "업체가 견적을 보내면 비교 화면에서 확인할 수 있습니다.",
+        amount: reservation.confirmedAmount ?? reservation.quotedAmount,
+        canReview: reservation.quoteResponseId != null || isAccepted || isConfirmed,
+        vendorConfirmationDueAt: dueAt
+      };
+    });
+  }, [planReservations, quoteRequestsData]);
 
   const vendorSvcsForForm = selectedVendor
     ? (selectedVendor.services ?? []).filter(
@@ -1248,36 +1368,31 @@ export function EventPlanningWorkspace({
             {/* Sent requests sidebar */}
             <div className="space-y-3">
               <h3 className="font-[var(--font-display)] text-sm font-bold text-foreground">보낸 요청 현황</h3>
-              {planReservations.length > 0 ? (
-                planReservations.map((r) => (
+              {requestStatusItems.length > 0 ? (
+                requestStatusItems.map((item) => (
                   <div
-                    key={r.id}
+                    key={item.id}
                     className="rounded-[1.75rem] border border-border/60 bg-white/90 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="text-sm font-semibold text-foreground">
-                          {getQuoteServiceModuleLabel({
-                            eventType: r.eventPlan.type,
-                            serviceCategory: r.serviceCategory,
-                            serviceName: r.serviceName
-                          })}
-                        </p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">{r.vendor.companyName ?? r.vendor.name}</p>
+                        <p className="text-sm font-semibold text-foreground">{item.serviceLabel}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{item.vendorName}</p>
                       </div>
-                      <Badge className={getQuoteStatusMeta(r).tone}>
-                        {getQuoteStatusMeta(r).label}
-                      </Badge>
+                      <Badge className={item.statusTone}>{item.statusLabel}</Badge>
                     </div>
-                    {r.confirmedAmount != null && r.status === "PENDING" && (
-                      <div className="mt-3 flex items-center justify-between">
-                        <span className={`text-sm font-bold ${theme.accentText}`}>{formatCurrency(r.confirmedAmount)}</span>
+                    <p className="mt-2 text-xs leading-5 text-muted-foreground">{item.helperText}</p>
+                    {(item.amount != null || item.canReview) && (
+                      <div className="mt-3 flex items-center justify-between gap-3">
+                        <span className={`text-sm font-bold ${theme.accentText}`}>
+                          {item.amount != null ? formatCurrency(item.amount) : "상세 확인"}
+                        </span>
                         <button
                           className={`text-xs font-semibold underline-offset-2 hover:underline ${theme.accentText}`}
                           onClick={() => navigateStep("booking")}
                           type="button"
                         >
-                          제안 확인 →
+                          {item.canReview ? "진행 상태 확인 →" : "비교 화면 →"}
                         </button>
                       </div>
                     )}
@@ -1287,13 +1402,13 @@ export function EventPlanningWorkspace({
                 <EmptyState emoji="📬" title="아직 요청이 없습니다." description="업체를 선택해 견적 요청을 보내세요." />
               )}
 
-              {proposals.length > 0 && (
+              {comparisonQuotes.length > 0 && (
                 <button
                   className={`flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-semibold ${theme.btnAccent}`}
                   onClick={() => navigateStep("booking")}
                   type="button"
                 >
-                  받은 제안 확인 ({proposals.length}건)
+                  견적 비교 및 상태 확인 ({comparisonQuotes.length}건)
                   <ArrowRight className="h-4 w-4" />
                 </button>
               )}
@@ -1303,6 +1418,7 @@ export function EventPlanningWorkspace({
 
         {/* ══ STEP 4: 견적 비교 및 수락 ══════════════════════════════════ */}
         {activeStep === "booking" && (() => {
+          const pendingQuoteRequests = (quoteRequestsData ?? []).filter((r) => r.status === "PENDING");
           const respondedRequests = (quoteRequestsData ?? []).filter((r) => r.status === "RESPONDED");
           const acceptedRequests = (quoteRequestsData ?? []).filter((r) => r.status === "ACCEPTED");
 
@@ -1311,6 +1427,41 @@ export function EventPlanningWorkspace({
               {/* Left column: comparison + acceptance */}
               <div className="space-y-4">
                 <h2 className="font-[var(--font-display)] text-base font-bold text-foreground">견적 비교 및 수락</h2>
+
+                <div className="rounded-[1.75rem] border border-border/60 bg-white/90 p-4 shadow-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className={theme.badge}>다음 단계 안내</Badge>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      견적 수락과 예약 확정은 다른 단계입니다.
+                    </span>
+                  </div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-4">
+                    <WorkflowStep
+                      active={pendingQuoteRequests.length > 0}
+                      count={pendingQuoteRequests.length}
+                      label="업체 응답 대기"
+                      description="요청 전송 완료"
+                    />
+                    <WorkflowStep
+                      active={respondedRequests.length > 0}
+                      count={respondedRequests.length}
+                      label="견적 비교"
+                      description="금액·포함 항목 확인"
+                    />
+                    <WorkflowStep
+                      active={acceptedRequests.length > 0}
+                      count={acceptedRequests.length}
+                      label="업체 확정 대기"
+                      description="사용자가 수락한 상태"
+                    />
+                    <WorkflowStep
+                      active={confirmedRes.length > 0}
+                      count={confirmedRes.length}
+                      label="예약 확정 완료"
+                      description="업체 최종 확정"
+                    />
+                  </div>
+                </div>
 
                 {/* Comparison table */}
                 {plan && (
@@ -1414,6 +1565,11 @@ export function EventPlanningWorkspace({
                               <p className="mt-0.5 text-xs text-muted-foreground">
                                 업체가 예약을 최종 확정하면 완료됩니다
                               </p>
+                              {req.reservation?.vendorConfirmationDueAt && (
+                                <p className="mt-1 text-xs font-semibold text-violet-700">
+                                  확정 요청 기한: {formatDate(req.reservation.vendorConfirmationDueAt)}
+                                </p>
+                              )}
                             </div>
                             {resp && (
                               <p className="text-sm font-bold text-violet-700">{formatCurrency(resp.totalPrice)}</p>
@@ -1425,10 +1581,10 @@ export function EventPlanningWorkspace({
                   </div>
                 )}
 
-                {pendingRequests.length > 0 && (
+                {pendingQuoteRequests.length > 0 && (
                   <div className="flex items-center gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3.5 text-sm text-amber-700">
                     <Clock className="h-4 w-4 shrink-0" />
-                    <span>{pendingRequests.length}건의 요청이 업체 응답을 기다리고 있습니다.</span>
+                    <span>{pendingQuoteRequests.length}건의 요청이 업체 응답을 기다리고 있습니다.</span>
                   </div>
                 )}
               </div>
@@ -1488,6 +1644,40 @@ function EmptyState({ title, description, emoji }: { title: string; description:
       {emoji && <p className="mb-3 text-3xl">{emoji}</p>}
       <p className="text-sm font-semibold text-foreground">{title}</p>
       <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
+function WorkflowStep({
+  active,
+  count,
+  label,
+  description
+}: {
+  active: boolean;
+  count: number;
+  label: string;
+  description: string;
+}) {
+  return (
+    <div
+      className={`rounded-2xl border px-3.5 py-3 transition-colors ${
+        active
+          ? "border-primary/20 bg-primary/5 text-foreground"
+          : "border-border/40 bg-muted/20 text-muted-foreground"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-bold">{label}</p>
+        <span
+          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+            active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {count}
+        </span>
+      </div>
+      <p className="mt-1 text-[11px] leading-4">{description}</p>
     </div>
   );
 }
