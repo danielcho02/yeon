@@ -554,3 +554,40 @@ DTO/action 계약:
 - 운영 대시보드: `ActivityLog`는 저장되지만 관리자 조회 화면은 없다. CS 대응용 admin activity timeline을 추가해야 한다.
 - 인증/AI/결제: 실제 SMS/email provider, AI provider, PG/정산 정책은 아직 런칭 blocker다. Step 3 견적/예약 흐름과 별도 트랙으로 provider 선택과 env validation을 구현해야 한다.
 - 브라우저 E2E: Playwright dependency 또는 브라우저 MCP가 연결되면 `planner@yeon.local` → `venue@yeon.local` → `planner@yeon.local` → vendor confirm 전체 클릭 흐름을 자동화해야 한다.
+
+## 20. 2026-05-28 Chrome QA High Priority Fix
+
+Chrome MCP QA 이후 main merge 전 High Priority 버그만 좁게 수정했다. 새 기능 추가나 UI 대개편은 하지 않았다.
+
+수정한 버그:
+
+- BUG-01 `/planner/wedding?planId=...` 새로고침 시 Step 2로 초기화
+  - `app/planner/wedding/page.tsx`, `app/planner/funeral/page.tsx`가 `step` query를 파싱해 `EventPlanningWorkspace.initialStep`으로 전달한다.
+  - `EventPlanningWorkspace`는 `step=1..4`만 허용하고, 잘못된 값은 서버 props 기반 plan 상태로 fallback한다.
+  - plan 상태 기반 fallback은 quote/reservation 상태를 AI 추천 여부보다 먼저 본다. `PENDING` request는 Step 3, `RESPONDED`/`ACCEPTED`/`CONFIRMED` 흐름은 Step 4로 진입한다.
+- BUG-02 `/plans`의 “견적 비교하기”가 Step 2로 랜딩
+  - `/plans` CTA 링크에 `step` query를 붙인다.
+  - `compare_quotes`, `accept_quote`, `reservation_pending`, `confirmed`는 `step=4`로 이동한다.
+  - `create_quote_request`, `waiting_for_vendor`, `canceled`는 `step=3`으로 이동한다.
+- BUG-03 업체 최종 확정 후 Step 4 “업체 최종 확정 대기 중”에 계속 표시
+  - Step 4의 `acceptedRequests`는 `QuoteRequest.status === "ACCEPTED"`만 보지 않고 `reservation.status === "PENDING"`인 항목만 포함한다.
+  - `Reservation(CONFIRMED|COMPLETED)`는 확정된 예약 섹션에만 표시된다.
+  - `confirmReservation()`의 revalidate path는 기존 구현상 `/plans`, `/planner`, `/planner/wedding`, `/planner/funeral`, `/vendor/dashboard`를 이미 포함한다.
+- BUG-06 `/vendor/requests` 404
+  - `app/vendor/requests/page.tsx`를 추가해 `/vendor/dashboard`로 redirect한다.
+
+검증 결과:
+
+- `npx tsc --noEmit`: 통과.
+- `npm run lint`: 통과.
+- `npm run build`: 통과. 빌드 route 목록에 `/vendor/requests` 포함.
+- `npm run db:seed`: 통과.
+- `npx tsx scripts/verify-quote-flow.ts`: sandbox IPC 제한으로 1회 `EPERM` 실패 후 sandbox 밖 재실행 통과.
+- `npx tsx scripts/launch-readiness-smoke.ts`: sandbox 밖 재실행 통과.
+
+Claude/UI 담당자 handoff:
+
+- `/plans`에서 “견적 비교하기” 클릭 시 `/planner/{type}?planId=...&step=4`로 이동하고 Step 2가 보이지 않는지 브라우저에서 확인한다.
+- `/planner/wedding?planId=...&step=3`, `step=4`, 잘못된 `step=abc`를 각각 새로고침해 query 우선/상태 기반 fallback이 맞는지 확인한다.
+- 업체 최종 확정 후 Step 4에서 동일 항목이 “업체 최종 확정 대기 중”과 “확정된 예약”에 동시에 표시되지 않는지 확인한다.
+- `/vendor/requests` 직접 접근이 `/vendor/dashboard`로 redirect되는지 확인한다.

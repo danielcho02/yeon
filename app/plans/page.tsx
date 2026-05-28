@@ -90,9 +90,27 @@ const ctaStyles = {
   gray: "border border-border bg-white text-muted-foreground hover:bg-muted/30",
 } as const;
 
+function getPlannerStep(nextAction: PlanDashboardNextAction) {
+  switch (nextAction) {
+    case "compare_quotes":
+    case "accept_quote":
+    case "reservation_pending":
+    case "confirmed":
+      return 4;
+    case "create_quote_request":
+    case "waiting_for_vendor":
+    default:
+      return 3;
+  }
+}
+
 function getPlannerLink(plan: PlanDashboardData) {
   const type = plan.eventType === "WEDDING" ? "wedding" : "funeral";
-  return `/planner/${type}?planId=${plan.id}`;
+  const params = new URLSearchParams({
+    planId: plan.id,
+    step: String(getPlannerStep(plan.summary.nextAction))
+  });
+  return `/planner/${type}?${params.toString()}`;
 }
 
 export default async function PlansPage() {

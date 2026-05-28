@@ -168,6 +168,7 @@ const moduleSelectClassName =
 type Props = {
   eventType: EventType;
   initialPlanId?: string | null;
+  initialStep?: number | null;
   viewerName: string;
   viewerEmail: string;
   plans: PlanOption[];
@@ -175,9 +176,18 @@ type Props = {
   reservations: ReservationItem[];
 };
 
+function stepKeyFromNumber(step: number | null | undefined): StepKey | null {
+  if (step === 1) return "setup";
+  if (step === 2) return "ai";
+  if (step === 3) return "vendors";
+  if (step === 4) return "booking";
+  return null;
+}
+
 export function EventPlanningWorkspace({
   eventType,
   initialPlanId,
+  initialStep,
   viewerName,
   plans,
   vendors,
@@ -211,10 +221,22 @@ export function EventPlanningWorkspace({
     () => planReservations.filter((r) => r.status === "PENDING" && r.quoteResponseId != null),
     [planReservations]
   );
+  const pendingFinalConfirmations = useMemo(
+    () =>
+      planReservations.filter(
+        (r) => r.status === "PENDING" && r.quoteRequestStatus === "ACCEPTED"
+      ),
+    [planReservations]
+  );
   const confirmedRes = useMemo(
     () => planReservations.filter((r) => r.status === "CONFIRMED" || r.status === "COMPLETED"),
     [planReservations]
   );
+  const hasQuoteOrReservationState =
+    pendingRequests.length > 0 ||
+    proposals.length > 0 ||
+    pendingFinalConfirmations.length > 0 ||
+    confirmedRes.length > 0;
 
   const completedSteps = useMemo<StepKey[]>(() => {
     const done: StepKey[] = [];
@@ -225,15 +247,29 @@ export function EventPlanningWorkspace({
     return done;
   }, [plan, pendingRequests, proposals, confirmedRes]);
 
-  const initialStep: StepKey = useMemo(() => {
+  const planStateInitialStep: StepKey = useMemo(() => {
     if (!plan) return "setup";
-    if (!plan.aiRecommendation) return "ai";
-    if (proposals.length > 0) return "booking";
     if (pendingRequests.length > 0) return "vendors";
-    return "booking";
-  }, [plan, proposals, pendingRequests]);
+    if (proposals.length > 0 || pendingFinalConfirmations.length > 0 || confirmedRes.length > 0) {
+      return "booking";
+    }
+    if (!plan.aiRecommendation) return "ai";
+    return "vendors";
+  }, [plan, pendingRequests, proposals, pendingFinalConfirmations, confirmedRes]);
 
-  const [activeStep, setActiveStep] = useState<StepKey>(initialStep);
+  const resolvedInitialStep: StepKey = useMemo(() => {
+    const requestedStep = stepKeyFromNumber(initialStep);
+
+    if (!requestedStep) return planStateInitialStep;
+    if (!plan) return "setup";
+    if (requestedStep === "booking" && !hasQuoteOrReservationState) {
+      return "vendors";
+    }
+
+    return requestedStep;
+  }, [initialStep, plan, hasQuoteOrReservationState, planStateInitialStep]);
+
+  const [activeStep, setActiveStep] = useState<StepKey>(resolvedInitialStep);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
   const [isEditingPlan, setIsEditingPlan] = useState(!Boolean(initialPlan) && plans.length === 0);
   const [vendorModules, setVendorModules] = useState<VendorServiceModuleData[] | null>(null);
@@ -1420,7 +1456,9 @@ export function EventPlanningWorkspace({
         {activeStep === "booking" && (() => {
           const pendingQuoteRequests = (quoteRequestsData ?? []).filter((r) => r.status === "PENDING");
           const respondedRequests = (quoteRequestsData ?? []).filter((r) => r.status === "RESPONDED");
-          const acceptedRequests = (quoteRequestsData ?? []).filter((r) => r.status === "ACCEPTED");
+          const acceptedRequests = (quoteRequestsData ?? []).filter(
+            (r) => r.status === "ACCEPTED" && r.reservation?.status === "PENDING"
+          );
 
           return (
             <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">

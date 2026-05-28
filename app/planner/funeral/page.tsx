@@ -28,10 +28,15 @@ function isRecommendationShape(value: unknown): value is Recommendation {
   );
 }
 
+function parseInitialStep(value: string | undefined) {
+  const step = Number.parseInt(value ?? "", 10);
+  return step >= 1 && step <= 4 ? step : null;
+}
+
 export default async function FuneralPlannerPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ planId?: string }>;
+  searchParams?: Promise<{ planId?: string; step?: string }>;
 }) {
   const session = await getServerAuthSession();
   const params = await searchParams;
@@ -130,6 +135,7 @@ export default async function FuneralPlannerPage({
       <EventPlanningWorkspace
         eventType="FUNERAL"
         initialPlanId={params?.planId ?? null}
+        initialStep={parseInitialStep(params?.step)}
         viewerEmail={session.user.email ?? ""}
         viewerName={session.user.name ?? "사용자"}
         plans={plans.map((p) => ({
