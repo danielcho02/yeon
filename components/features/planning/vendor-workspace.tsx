@@ -367,6 +367,107 @@ export function VendorWorkspace({
         </div>
       </section>
 
+      {/* ── Pending Confirmations (action required) ─────────────────── */}
+      {pendingConfirmationReservations.length > 0 && (
+        <section
+          ref={pendingConfirmationsRef}
+          className="scroll-mt-6 rounded-[2rem] border-2 border-violet-300 bg-white p-6 shadow-md"
+        >
+          <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="mb-1 flex items-center gap-2">
+                <BadgeCheck className="h-4 w-4 text-violet-600" />
+                <h2 className="font-[var(--font-display)] text-base font-bold text-foreground">예약 최종 확정 필요</h2>
+                <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-bold text-violet-700">
+                  {pendingConfirmationReservations.length}건
+                </span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                사용자가 견적을 수락했습니다. 업체 최종 확인을 완료하면 예약이 확정됩니다.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            {pendingConfirmationReservations.map((r) => {
+              const requestMemo = getRequestMemo(r);
+              const amount = r.confirmedAmount ?? r.quotedAmount;
+
+              return (
+                <article
+                  key={r.id}
+                  className="rounded-[1.5rem] border border-violet-200 bg-violet-50/40 p-5"
+                >
+                  <div className="mb-4">
+                    <p className="font-[var(--font-display)] text-base font-bold text-foreground">
+                      {r.eventPlan.title ?? "(제목 없음)"}
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {getQuoteServiceModuleLabel({
+                        eventType: r.eventPlan.type,
+                        serviceCategory: r.serviceCategory,
+                        serviceName: r.serviceName
+                      })}
+                      {" · "}
+                      {getEventTypeLabel(r.eventPlan.type ?? "ETC")}
+                    </p>
+                  </div>
+
+                  <dl className="mb-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                    <div>
+                      <dt className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground/60">날짜</dt>
+                      <dd className="mt-0.5 font-medium text-foreground">{formatDate(r.serviceDate)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground/60">장소</dt>
+                      <dd className="mt-0.5 font-medium text-foreground">{r.eventPlan.region ?? "미정"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground/60">인원</dt>
+                      <dd className="mt-0.5 font-medium text-foreground">{r.guestCount ? `${r.guestCount}명` : "미정"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground/60">금액</dt>
+                      <dd className="mt-0.5 font-bold text-foreground">{formatCurrency(amount)}</dd>
+                    </div>
+                  </dl>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-100/70 px-3 py-1 text-xs font-semibold text-violet-800">
+                      <CheckCircle2 className="h-3 w-3" />
+                      사용자 수락 완료 · 업체 최종 확정 필요
+                    </span>
+                    <Button
+                      disabled={isPending || busyReservationId === r.id}
+                      onClick={() => confirmAcceptedReservation(r.id)}
+                      size="sm"
+                      className="bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
+                    >
+                      <BadgeCheck className="mr-1.5 h-3.5 w-3.5" />
+                      {busyReservationId === r.id ? "확정 처리 중..." : "예약 최종 확정"}
+                    </Button>
+                  </div>
+
+                  {r.vendorConfirmationDueAt && (
+                    <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-violet-700">
+                      <Clock className="h-3 w-3" />
+                      확정 요청 기한: {formatDate(r.vendorConfirmationDueAt)}
+                    </p>
+                  )}
+
+                  {requestMemo && (
+                    <div className="mt-3 rounded-xl border border-violet-100 bg-white px-4 py-3 text-sm text-violet-800">
+                      <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-violet-700/60">사용자 요청사항</p>
+                      <p>{requestMemo}</p>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* ── Panel tab bar ──────────────────────────────────────────── */}
       <section className="flex overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/85 p-2 shadow-sm">
         {PANELS.map((panel) => {
@@ -402,77 +503,6 @@ export function VendorWorkspace({
       {/* ── Notices ──────────────────────────────────────────────── */}
       {error && <Notice tone="error">{error}</Notice>}
       {message && <Notice tone="success">{message}</Notice>}
-
-      {pendingConfirmationReservations.length > 0 && (
-        <section
-          ref={pendingConfirmationsRef}
-          className={`scroll-mt-6 rounded-[2rem] border p-6 shadow-sm ${theme.panel}`}
-        >
-          <div className="mb-5 flex flex-wrap items-center gap-2">
-            <Badge className="bg-violet-100 text-violet-700">예약 최종 확정 필요</Badge>
-            <p className="text-sm text-muted-foreground">
-              사용자가 견적을 수락했습니다. 업체 최종 확정을 완료해야 예약 확정 상태가 됩니다.
-            </p>
-            <Badge className={`ml-auto ${theme.badge}`}>{pendingConfirmationReservations.length}건 대기</Badge>
-          </div>
-
-          <div className="grid gap-3 lg:grid-cols-2">
-            {pendingConfirmationReservations.map((r) => {
-              const requestMemo = getRequestMemo(r);
-
-              return (
-                <article
-                  key={r.id}
-                  className="rounded-[1.5rem] border-y border-r border-l-4 border-l-violet-400 border-y-violet-100 border-r-violet-100 bg-white/82 p-5 shadow-sm"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-foreground">
-                        {getQuoteServiceModuleLabel({
-                          eventType: r.eventPlan.type,
-                          serviceCategory: r.serviceCategory,
-                          serviceName: r.serviceName
-                        })}
-                      </p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {r.eventPlan.title} · {getEventTypeLabel(r.eventPlan.type ?? "ETC")}
-                      </p>
-                    </div>
-                    <Button
-                      disabled={isPending || busyReservationId === r.id}
-                      onClick={() => confirmAcceptedReservation(r.id)}
-                      size="sm"
-                    >
-                      <BadgeCheck className="mr-1.5 h-3.5 w-3.5" />
-                      {busyReservationId === r.id ? "확정 처리 중..." : "예약 최종 확정"}
-                    </Button>
-                  </div>
-
-                  <div className="mt-4 grid gap-1.5 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2"><CalendarDays className="h-3.5 w-3.5 text-muted-foreground/55" />{formatDate(r.serviceDate)}</div>
-                    <div className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-muted-foreground/55" />{r.eventPlan.region ?? "지역 미정"}</div>
-                    <div className="flex items-center gap-2"><UsersRound className="h-3.5 w-3.5 text-muted-foreground/55" />{r.guestCount ?? 0}명</div>
-                    <div className="flex items-center gap-2"><Wallet className="h-3.5 w-3.5 text-muted-foreground/55" />{formatCurrency(r.confirmedAmount ?? r.quotedAmount)}</div>
-                    {r.vendorConfirmationDueAt && (
-                      <div className="flex items-center gap-2 font-semibold text-violet-700">
-                        <Clock className="h-3.5 w-3.5" />
-                        확정 요청 기한: {formatDate(r.vendorConfirmationDueAt)}
-                      </div>
-                    )}
-                  </div>
-
-                  {requestMemo && (
-                    <div className="mt-4 rounded-2xl border border-violet-100 bg-violet-50/60 px-4 py-3 text-sm text-violet-800">
-                      <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-violet-700/60">사용자 요청사항</p>
-                      <p>{requestMemo}</p>
-                    </div>
-                  )}
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      )}
 
       {/* ── Inbox panel ──────────────────────────────────────────── */}
       {activePanel === "inbox" && (
