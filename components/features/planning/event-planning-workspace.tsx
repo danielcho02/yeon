@@ -152,6 +152,44 @@ function asDateInput(v: string | null) {
 const moduleSelectClassName =
   "h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
+type AiRecommendationCard = {
+  name: string;
+  category: string;
+  region: string;
+  price: number;
+  highlight: string;
+  reason: string;
+};
+
+const MOCK_AI_RECOMMENDATIONS: AiRecommendationCard[] = [
+  {
+    name: "루미에르 웨딩홀",
+    category: "예식장 / 플로럴 연출",
+    region: "서울 강남구",
+    price: 4_800_000,
+    highlight: "샴페인 톤 플라워와 자연광 중심의 프리미엄 무드",
+    reason: "예식 동선이 깔끔하고 고급스러운 톤을 유지하기 좋아서, 전체 분위기를 한 번에 정리하기 좋습니다."
+  },
+  {
+    name: "벨라테이블 케이터링",
+    category: "뷔페 / 연회",
+    region: "서울 서초구",
+    price: 3_200_000,
+    highlight: "하객 응대가 안정적인 연회형 구성",
+    reason: "식사 만족도와 테이블 세팅의 완성도가 높아, 예산 대비 체감 만족도가 좋은 선택지입니다."
+  },
+  {
+    name: "노블라이트 스튜디오",
+    category: "촬영 / 미디어",
+    region: "서울 마포구",
+    price: 2_100_000,
+    highlight: "장면 전환이 부드러운 시네마틱 촬영",
+    reason: "사진과 영상을 함께 담아 행사 기록의 완성도를 높이기에 적합한 구성입니다."
+  }
+];
+
+const MOCK_AI_ESTIMATED_TOTAL = MOCK_AI_RECOMMENDATIONS.reduce((sum, item) => sum + item.price, 0);
+
 type Props = {
   eventType: EventType;
   initialPlanId?: string | null;
@@ -185,6 +223,8 @@ export function EventPlanningWorkspace({
     [plans, selectedPlanId]
   );
   const needsPlanSelection = !plan && plans.length > 0;
+  const [aiFlowStage, setAiFlowStage] = useState<"idle" | "loading" | "done">("idle");
+  const [aiFlowRunId, setAiFlowRunId] = useState(0);
 
   const planReservations = useMemo(
     () => (plan ? reservations.filter((r) => r.eventPlan.id === plan.id) : []),
@@ -206,19 +246,19 @@ export function EventPlanningWorkspace({
   const completedSteps = useMemo<StepKey[]>(() => {
     const done: StepKey[] = [];
     if (plan) done.push("setup");
-    if (plan?.aiRecommendation) done.push("ai");
+    if (plan?.aiRecommendation || aiFlowStage === "done") done.push("ai");
     if (pendingRequests.length + proposals.length + confirmedRes.length > 0) done.push("vendors");
     if (confirmedRes.length > 0) done.push("booking");
     return done;
-  }, [plan, pendingRequests, proposals, confirmedRes]);
+  }, [aiFlowStage, plan, pendingRequests, proposals, confirmedRes]);
 
   const initialStep: StepKey = useMemo(() => {
     if (!plan) return "setup";
-    if (!plan.aiRecommendation) return "ai";
+    if (!plan.aiRecommendation && aiFlowStage !== "done") return "ai";
     if (proposals.length > 0) return "booking";
     if (pendingRequests.length > 0) return "vendors";
     return "booking";
-  }, [plan, proposals, pendingRequests]);
+  }, [aiFlowStage, plan, proposals, pendingRequests]);
 
   const [activeStep, setActiveStep] = useState<StepKey>(initialStep);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
@@ -234,6 +274,19 @@ export function EventPlanningWorkspace({
     setDirection(nextIdx >= currentIdx ? 'forward' : 'back');
     setActiveStep(next);
   }
+
+  function startAiRecommendationFlow() {
+    if (!plan) {
+      showNotice("error", "먼저 행사 정보를 저장해 주세요.");
+      return;
+    }
+
+    setDirection('forward');
+    setActiveStep("ai");
+    setAiFlowStage("loading");
+    setAiFlowRunId((current) => current + 1);
+  }
+
   const [selectedVendorId, setSelectedVendorId] = useState<string>(vendors[0]?.id ?? "");
   const selectedVendor = vendors.find((vendor) => vendor.id === selectedVendorId) ?? null;
   const [checkedServiceIds, setCheckedServiceIds] = useState<Set<string>>(new Set());
@@ -256,6 +309,23 @@ export function EventPlanningWorkspace({
     });
     return () => { cancelled = true; };
   }, [selectedVendorId]);
+
+  useEffect(() => {
+    if (aiFlowStage !== "loading") {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setAiFlowStage("done");
+    }, 3000);
+
+    return () => window.clearTimeout(timer);
+  }, [aiFlowRunId, aiFlowStage]);
+
+  useEffect(() => {
+    setAiFlowStage("idle");
+    setAiFlowRunId(0);
+  }, [plan?.id]);
 
   // Load quote request/response data for the current plan (used in Step 4)
   useEffect(() => {
@@ -639,15 +709,15 @@ export function EventPlanningWorkspace({
                     <p className="rounded-2xl border border-border/40 bg-white/80 px-4 py-3.5 text-sm leading-6 text-muted-foreground">{plan.description}</p>
                   )}
 
-                  {!plan.aiRecommendation && (
+                  {!plan.aiRecommendation && aiFlowStage !== "done" && (
                     <button
                       className={`flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-semibold ${theme.btnAccent}`}
                       disabled={isPending}
-                      onClick={() => navigateStep("ai")}
+                      onClick={startAiRecommendationFlow}
                       type="button"
                     >
                       <Sparkles className="h-4 w-4" />
-                      AI 추천 받기
+                      AI에게 추천 생성하기
                       <ArrowRight className="h-4 w-4" />
                     </button>
                   )}
@@ -736,7 +806,7 @@ export function EventPlanningWorkspace({
                 <div className="space-y-2">
                   {[
                     { label: "행사 정보", done: Boolean(plan), value: plan ? "완료" : "미완료" },
-                    { label: "AI 추천", done: Boolean(plan?.aiRecommendation), value: plan?.aiRecommendation ? "완료" : "미완료" },
+                    { label: "AI 추천", done: Boolean(plan?.aiRecommendation) || aiFlowStage === "done", value: plan?.aiRecommendation || aiFlowStage === "done" ? "완료" : "미완료" },
                     { label: "견적 요청", done: pendingRequests.length + proposals.length + confirmedRes.length > 0, value: `${pendingRequests.length + proposals.length + confirmedRes.length}건` },
                     { label: "확정 예약", done: confirmedRes.length > 0, value: `${confirmedRes.length}건` },
                   ].map(({ label, done, value }) => (
@@ -759,14 +829,14 @@ export function EventPlanningWorkspace({
                 </div>
               )}
 
-              {plan && !plan.aiRecommendation && (
+              {plan && !plan.aiRecommendation && aiFlowStage !== "done" && (
                 <button
                   className={`flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-semibold ${theme.btnAccent}`}
-                  onClick={() => navigateStep("ai")}
+                  onClick={startAiRecommendationFlow}
                   type="button"
                 >
                   <Sparkles className="h-4 w-4" />
-                  AI 추천 받기
+                  AI에게 추천 생성하기
                   <ArrowRight className="h-4 w-4" />
                 </button>
               )}
@@ -777,7 +847,101 @@ export function EventPlanningWorkspace({
         {/* ══ STEP 2: AI 추천 ══════════════════════════════════════ */}
         {activeStep === "ai" && (
           <div className="grid gap-4">
-            {plan?.aiRecommendation ? (
+            {aiFlowStage === "loading" ? (
+              <div className={`animate-fade-in rounded-[2rem] border p-12 text-center ${theme.accentBg} ${theme.accentBorder}`}>
+                <div className={`mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full shadow-lg ${theme.iconSolid}`}>
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-white/35 border-t-white border-r-white/80 border-b-transparent border-l-transparent" />
+                </div>
+                <h2 className="font-[var(--font-display)] text-2xl font-bold text-foreground">AI 추천 분석 중</h2>
+                <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-muted-foreground">
+                  유저님의 조건을 바탕으로 맞춤형 업체를 AI가 분석 중입니다...
+                </p>
+              </div>
+            ) : aiFlowStage === "done" ? (
+              <div className="grid gap-4">
+                <div className={`animate-fade-in relative overflow-hidden rounded-[2rem] border bg-gradient-to-br p-7 shadow-sm sm:p-10 ${theme.heroBg}`}>
+                  <div className={`pointer-events-none absolute inset-0 ${theme.heroOrb}`} />
+                  <div
+                    className={`pointer-events-none absolute inset-0 ${theme.heroPatternOpacity}`}
+                    style={{ backgroundImage: theme.heroPattern, backgroundSize: theme.heroPatternSize }}
+                  />
+                  <div className="relative space-y-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className={theme.badge}>AI 추천 결과</Badge>
+                      <Badge variant="outline" className={`border ${theme.accentBorder} ${theme.accentText} bg-white/60`}>
+                        추천 3개
+                      </Badge>
+                    </div>
+                    <h2 className="font-[var(--font-display)] text-3xl font-bold text-foreground sm:text-4xl">
+                      예상 총 견적 {formatCurrency(MOCK_AI_ESTIMATED_TOTAL)}
+                    </h2>
+                    <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
+                      예산과 행사 조건을 바탕으로, 바로 시연할 수 있는 추천 업체 3곳을 정리했습니다.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-[1fr_1.15fr]">
+                  <div className="rounded-[1.75rem] border border-white/80 bg-white/90 p-5 shadow-sm animate-fade-in delay-150">
+                    <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground/55">분석 요약</p>
+                    <div className="flex items-center justify-between rounded-2xl bg-muted/40 px-4 py-3">
+                      <span className="text-sm text-muted-foreground">예상 총 견적</span>
+                      <strong className="text-lg font-extrabold tracking-[-0.03em] text-foreground">
+                        {formatCurrency(MOCK_AI_ESTIMATED_TOTAL)}
+                      </strong>
+                    </div>
+                    <div className="mt-4 space-y-2.5">
+                      <div className="rounded-2xl bg-white px-4 py-3 text-sm text-muted-foreground ring-1 ring-border/60">조건 적합도 우선 정렬</div>
+                      <div className="rounded-2xl bg-white px-4 py-3 text-sm text-muted-foreground ring-1 ring-border/60">지역과 예산 균형 반영</div>
+                      <div className="rounded-2xl bg-white px-4 py-3 text-sm text-muted-foreground ring-1 ring-border/60">바로 비교 가능한 3개 카드</div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {MOCK_AI_RECOMMENDATIONS.map((item, index) => (
+                      <article
+                        key={item.name}
+                        className="animate-fade-in rounded-[1.75rem] border border-white/80 bg-white/90 p-5 shadow-[0_18px_50px_-32px_rgba(60,45,30,0.35)]"
+                        style={{ animationDelay: `${index * 120}ms` }}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground/50">추천 업체</p>
+                            <h3 className="mt-1 font-[var(--font-display)] text-xl font-semibold text-foreground">{item.name}</h3>
+                          </div>
+                          <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                            {formatCurrency(item.price)}
+                          </span>
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-200/70">
+                            {item.category}
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                            {item.region}
+                          </span>
+                        </div>
+
+                        <p className="mt-4 text-sm font-semibold text-foreground">{item.highlight}</p>
+                        <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.reason}</p>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    className={`flex items-center gap-2 rounded-2xl px-6 py-3.5 text-sm font-semibold ${theme.btnAccent}`}
+                    onClick={() => navigateStep("vendors")}
+                    type="button"
+                  >
+                    업체 견적 요청하기
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ) : plan?.aiRecommendation ? (
               <>
                 <div className={`relative overflow-hidden rounded-[2rem] border bg-gradient-to-br p-7 shadow-sm sm:p-10 ${theme.heroBg}`}>
                   <div className={`pointer-events-none absolute inset-0 ${theme.heroOrb}`} />
@@ -915,7 +1079,7 @@ export function EventPlanningWorkspace({
                       type="button"
                     >
                       <Sparkles className="h-4 w-4" />
-                      행사 정보에서 AI 추천 생성하기
+                      AI에게 추천 생성하기
                     </button>
                   )}
                 </div>

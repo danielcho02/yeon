@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "prisma migrate deploy",
     "dev": "next dev",
+    "prestart": "prisma migrate deploy",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
