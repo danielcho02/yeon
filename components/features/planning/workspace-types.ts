@@ -55,6 +55,8 @@ export type ReservationItem = {
   confirmedAmount: number | null;
   vendorConfirmationDueAt: string | null;
   notes: string | null;
+  requestMemo?: string | null;
+  responseMessage?: string | null;
   status: "PENDING" | "CONFIRMED" | "REJECTED" | "CHANGED" | "CANCELED" | "COMPLETED";
   quoteRequestId?: string | null;
   quoteResponseId?: string | null;

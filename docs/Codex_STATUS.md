@@ -940,3 +940,52 @@ Chrome MCP 재확인 방법:
 - Network에서 Server Action POST가 503 없이 ActionResult error/success로 끝나는지 확인한다.
 - vendor dashboard에서 사용자가 수락한 PENDING reservation이 `pendingConfirmations` 기반 UI에 별도 표시되는지 확인한다.
 - 업체 응답 textarea가 planner request memo로 prefill되지 않는지 확인한다.
+
+## 25. Codex spot QA follow-up fix - 2026-05-28
+
+범위:
+
+- Chrome MCP spot QA에서 명확히 확인된 F02/F03을 최소 UI 수정으로 처리했다.
+- F01은 재현성 낮은 간헐 503이므로 기존 backend 완화 위에 submit 중복 실행 guard와 문서화만 추가했다.
+- Server Action/Prisma schema/DTO contract는 깨지지 않았다.
+
+BUG-F03 response textarea 초기값 수정:
+
+- `components/features/planning/vendor-workspace.tsx`에서 vendor response form state와 planner request memo 표시를 분리했다.
+- 신규 응답 작성 시 `proposalForm.notes`는 빈 문자열로 시작한다.
+- 기존 `QuoteResponse`가 있는 경우에만 `responseMessage`를 textarea value로 사용한다.
+- `requestMemo`는 “사용자 요청사항” 박스 또는 요청 상세 영역에만 표시한다.
+- 요청 드롭다운 또는 요청 카드 변경 시 textarea는 `getResponseMessage(reservation)` 기준으로 reset된다.
+- `reservation.notes`는 더 이상 신규 업체 응답 textarea 초기값으로 쓰지 않는다.
+
+BUG-F02 pending confirmation UI 수정:
+
+- `app/vendor/dashboard/page.tsx`가 서버에서 계산한 `reservationContract.pendingConfirmations`를 `VendorWorkspace`에 전달한다.
+- vendor dashboard 상단에 `예약 최종 확정 필요` 섹션을 추가했다.
+- 이 섹션은 `Reservation.status === PENDING`이고 `quoteRequestStatus === ACCEPTED`인 항목만 표시한다.
+- 각 카드에는 행사명, 서비스명, 날짜, 장소, 인원, 금액, 확정 요청 기한, 사용자 요청사항, `예약 최종 확정` 버튼을 표시한다.
+- 버튼은 기존 `confirmReservation()` Server Action을 그대로 사용하고 성공 후 `router.refresh()`를 실행한다.
+- 기존 banner 클릭은 숨겨진 proposals 탭으로 보내지 않고 상단 pending confirmation 섹션으로 scroll한다.
+- `진행 중 제안` 목록은 사용자가 아직 수락하지 않은 PENDING quote response만 보여준다. 수락된 PENDING reservation은 pending confirmation 섹션에만 표시된다.
+- `확정 예약` 탭은 기존대로 `CONFIRMED`/`COMPLETED`만 표시한다.
+
+BUG-F01 503 추가 완화:
+
+- 기존 완화: SQLite adapter timeout 10초, seed WAL/busy_timeout, `withPrismaRetry()` read bootstrap, DB busy error mapping.
+- 추가 완화: Step 3/4 quote request submit, legacy checklist submit, quote accept handler에 `quoteActionLockedRef` 재진입 guard를 추가했다.
+- 현재 직접 smoke에서는 503을 재현하지 못했다. 과거 Chrome Network 로그에 503 흔적이 있으므로 local SQLite dev 환경에서는 계속 monitoring이 필요하다.
+- `scripts/server-action-read-concurrency-smoke.ts`는 planner Step 3 page read bootstrap과 vendor dashboard contract read를 병렬 시뮬레이션한다.
+
+브라우저 재확인 항목:
+
+- vendor 응답 textarea: 신규 응답 작성 시 빈 값인지 확인한다.
+- vendor 응답 textarea: planner request memo가 “사용자 요청사항” 영역에만 표시되는지 확인한다.
+- vendor 응답 textarea: 요청 드롭다운 변경 시 이전 요청 메모/응답이 잘못 남지 않는지 확인한다.
+- pending confirmation: `catering@yeon.local` 또는 실제 수락 대상 업체로 로그인했을 때 `예약 최종 확정 필요` 섹션이 상단에 바로 보이는지 확인한다.
+- pending confirmation: 버튼 클릭 후 `CONFIRMED`로 전환되고 pending 섹션에서 제거되는지 확인한다.
+- 권한: venue/catering 계정 간 서로의 pending confirmation이 보이지 않는지 확인한다.
+- 503: `/planner/wedding?planId=...&step=3`에서 로드/새로고침/견적 요청 제출을 여러 번 반복하고 Network POST 503 재발 여부를 확인한다.
+
+검증 결과:
+
+- final verification에서 `npx prisma generate`, `npm run db:seed`, 3개 smoke, `npx tsc --noEmit`, `npm run lint`, `npm run build`, `npx prisma migrate status`를 다시 실행한다.

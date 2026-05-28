@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useMemo, useState, useTransition } from "react";
+import { type ReactNode, useMemo, useRef, useState, useTransition } from "react";
 import {
   BadgeCheck,
   CalendarDays,
@@ -41,6 +41,7 @@ type Props = {
   viewerEmail: string;
   companyName: string;
   reservations: ReservationItem[];
+  pendingConfirmations?: ReservationItem[];
   supportedEventTypes?: string[];
 };
 
@@ -60,9 +61,11 @@ export function VendorWorkspace({
   viewerEmail,
   companyName,
   reservations,
+  pendingConfirmations,
   supportedEventTypes
 }: Props) {
   const router = useRouter();
+  const pendingConfirmationsRef = useRef<HTMLElement>(null);
   const [isPending, startTransition] = useTransition();
   const [activePanel, setActivePanel] = useState<PanelKey>("inbox");
 
@@ -71,19 +74,29 @@ export function VendorWorkspace({
     if (!supportedEventTypes || supportedEventTypes.length === 0) return base;
     return base.filter((r) => !r.eventPlan.type || supportedEventTypes.includes(r.eventPlan.type));
   }, [reservations, supportedEventTypes]);
-  const inProgressReservations = useMemo(
-    () => reservations.filter((r) => r.status === "PENDING" && r.quoteResponseId != null),
-    [reservations]
+  const pendingConfirmationReservations = useMemo(
+    () =>
+      pendingConfirmations ??
+      reservations.filter((r) => r.status === "PENDING" && r.quoteRequestStatus === "ACCEPTED"),
+    [pendingConfirmations, reservations]
   );
-  const acceptedProposalReservations = useMemo(
-    () => inProgressReservations.filter((r) => r.quoteRequestStatus === "ACCEPTED"),
-    [inProgressReservations]
+  const pendingConfirmationIds = useMemo(
+    () => new Set(pendingConfirmationReservations.map((reservation) => reservation.id)),
+    [pendingConfirmationReservations]
+  );
+  const inProgressReservations = useMemo(
+    () =>
+      reservations.filter(
+        (r) =>
+          r.status === "PENDING" &&
+          r.quoteResponseId != null &&
+          r.quoteRequestStatus !== "ACCEPTED" &&
+          !pendingConfirmationIds.has(r.id)
+      ),
+    [pendingConfirmationIds, reservations]
   );
   const editableProposalReservations = useMemo(
-    () =>
-      [...inboxReservations, ...inProgressReservations].filter(
-        (r) => r.quoteRequestStatus !== "ACCEPTED"
-      ),
+    () => [...inboxReservations, ...inProgressReservations],
     [inboxReservations, inProgressReservations]
   );
   const confirmedReservations = useMemo(
@@ -92,7 +105,7 @@ export function VendorWorkspace({
   );
 
   const fallbackReservation =
-    inboxReservations[0] ?? inProgressReservations[0] ?? confirmedReservations[0] ?? null;
+    pendingConfirmationReservations[0] ?? inboxReservations[0] ?? inProgressReservations[0] ?? confirmedReservations[0] ?? null;
   const [selectedReservationId, setSelectedReservationId] = useState(fallbackReservation?.id ?? "");
   const selectedReservation =
     reservations.find((r) => r.id === selectedReservationId) ?? fallbackReservation;
@@ -115,6 +128,16 @@ export function VendorWorkspace({
       ? "새로운 장례 서비스 요청이 없습니다 🕯️"
       : "새 요청이 없습니다.";
 
+  function getRequestMemo(reservation: ReservationItem | null | undefined) {
+    if (!reservation) return null;
+    return reservation.requestMemo ?? (reservation.quoteResponseId ? null : reservation.notes);
+  }
+
+  function getResponseMessage(reservation: ReservationItem | null | undefined) {
+    if (!reservation?.quoteResponseId) return "";
+    return reservation.responseMessage ?? "";
+  }
+
   const [proposalForm, setProposalForm] = useState(() => ({
     reservationId: selectedReservation?.id ?? "",
     serviceDate: asDateInput(selectedReservation?.serviceDate ?? null),
@@ -123,7 +146,7 @@ export function VendorWorkspace({
       : selectedReservation?.quotedAmount
       ? String(selectedReservation.quotedAmount)
       : "",
-    notes: selectedReservation?.notes ?? ""
+    notes: getResponseMessage(selectedReservation)
   }));
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -150,7 +173,7 @@ export function VendorWorkspace({
         : reservation.quotedAmount
         ? String(reservation.quotedAmount)
         : "",
-      notes: reservation.notes ?? ""
+      notes: getResponseMessage(reservation)
     });
     setMessage(null);
     setError(null);
@@ -159,6 +182,7 @@ export function VendorWorkspace({
 
   async function updateReservation(action: "quote" | "decline") {
     if (!proposalForm.reservationId) { setError("응답할 요청을 먼저 선택해 주세요."); return; }
+    if (busyReservationId === proposalForm.reservationId) return;
     if (isSelectedAcceptedProposal) {
       setError("사용자가 이미 수락한 견적입니다. 이제 예약 최종 확정만 진행할 수 있습니다.");
       return;
@@ -193,6 +217,7 @@ export function VendorWorkspace({
   }
 
   async function completeReservation(reservationId: string) {
+    if (busyReservationId === reservationId) return;
     setBusyReservationId(reservationId);
     setMessage(null);
     setError(null);
@@ -214,6 +239,7 @@ export function VendorWorkspace({
   }
 
   async function confirmAcceptedReservation(reservationId: string) {
+    if (busyReservationId === reservationId) return;
     setBusyReservationId(reservationId);
     setMessage(null);
     setError(null);
@@ -243,6 +269,11 @@ export function VendorWorkspace({
     proposals: inProgressReservations.length,
     confirmed: confirmedReservations.length,
   };
+  const selectedProposalRequestMemo = getRequestMemo(selectedProposalReservation);
+
+  function scrollToPendingConfirmations() {
+    pendingConfirmationsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   return (
     <div className="grid gap-5">
@@ -300,21 +331,21 @@ export function VendorWorkspace({
             <div className="space-y-2">
               <StatusRow done={inboxReservations.length > 0} label="새 요청 확인" />
               <StatusRow done={inProgressReservations.length > 0} label="견적 제안 발송" />
-              <StatusRow done={acceptedProposalReservations.length > 0} label="예약 최종 확정 필요" />
+              <StatusRow done={pendingConfirmationReservations.length > 0} label="예약 최종 확정 필요" />
               <StatusRow done={confirmedReservations.length > 0} label="확정 예약 관리" />
             </div>
 
-            {(inboxReservations.length > 0 || acceptedProposalReservations.length > 0) && (
+            {(inboxReservations.length > 0 || pendingConfirmationReservations.length > 0) && (
               <div className="mt-4 space-y-2">
-                {acceptedProposalReservations.length > 0 && (
+                {pendingConfirmationReservations.length > 0 && (
                   <button
                     className="flex w-full items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-left transition-colors hover:bg-violet-100/70"
-                    onClick={() => setActivePanel("proposals")}
+                    onClick={scrollToPendingConfirmations}
                     type="button"
                   >
                     <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-violet-700" />
                     <p className="text-xs text-violet-800">
-                      <span className="font-bold">{acceptedProposalReservations.length}건</span>은 사용자가 수락했습니다. 예약 최종 확정을 진행하세요.
+                      <span className="font-bold">{pendingConfirmationReservations.length}건</span>은 사용자가 수락했습니다. 예약 최종 확정을 진행하세요.
                     </p>
                   </button>
                 )}
@@ -371,6 +402,77 @@ export function VendorWorkspace({
       {/* ── Notices ──────────────────────────────────────────────── */}
       {error && <Notice tone="error">{error}</Notice>}
       {message && <Notice tone="success">{message}</Notice>}
+
+      {pendingConfirmationReservations.length > 0 && (
+        <section
+          ref={pendingConfirmationsRef}
+          className={`scroll-mt-6 rounded-[2rem] border p-6 shadow-sm ${theme.panel}`}
+        >
+          <div className="mb-5 flex flex-wrap items-center gap-2">
+            <Badge className="bg-violet-100 text-violet-700">예약 최종 확정 필요</Badge>
+            <p className="text-sm text-muted-foreground">
+              사용자가 견적을 수락했습니다. 업체 최종 확정을 완료해야 예약 확정 상태가 됩니다.
+            </p>
+            <Badge className={`ml-auto ${theme.badge}`}>{pendingConfirmationReservations.length}건 대기</Badge>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            {pendingConfirmationReservations.map((r) => {
+              const requestMemo = getRequestMemo(r);
+
+              return (
+                <article
+                  key={r.id}
+                  className="rounded-[1.5rem] border-y border-r border-l-4 border-l-violet-400 border-y-violet-100 border-r-violet-100 bg-white/82 p-5 shadow-sm"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-foreground">
+                        {getQuoteServiceModuleLabel({
+                          eventType: r.eventPlan.type,
+                          serviceCategory: r.serviceCategory,
+                          serviceName: r.serviceName
+                        })}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {r.eventPlan.title} · {getEventTypeLabel(r.eventPlan.type ?? "ETC")}
+                      </p>
+                    </div>
+                    <Button
+                      disabled={isPending || busyReservationId === r.id}
+                      onClick={() => confirmAcceptedReservation(r.id)}
+                      size="sm"
+                    >
+                      <BadgeCheck className="mr-1.5 h-3.5 w-3.5" />
+                      {busyReservationId === r.id ? "확정 처리 중..." : "예약 최종 확정"}
+                    </Button>
+                  </div>
+
+                  <div className="mt-4 grid gap-1.5 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2"><CalendarDays className="h-3.5 w-3.5 text-muted-foreground/55" />{formatDate(r.serviceDate)}</div>
+                    <div className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-muted-foreground/55" />{r.eventPlan.region ?? "지역 미정"}</div>
+                    <div className="flex items-center gap-2"><UsersRound className="h-3.5 w-3.5 text-muted-foreground/55" />{r.guestCount ?? 0}명</div>
+                    <div className="flex items-center gap-2"><Wallet className="h-3.5 w-3.5 text-muted-foreground/55" />{formatCurrency(r.confirmedAmount ?? r.quotedAmount)}</div>
+                    {r.vendorConfirmationDueAt && (
+                      <div className="flex items-center gap-2 font-semibold text-violet-700">
+                        <Clock className="h-3.5 w-3.5" />
+                        확정 요청 기한: {formatDate(r.vendorConfirmationDueAt)}
+                      </div>
+                    )}
+                  </div>
+
+                  {requestMemo && (
+                    <div className="mt-4 rounded-2xl border border-violet-100 bg-violet-50/60 px-4 py-3 text-sm text-violet-800">
+                      <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-violet-700/60">사용자 요청사항</p>
+                      <p>{requestMemo}</p>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* ── Inbox panel ──────────────────────────────────────────── */}
       {activePanel === "inbox" && (
@@ -461,8 +563,8 @@ export function VendorWorkspace({
                   {selectedReservation.guestCount != null && (
                     <DetailRow label="참석 인원" value={`${selectedReservation.guestCount}명`} />
                   )}
-                  {selectedReservation.notes && (
-                    <DetailRow label="메모" value={selectedReservation.notes} />
+                  {getRequestMemo(selectedReservation) && (
+                    <DetailRow label="사용자 요청사항" value={getRequestMemo(selectedReservation) ?? ""} />
                   )}
                   {selectedReservation.selectedServiceOptions && selectedReservation.selectedServiceOptions.length > 0 && (
                     <div className="rounded-[1.25rem] border border-white/60 bg-white/70 px-4 py-3.5">
@@ -548,6 +650,13 @@ export function VendorWorkspace({
                     <BadgeCheck className="mr-1.5 h-3.5 w-3.5" />
                     {busyReservationId === selectedProposalReservation.id ? "확정 처리 중..." : "예약 최종 확정"}
                   </Button>
+                </div>
+              )}
+
+              {selectedProposalRequestMemo && (
+                <div className="rounded-2xl border border-white/60 bg-white/70 px-4 py-3 text-sm text-foreground">
+                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground/55">사용자 요청사항</p>
+                  <p>{selectedProposalRequestMemo}</p>
                 </div>
               )}
 

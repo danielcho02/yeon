@@ -168,6 +168,7 @@ export default async function VendorDashboardPage() {
           viewerEmail={session.user.email ?? ""}
           companyName={companyName}
           reservations={reservationContract.reservations}
+          pendingConfirmations={reservationContract.pendingConfirmations}
           supportedEventTypes={supportedEventTypes}
         />
 

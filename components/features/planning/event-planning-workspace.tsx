@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState, useTransition } from "react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   ArrowRight,
   BadgeCheck,
@@ -276,6 +276,7 @@ export function EventPlanningWorkspace({
   const [vendorModuleError, setVendorModuleError] = useState(false);
   const [quoteRequestsData, setQuoteRequestsData] = useState<QuoteRequestWithResponses[] | null>(null);
   const [isQuoteActionPending, setIsQuoteActionPending] = useState(false);
+  const quoteActionLockedRef = useRef(false);
   const [confettiActive, setConfettiActive] = useState(false);
 
   function navigateStep(next: StepKey) {
@@ -530,6 +531,7 @@ export function EventPlanningWorkspace({
 
   async function handleSendRequestWithChecklist(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (quoteActionLockedRef.current) return;
     if (checkedServiceIds.size === 0) {
       showNotice("error", "최소 1개 이상의 항목을 선택해 주세요.");
       return;
@@ -554,6 +556,7 @@ export function EventPlanningWorkspace({
       formData.append("selectedItemIds", id);
     }
 
+    quoteActionLockedRef.current = true;
     setIsQuoteActionPending(true);
     try {
       const result = await createQuoteRequestLegacy(formData);
@@ -565,6 +568,7 @@ export function EventPlanningWorkspace({
       startTransition(() => router.refresh());
     } finally {
       setIsQuoteActionPending(false);
+      quoteActionLockedRef.current = false;
     }
   }
 
@@ -574,6 +578,7 @@ export function EventPlanningWorkspace({
     basePackage: BasePackage | null
   ) {
     if (!plan || !selectedVendorId) return;
+    if (quoteActionLockedRef.current) return;
     const selectedModuleIds = Array.from(
       new Set([
         ...(basePackage?.includedModuleKeys ?? []),
@@ -585,6 +590,7 @@ export function EventPlanningWorkspace({
       return;
     }
     const guestCount = Math.max(1, Number.parseInt(requestForm.guestCount, 10) || 1);
+    quoteActionLockedRef.current = true;
     setIsQuoteActionPending(true);
     try {
       const result = await createQuoteRequestAction({
@@ -602,10 +608,13 @@ export function EventPlanningWorkspace({
       startTransition(() => router.refresh());
     } finally {
       setIsQuoteActionPending(false);
+      quoteActionLockedRef.current = false;
     }
   }
 
   async function handleAcceptQuote(quoteResponseId: string) {
+    if (quoteActionLockedRef.current) return;
+    quoteActionLockedRef.current = true;
     setIsQuoteActionPending(true);
     try {
       const result = await acceptQuoteResponse({
@@ -620,6 +629,7 @@ export function EventPlanningWorkspace({
       startTransition(() => router.refresh());
     } finally {
       setIsQuoteActionPending(false);
+      quoteActionLockedRef.current = false;
     }
   }
 
