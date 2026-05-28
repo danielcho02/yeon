@@ -858,3 +858,85 @@ Claude/UI handoff:
 - notification center UI는 아직 남아 있다.
 - BUG-04/05/07은 기능 기준으로 반영됐으나, Claude가 실제 화면에서 문구/간격을 QA하고 필요 시 컴포넌트 내부에서만 polish한다.
 - backend freeze 영역(`app/actions`, `app/api`, `prisma`, `lib/workflow-events.ts`, `lib/state-machine.ts`)은 계속 수정하지 않는다.
+
+## 24. Codex backend QA follow-up - 2026-05-28
+
+범위:
+
+- Chrome MCP 최종 QA에서 남은 backend/data contract 이슈 BUG-F01, BUG-F02 backend contract, BUG-F03 backend contract를 처리했다.
+- UI 컴포넌트와 hook은 수정하지 않았다.
+- Prisma schema/migration은 변경하지 않았다.
+
+BUG-F01 Server Action 503 조사 결과:
+
+- 확인 파일: `lib/prisma.ts`, `lib/errors.ts`, `prisma/seed.ts`, `app/actions/quote.ts`, `app/actions/reservation.ts`, `app/actions/plan.ts`, `app/planner/wedding/page.tsx`, `app/planner/funeral/page.tsx`, `app/vendor/dashboard/page.tsx`, smoke scripts.
+- PrismaClient는 `lib/prisma.ts`에서 dev hot reload singleton으로 이미 관리되고 있었다.
+- 프로젝트는 Prisma 7 driver adapter `@prisma/adapter-better-sqlite3`와 SQLite를 사용한다.
+- QA의 간헐적 503은 확정 원인으로 단정하지 않는다. 가능한 원인은 개발 환경 SQLite 파일 잠금, Server Action 이후 `router.refresh`/RSC page read가 겹치는 상황, SQLite connection busy timeout 부족이다.
+- 긴 transaction 안에 notification/activity log 기록이 포함되어 있지만 현재 smoke와 browser QA에서 핵심 flow 정합성은 통과했다. 이번 작업에서는 transaction boundary를 크게 바꾸지 않았다.
+
+BUG-F01 완화책:
+
+- `lib/prisma.ts`의 `PrismaBetterSqlite3` adapter에 `timeout: 10000`을 명시했다.
+- `prisma/seed.ts`에서 `PRAGMA journal_mode = WAL`, `PRAGMA busy_timeout = 10000`을 적용한다.
+- planner wedding/funeral page와 vendor dashboard의 RSC read bootstrap을 `withPrismaRetry()`로 감싸 transient SQLite busy error를 최대 3회 짧게 재시도한다.
+- `lib/errors.ts`에 `isDatabaseBusyError()`를 추가하고 `getActionError()`가 SQLite busy/locked/busy executing query를 사용자용 메시지로 변환하게 했다.
+- vendor reservation API route도 DB busy error를 `{ error: "요청이 일시적으로 지연되고 있습니다. 잠시 후 다시 시도해 주세요." }` 형태로 반환한다.
+- `scripts/server-action-read-concurrency-smoke.ts`를 추가해 4개 Prisma client, 24개 병렬 read batch로 planner page read와 vendor dashboard contract read를 반복 검증한다.
+
+BUG-F01 남은 한계:
+
+- local SQLite의 파일 잠금 특성은 완전히 제거할 수 없다. Production DB가 SQLite가 아니라면 이 현상은 다르게 검증해야 한다.
+- WAL은 seed 실행 후 DB 파일에 적용된다. seed를 거치지 않은 새 SQLite 파일은 별도 DB init 확인이 필요하다.
+- Chrome MCP에서는 `/planner/wedding?planId=...&step=3`에서 Step 3 submit 직후 Network 503 재발 여부를 다시 확인해야 한다.
+
+Vendor pending confirmation server contract:
+
+- 새 contract helper: `buildVendorDashboardReservationContract(reservations)` in `lib/vendor-dashboard-contract.ts`.
+- DTO: `VendorDashboardReservationDTO`, `VendorDashboardReservationContractDTO`, `VendorDashboardReservationCountsDTO` in `types/reservation.ts`.
+- `pendingConfirmations`: `Reservation.status === "PENDING"`이고 `quoteRequestStatus === "ACCEPTED"`인 항목이다. 업체가 “예약 최종 확정”해야 하는 대상이다.
+- `confirmedReservations`: `Reservation.status === "CONFIRMED"` 또는 `"COMPLETED"`인 항목이다.
+- `quoteResponsesWaitingForUserAcceptance`: 업체가 견적 응답을 보냈고 아직 사용자가 수락하지 않은 PENDING reservation이다.
+- `newQuoteRequests`: 아직 업체 응답이 없는 PENDING reservation이다.
+- count fields: `newRequestsCount`, `pendingConfirmationsCount`, `confirmedReservationsCount`, `respondedQuotesCount`.
+- `app/vendor/dashboard/page.tsx`는 기존 `reservations` prop을 유지하면서 서버에서 contract를 먼저 계산한다. Claude는 새 섹션을 만들 때 `pendingConfirmations`와 `counts.pendingConfirmationsCount`를 기준으로 렌더링하면 된다.
+- 권한 조건은 vendor dashboard page의 `vendorId = session.user.id` 필터를 유지하므로 venue/catering 간 pending confirmation이 섞이지 않는다.
+
+Request memo / response message contract:
+
+- planner request memo field: `QuoteRequestData.requestMemo` alias. 기존 `requirements`도 유지한다.
+- vendor response message field: `QuoteResponseData.responseMessage` alias. 기존 `note`도 유지한다.
+- `SubmitQuoteResponsePayload.responseMessage`를 optional alias로 추가했다. 서버는 `responseMessage ?? note`를 `QuoteResponse.note`에 저장한다.
+- vendor dashboard reservation DTO는 `requestMemo`와 `responseMessage`를 분리해서 제공한다.
+- Claude UI handoff: 업체 응답 textarea의 `value` 초기값은 빈 문자열이어야 한다.
+- Claude UI handoff: planner request memo는 textarea value에 넣지 말고 placeholder나 별도 요청 메모 영역에 표시한다.
+- Claude UI handoff: 업체 응답 textarea 저장값은 `responseMessage` 또는 legacy `note`를 사용한다.
+
+Smoke test 업데이트:
+
+- `scripts/verify-quote-flow.ts`가 vendor dashboard contract를 검증한다.
+- accept 전: `newQuoteRequests` 및 `quoteResponsesWaitingForUserAcceptance` 분류 검증.
+- accept 후: `pendingConfirmationsCount` 증가 검증.
+- confirm 후: `pendingConfirmations`에서 제거되고 `confirmedReservations`로 이동하는지 검증.
+- request memo와 response message가 각각 `requestMemo`, `responseMessage`에 분리되어 내려오는지 검증.
+- `scripts/server-action-read-concurrency-smoke.ts`가 concurrent read smoke를 담당한다.
+
+이번 작업 검증 결과:
+
+- `npx prisma generate`: 통과
+- `npm run db:seed`: 통과
+- `npx tsx scripts/verify-quote-flow.ts`: 통과
+- `npx tsx scripts/launch-readiness-smoke.ts`: 통과
+- `npx tsx scripts/server-action-read-concurrency-smoke.ts`: 통과
+- `npx tsc --noEmit`: 통과
+- `npm run lint`: 통과
+- `npm run build`: 통과
+- `npx prisma migrate status`: 통과, database schema up to date
+- `npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --script`: 통과, empty migration
+
+Chrome MCP 재확인 방법:
+
+- planner로 `/planner/wedding?planId=...&step=3` 진입 후 견적 요청 submit을 2~3회 새 플랜 기준으로 반복한다.
+- Network에서 Server Action POST가 503 없이 ActionResult error/success로 끝나는지 확인한다.
+- vendor dashboard에서 사용자가 수락한 PENDING reservation이 `pendingConfirmations` 기반 UI에 별도 표시되는지 확인한다.
+- 업체 응답 textarea가 planner request memo로 prefill되지 않는지 확인한다.

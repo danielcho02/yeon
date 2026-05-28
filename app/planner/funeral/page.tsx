@@ -4,7 +4,7 @@ import { EventPlanningWorkspace } from "@/components/features/planning/event-pla
 import type { ReservationItem } from "@/components/features/planning/workspace-types";
 import { UserRole } from "@/generated/prisma/client";
 import { getServerAuthSession } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
+import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { vendorSupportsAnyServiceModule } from "@/lib/step3.shared";
 
 type Recommendation = {
@@ -49,83 +49,85 @@ export default async function FuneralPlannerPage({
     redirect("/vendor/dashboard");
   }
 
-  const [plans, vendors, reservations] = await Promise.all([
-    prisma.eventPlan.findMany({
-      where: { ownerId: session.user.id, type: "FUNERAL" },
-      orderBy: { scheduledAt: "asc" },
-      select: {
-        id: true,
-        title: true,
-        type: true,
-        region: true,
-        scheduledAt: true,
-        guestTarget: true,
-        budget: true,
-        description: true,
-        aiRecommendation: true
-      }
-    }),
-    prisma.user.findMany({
-      where: { role: UserRole.VENDOR, vendorApprovalStatus: "APPROVED", isActive: true },
-      orderBy: { createdAt: "asc" },
-      select: {
-        id: true,
-        name: true,
-        companyName: true,
-        location: true,
-        supportedEventTypes: true,
-        supportedServiceModules: true,
-        vendorServices: {
-          where: { isActive: true },
-          select: {
-            id: true,
-            eventType: true,
-            module: true,
-            catalogKey: true,
-            pricingType: true,
-            name: true,
-            description: true,
-            basePrice: true,
-            maxGuests: true,
-            isActive: true
-          },
-          orderBy: [{ module: "asc" as const }, { basePrice: "asc" as const }]
+  const [plans, vendors, reservations] = await withPrismaRetry(() =>
+    Promise.all([
+      prisma.eventPlan.findMany({
+        where: { ownerId: session.user.id, type: "FUNERAL" },
+        orderBy: { scheduledAt: "asc" },
+        select: {
+          id: true,
+          title: true,
+          type: true,
+          region: true,
+          scheduledAt: true,
+          guestTarget: true,
+          budget: true,
+          description: true,
+          aiRecommendation: true
         }
-      }
-    }),
-    prisma.reservation.findMany({
-      where: {
-        eventPlan: { ownerId: session.user.id, type: "FUNERAL" }
-      },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        serviceName: true,
-        serviceCategory: true,
-        serviceDate: true,
-        guestCount: true,
-        quotedAmount: true,
-        confirmedAmount: true,
-        vendorConfirmationDueAt: true,
-        notes: true,
-        status: true,
-        quoteRequestId: true,
-        quoteResponseId: true,
-        quoteRequest: {
-          select: {
-            status: true
+      }),
+      prisma.user.findMany({
+        where: { role: UserRole.VENDOR, vendorApprovalStatus: "APPROVED", isActive: true },
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          name: true,
+          companyName: true,
+          location: true,
+          supportedEventTypes: true,
+          supportedServiceModules: true,
+          vendorServices: {
+            where: { isActive: true },
+            select: {
+              id: true,
+              eventType: true,
+              module: true,
+              catalogKey: true,
+              pricingType: true,
+              name: true,
+              description: true,
+              basePrice: true,
+              maxGuests: true,
+              isActive: true
+            },
+            orderBy: [{ module: "asc" as const }, { basePrice: "asc" as const }]
           }
-        },
-        selectedServiceOptions: true,
-        eventPlan: {
-          select: { id: true, title: true, type: true, region: true, scheduledAt: true, hostName: true, honoreeName: true }
-        },
-        vendor: {
-          select: { id: true, name: true, companyName: true, location: true }
         }
-      }
-    })
-  ]);
+      }),
+      prisma.reservation.findMany({
+        where: {
+          eventPlan: { ownerId: session.user.id, type: "FUNERAL" }
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          serviceName: true,
+          serviceCategory: true,
+          serviceDate: true,
+          guestCount: true,
+          quotedAmount: true,
+          confirmedAmount: true,
+          vendorConfirmationDueAt: true,
+          notes: true,
+          status: true,
+          quoteRequestId: true,
+          quoteResponseId: true,
+          quoteRequest: {
+            select: {
+              status: true
+            }
+          },
+          selectedServiceOptions: true,
+          eventPlan: {
+            select: { id: true, title: true, type: true, region: true, scheduledAt: true, hostName: true, honoreeName: true }
+          },
+          vendor: {
+            select: { id: true, name: true, companyName: true, location: true }
+          }
+        }
+      })
+    ])
+  );
   const filteredVendors = vendors.filter((vendor) =>
     vendorSupportsAnyServiceModule(vendor, "FUNERAL")
   );

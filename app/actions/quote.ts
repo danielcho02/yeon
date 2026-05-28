@@ -97,6 +97,7 @@ const createQuoteRequestSchema = z.object({
   planId: z.string().min(1),
   vendorId: z.string().min(1),
   requirements: z.string().trim().min(1),
+  requestMemo: z.string().trim().min(1).optional(),
   selectedModuleIds: z.array(z.string().min(1)).min(1),
   guestCount: z.number().int().positive().optional(),
   preferredDate: z.string().trim().min(1).optional(),
@@ -108,7 +109,8 @@ const submitQuoteResponseSchema = z.object({
   basePrice: z.number().int().nonnegative(),
   modules: quoteResponseModulesSchema,
   totalPrice: z.number().int(),
-  note: z.string().trim().optional()
+  note: z.string().trim().optional(),
+  responseMessage: z.string().trim().optional()
 });
 
 const acceptQuoteResponseSchema = z.object({
@@ -599,6 +601,7 @@ export async function submitQuoteResponse(
     assertQuoteTransition(currentStatus, "RESPONDED");
 
     const totalPrice = calculateModulesTotal(parsed.data.modules);
+    const responseMessage = parsed.data.responseMessage ?? parsed.data.note ?? null;
     if (totalPrice <= 0) {
       return actionError("견적 총액은 0원보다 커야 합니다.", "INVALID_TOTAL_PRICE");
     }
@@ -619,7 +622,7 @@ export async function submitQuoteResponse(
           basePrice: parsed.data.basePrice,
           modules: parsed.data.modules,
           totalPrice,
-          note: parsed.data.note ?? null
+          note: responseMessage
         },
         include: { vendor: true }
       });
@@ -637,7 +640,7 @@ export async function submitQuoteResponse(
             quotedAmount: totalPrice,
             confirmedAmount: null,
             selectedServiceOptions: parsed.data.modules as Prisma.InputJsonValue,
-            notes: parsed.data.note ?? request.reservation.notes
+            notes: responseMessage ?? request.reservation.notes
           }
         });
       }
@@ -669,7 +672,7 @@ export async function submitQuoteResponse(
         message: "업체가 견적 응답을 제출했습니다.",
         metadata: {
           totalPrice,
-          hasNote: Boolean(parsed.data.note)
+          hasNote: Boolean(responseMessage)
         }
       });
 

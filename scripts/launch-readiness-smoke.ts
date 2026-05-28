@@ -7,7 +7,8 @@ import { demoAccountCredentials } from "../lib/demo/ensure-demo-data";
 
 const prisma = new PrismaClient({
   adapter: new PrismaBetterSqlite3({
-    url: process.env.DATABASE_URL ?? "file:./prisma/yeon.db"
+    url: process.env.DATABASE_URL ?? "file:./prisma/yeon.db",
+    timeout: 10000
   })
 });
 

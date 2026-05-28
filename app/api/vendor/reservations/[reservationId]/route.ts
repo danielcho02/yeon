@@ -8,7 +8,7 @@ import {
   VendorApprovalStatus
 } from "@/generated/prisma/client";
 import { getServerAuthSession } from "@/lib/auth/session";
-import { isPrismaUniqueConstraintError } from "@/lib/errors";
+import { getActionError, isDatabaseBusyError, isPrismaUniqueConstraintError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { assertQuoteTransition } from "@/lib/state-machine";
 import {
@@ -463,6 +463,13 @@ export async function PATCH(request: Request, context: RouteContext) {
       return Response.json(
         { error: "이미 제출한 견적 응답이 있습니다." },
         { status: 409 }
+      );
+    }
+
+    if (isDatabaseBusyError(error)) {
+      return Response.json(
+        { error: getActionError(error) },
+        { status: 503 }
       );
     }
 

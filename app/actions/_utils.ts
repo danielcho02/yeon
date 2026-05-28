@@ -257,6 +257,7 @@ export function mapQuoteRequest(request: QuoteRequestLike): QuoteRequestData {
     planId: request.planId,
     vendorId: request.vendorId,
     requirements: request.requirements,
+    requestMemo: request.requirements,
     selectedModules: stringArrayFromJson(request.selectedModules),
     preferredDate: request.preferredDate?.toISOString() ?? null,
     budget: request.budget,
@@ -274,6 +275,7 @@ export function mapQuoteResponse(response: QuoteResponseLike): QuoteResponseData
     modules: response.modules as unknown as QuoteResponseModules,
     totalPrice: response.totalPrice,
     note: response.note,
+    responseMessage: response.note,
     createdAt: response.createdAt.toISOString(),
     vendor: response.vendor ? mapVendorProfile(response.vendor) : undefined
   };

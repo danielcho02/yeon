@@ -21,7 +21,8 @@ import type { QuoteResponseModules } from "../types/quote";
 
 const prisma = new PrismaClient({
   adapter: new PrismaBetterSqlite3({
-    url: process.env.DATABASE_URL ?? "file:./prisma/yeon.db"
+    url: process.env.DATABASE_URL ?? "file:./prisma/yeon.db",
+    timeout: 10000
   })
 });
 
@@ -500,6 +501,9 @@ async function seedModularQuoteData() {
 }
 
 async function main() {
+  await prisma.$executeRawUnsafe("PRAGMA journal_mode = WAL");
+  await prisma.$executeRawUnsafe("PRAGMA busy_timeout = 10000");
+
   await prisma.review.deleteMany();
   await prisma.transaction.deleteMany();
   await prisma.invitation.deleteMany();

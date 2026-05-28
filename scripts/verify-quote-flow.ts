@@ -18,10 +18,13 @@ import {
   assertQuoteTransition,
   assertReservationTransition
 } from "../lib/state-machine";
+import { buildVendorDashboardReservationContract } from "../lib/vendor-dashboard-contract";
+import type { VendorDashboardReservationDTO } from "../types/reservation";
 
 const prisma = new PrismaClient({
   adapter: new PrismaBetterSqlite3({
-    url: process.env.DATABASE_URL ?? "file:./prisma/yeon.db"
+    url: process.env.DATABASE_URL ?? "file:./prisma/yeon.db",
+    timeout: 10000
   })
 });
 
@@ -67,6 +70,118 @@ function stringArrayFromJson(value: Prisma.JsonValue | null): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
     : [];
+}
+
+function selectedOptionsFromJson(
+  value: Prisma.JsonValue | null
+): VendorDashboardReservationDTO["selectedServiceOptions"] {
+  if (!Array.isArray(value)) return null;
+
+  return value
+    .map((item) => {
+      const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
+      const name = typeof record.name === "string" ? record.name : null;
+      const price = typeof record.price === "number" ? record.price : null;
+      const pricingType = typeof record.pricingType === "string" ? record.pricingType : "FLAT";
+
+      if (!name || price === null) return null;
+
+      return {
+        catalogKey: typeof record.catalogKey === "string" ? record.catalogKey : null,
+        name,
+        price,
+        pricingType,
+        ...(typeof record.quantity === "number" ? { quantity: record.quantity } : {}),
+        ...(typeof record.subtotal === "number" ? { subtotal: record.subtotal } : {})
+      };
+    })
+    .filter((item): item is NonNullable<VendorDashboardReservationDTO["selectedServiceOptions"]>[number] => Boolean(item));
+}
+
+async function readVendorDashboardContract(vendorId: string) {
+  const rows = await prisma.reservation.findMany({
+    where: { vendorId },
+    select: {
+      id: true,
+      serviceName: true,
+      serviceCategory: true,
+      serviceDate: true,
+      guestCount: true,
+      quotedAmount: true,
+      confirmedAmount: true,
+      vendorConfirmationDueAt: true,
+      notes: true,
+      status: true,
+      quoteRequestId: true,
+      quoteResponseId: true,
+      quoteRequest: {
+        select: {
+          status: true,
+          requirements: true
+        }
+      },
+      quoteResponse: {
+        select: {
+          note: true
+        }
+      },
+      selectedServiceOptions: true,
+      eventPlan: {
+        select: {
+          id: true,
+          title: true,
+          type: true,
+          region: true,
+          scheduledAt: true,
+          hostName: true,
+          honoreeName: true
+        }
+      },
+      vendor: {
+        select: {
+          id: true,
+          name: true,
+          companyName: true,
+          location: true
+        }
+      }
+    },
+    orderBy: { createdAt: "desc" }
+  });
+
+  return buildVendorDashboardReservationContract(rows.map((row): VendorDashboardReservationDTO => ({
+    id: row.id,
+    serviceName: row.serviceName,
+    serviceCategory: row.serviceCategory,
+    serviceDate: row.serviceDate?.toISOString() ?? null,
+    guestCount: row.guestCount,
+    quotedAmount: row.quotedAmount,
+    confirmedAmount: row.confirmedAmount,
+    vendorConfirmationDueAt: row.vendorConfirmationDueAt?.toISOString() ?? null,
+    notes: row.notes,
+    requestMemo: row.quoteRequest?.requirements ?? row.notes,
+    responseMessage: row.quoteResponse?.note ?? null,
+    status: row.status,
+    quoteRequestId: row.quoteRequestId,
+    quoteResponseId: row.quoteResponseId,
+    quoteRequestStatus: row.quoteRequest?.status ?? null,
+    selectedServiceOptions: selectedOptionsFromJson(row.selectedServiceOptions),
+    eventPlan: {
+      id: row.eventPlan.id,
+      title: row.eventPlan.title,
+      type: row.eventPlan.type ?? undefined,
+      region: row.eventPlan.region,
+      scheduledAt: row.eventPlan.scheduledAt?.toISOString() ?? null,
+      hostName: row.eventPlan.hostName,
+      honoreeName: row.eventPlan.honoreeName
+    },
+    vendor: {
+      id: row.vendor.id,
+      name: row.vendor.name,
+      companyName: row.vendor.companyName,
+      location: row.vendor.location
+    }
+  })));
 }
 
 function moduleCategoryMatchesEventType(eventType: string, category: string) {
@@ -600,6 +715,13 @@ async function main() {
   checks.vendor_quote_request_count = vendorQuoteRequests.length;
   assert.equal(vendorQuoteRequests.length, 1);
 
+  const vendorContractBeforeResponse = await readVendorDashboardContract(vendor.id);
+  checks.vendor_contract_new_requests_count =
+    vendorContractBeforeResponse.counts.newRequestsCount;
+  assert.ok(
+    vendorContractBeforeResponse.newQuoteRequests.some((item) => item.quoteRequestId === created.requestId)
+  );
+
   await expectReject("confirm before user accepts quote", async () => {
     await canVendorConfirmReservation(created.reservationId, vendor.id);
   });
@@ -692,6 +814,21 @@ async function main() {
   assert.equal(afterVendorResponse.status, QuoteStatus.RESPONDED);
   assert.equal(afterVendorResponse.responses.length, 1);
   assert.equal(afterVendorResponse.reservation?.quoteResponseId, created.responseId);
+
+  const vendorContractAfterResponse = await readVendorDashboardContract(vendor.id);
+  const waitingForUserAcceptance =
+    vendorContractAfterResponse.quoteResponsesWaitingForUserAcceptance.find(
+      (item) => item.quoteRequestId === created.requestId
+    ) ?? null;
+  checks.vendor_contract_waiting_for_user_acceptance_count =
+    vendorContractAfterResponse.counts.respondedQuotesCount;
+  checks.vendor_contract_request_memo_is_separate =
+    waitingForUserAcceptance?.requestMemo === "Backend smoke verification request";
+  checks.vendor_contract_response_message_is_separate =
+    waitingForUserAcceptance?.responseMessage === "Backend smoke verification response";
+  assert.ok(waitingForUserAcceptance);
+  assert.equal(waitingForUserAcceptance.requestMemo, "Backend smoke verification request");
+  assert.equal(waitingForUserAcceptance.responseMessage, "Backend smoke verification response");
 
   await expectReject("non-owner quote response accept", async () => {
     await validateQuoteAcceptContract({
@@ -857,6 +994,15 @@ async function main() {
 
   assert.equal(reservationCountAfterAccept, 1);
 
+  const vendorContractAfterAccept = await readVendorDashboardContract(vendor.id);
+  checks.vendor_contract_pending_confirmations_count =
+    vendorContractAfterAccept.counts.pendingConfirmationsCount;
+  assert.ok(
+    vendorContractAfterAccept.pendingConfirmations.some(
+      (item) => item.quoteRequestId === created.requestId && item.status === ReservationStatus.PENDING
+    )
+  );
+
   await expectReject("duplicate quote response accept", async () => {
     await validateQuoteAcceptContract({
       ownerId: planner.id,
@@ -888,6 +1034,20 @@ async function main() {
   });
   checks.confirmed_reservation_not_pending = pendingAfterConfirm === 0;
   assert.equal(pendingAfterConfirm, 0);
+
+  const vendorContractAfterConfirm = await readVendorDashboardContract(vendor.id);
+  checks.vendor_contract_pending_confirmations_cleared =
+    !vendorContractAfterConfirm.pendingConfirmations.some(
+      (item) => item.quoteRequestId === created.requestId
+    );
+  checks.vendor_contract_confirmed_reservations_count =
+    vendorContractAfterConfirm.confirmedReservations.length;
+  assert.ok(checks.vendor_contract_pending_confirmations_cleared);
+  assert.ok(
+    vendorContractAfterConfirm.confirmedReservations.some(
+      (item) => item.quoteRequestId === created.requestId && item.status === ReservationStatus.CONFIRMED
+    )
+  );
 
   const [workflowNotifications, workflowActivities] = await Promise.all([
     prisma.notification.count({ where: { id: { in: created.notificationIds } } }),

@@ -24,6 +24,7 @@ export interface QuoteRequestData {
   planId: string;
   vendorId: string;
   requirements: string;
+  requestMemo: string;
   selectedModules: string[];
   preferredDate: string | null;
   budget: number | null;
@@ -39,6 +40,7 @@ export interface QuoteResponseData {
   modules: QuoteResponseModules;
   totalPrice: number;
   note: string | null;
+  responseMessage: string | null;
   createdAt: string;
   vendor?: VendorProfileData;
 }
@@ -65,6 +67,7 @@ export interface CreateQuoteRequestPayload {
   planId: string;
   vendorId: string;
   requirements: string;
+  requestMemo?: string;
   selectedModuleIds: string[];
   guestCount?: number;
   preferredDate?: string;
@@ -77,6 +80,7 @@ export interface SubmitQuoteResponsePayload {
   modules: QuoteResponseModules;
   totalPrice: number;
   note?: string;
+  responseMessage?: string;
 }
 
 export interface AcceptQuoteResponsePayload {
