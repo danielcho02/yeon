@@ -1,62 +1,48 @@
-<div align="center">
-
-<img src="./public/yeon-logo.png" width="120" alt="yeON logo" />
-
-<br />
-
-# yeON
-
-### 중요한 순간을 더 차분하고 정확하게 준비하는 행사 플래닝 플랫폼
-
-<br />
-
-<p>
-  <img src="https://img.shields.io/badge/Wedding-Planning-FF6F91?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Funeral-Care-475569?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Quote-Workflow-F59E0B?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Reservation-Management-10B981?style=for-the-badge" />
+<p align="center">
+  <img src="./public/yeon-logo.png" width="120" alt="yeON logo" />
 </p>
 
-<br />
+<h1 align="center">yeON</h1>
 
-**yeON은 웨딩과 장례처럼 인생의 중요한 행사를 준비하는 사용자를 위해
-행사 계획, 업체 견적 요청, 비교, 수락, 예약 확정까지의 과정을
-하나의 흐름으로 연결하는 통합 플래닝 서비스입니다.**
+<p align="center">
+  중요한 순간을 더 차분하고 정확하게 준비하는 행사 플래닝 플랫폼
+</p>
 
-<br />
+<p align="center">
+  <img src="https://img.shields.io/badge/Wedding-Planning-FF6F91?style=for-the-badge" alt="Wedding Planning" />
+  <img src="https://img.shields.io/badge/Funeral-Care-475569?style=for-the-badge" alt="Funeral Care" />
+  <img src="https://img.shields.io/badge/Quote-Workflow-F59E0B?style=for-the-badge" alt="Quote Workflow" />
+  <img src="https://img.shields.io/badge/Reservation-Management-10B981?style=for-the-badge" alt="Reservation Management" />
+</p>
 
-<img src="https://capsule-render.vercel.app/api?type=rect&color=gradient&height=2" width="80%" />
+<p align="center">
+  <strong>
+    yeON은 웨딩과 장례처럼 인생의 중요한 행사를 준비하는 사용자를 위해
+    행사 계획, 업체 견적 요청, 비교, 수락, 예약 확정까지의 과정을
+    하나의 흐름으로 연결하는 통합 플래닝 서비스입니다.
+  </strong>
+</p>
 
-</div>
-
-<br />
+---
 
 ## ✨ Why yeON?
 
 행사 준비는 단순히 날짜와 장소를 정하는 일이 아닙니다.
 
-웨딩은 수많은 선택지 속에서 예산과 취향을 조율해야 하고,
-장례는 짧은 시간 안에 차분하고 정확한 결정을 내려야 합니다.
+웨딩은 수많은 선택지 속에서 예산과 취향을 조율해야 하고, 장례는 짧은 시간 안에 차분하고 정확한 결정을 내려야 합니다.
 
-하지만 실제 준비 과정은 여러 업체와의 연락, 견적 비교, 일정 확인, 예약 확정이 흩어져 있어
-사용자가 지금 무엇을 했고, 무엇을 기다리고 있으며, 다음에 무엇을 해야 하는지 파악하기 어렵습니다.
+하지만 실제 준비 과정은 여러 업체와의 연락, 견적 비교, 일정 확인, 예약 확정이 흩어져 있어 사용자가 지금 무엇을 했고, 무엇을 기다리고 있으며, 다음에 무엇을 해야 하는지 파악하기 어렵습니다.
 
 **yeON은 이 복잡한 과정을 하나의 상태 기반 워크플로우로 정리합니다.**
 
-<br />
-
-<div align="center">
-
-| Before                    | After                    |
-| ------------------------- | ------------------------ |
-| 업체별 연락과 견적이 흩어짐           | 모든 견적 요청과 응답을 한 흐름에서 관리  |
-| 견적 수락과 예약 확정이 혼동됨         | 사용자 수락과 업체 확정을 명확히 분리    |
-| 행사 유형별 경험이 동일하게 처리됨       | 웨딩과 장례에 맞는 다른 플래닝 경험 제공  |
+| Before | After |
+| --- | --- |
+| 업체별 연락과 견적이 흩어짐 | 모든 견적 요청과 응답을 한 흐름에서 관리 |
+| 견적 수락과 예약 확정이 혼동됨 | 사용자 수락과 업체 확정을 명확히 분리 |
+| 행사 유형별 경험이 동일하게 처리됨 | 웨딩과 장례에 맞는 다른 플래닝 경험 제공 |
 | 업체가 요청 내용을 구조적으로 파악하기 어려움 | 서비스 모듈 기반으로 명확한 견적 요청 가능 |
 
-</div>
-
-<br />
+---
 
 ## 🧭 Service Flow
 
@@ -80,99 +66,46 @@ yeON은 행사 준비의 흐름을 다음과 같이 설계합니다.
 예약 완료
 ```
 
-<br />
-
-> 사용자의 견적 수락은 예약 완료가 아닙니다.
+> 사용자의 견적 수락은 예약 완료가 아닙니다.  
 > 예약은 업체가 최종 확정해야 완료됩니다.
 
-<br />
+이 구분을 통해 사용자는 현재 상태를 정확히 이해하고, 업체는 실제 예약 확정까지 책임 있게 관리할 수 있습니다.
 
-이 구분을 통해 사용자는 현재 상태를 정확히 이해하고,
-업체는 실제 예약 확정까지 책임 있게 관리할 수 있습니다.
-
-<br />
+---
 
 ## 🪄 Core Experience
 
 ### 01. 행사 유형별 플래닝
 
-yeON은 웨딩과 장례를 하나의 플랫폼에서 관리하지만,
-두 행사의 분위기와 사용자의 감정적 맥락은 다르게 다룹니다.
+yeON은 웨딩과 장례를 하나의 플랫폼에서 관리하지만, 두 행사의 분위기와 사용자의 감정적 맥락은 다르게 다룹니다.
 
-<br />
-
-<table>
-  <tr>
-    <td width="50%">
-      <h3 align="center">Wedding</h3>
-      <p align="center">설렘과 취향 중심의 준비 경험</p>
-      <ul>
-        <li>예식장</li>
-        <li>식사</li>
-        <li>플라워</li>
-        <li>촬영</li>
-        <li>드레스 및 스타일링</li>
-      </ul>
-    </td>
-    <td width="50%">
-      <h3 align="center">Funeral</h3>
-      <p align="center">차분하고 정확한 진행 경험</p>
-      <ul>
-        <li>장례식장</li>
-        <li>화환</li>
-        <li>운구</li>
-        <li>추모 서비스</li>
-        <li>일정 및 절차 관리</li>
-      </ul>
-    </td>
-  </tr>
-</table>
-
-<br />
-
----
-
-<br />
+| Wedding | Funeral |
+| --- | --- |
+| 설렘과 취향 중심의 준비 경험 | 차분하고 정확한 진행 경험 |
+| 예식장 | 장례식장 |
+| 식사 | 화환 |
+| 플라워 | 운구 |
+| 촬영 | 추모 서비스 |
+| 드레스 및 스타일링 | 일정 및 절차 관리 |
 
 ### 02. 모듈형 견적 요청
 
-기존의 견적 문의는 대부분 텍스트 중심입니다.
-사용자는 무엇을 요청해야 하는지 정리하기 어렵고, 업체도 필요한 정보를 다시 확인해야 합니다.
+기존의 견적 문의는 대부분 텍스트 중심입니다. 사용자는 무엇을 요청해야 하는지 정리하기 어렵고, 업체도 필요한 정보를 다시 확인해야 합니다.
 
 yeON은 필요한 서비스를 **모듈 단위**로 선택하게 하여 견적 요청을 구조화합니다.
 
-<br />
+| 사용자가 선택하는 것 | 업체가 받는 것 |
+| --- | --- |
+| 필요한 서비스 항목 | 명확한 요청 범위 |
+| 행사 날짜와 장소 | 일정 판단 기준 |
+| 예상 인원 | 금액 산정 기준 |
+| 요청사항 | 맞춤 견적 작성 기준 |
 
-<div align="center">
-
-| 사용자가 선택하는 것 | 업체가 받는 것    |
-| ----------- | ----------- |
-| 필요한 서비스 항목  | 명확한 요청 범위   |
-| 행사 날짜와 장소   | 일정 판단 기준    |
-| 예상 인원       | 금액 산정 기준    |
-| 요청사항        | 맞춤 견적 작성 기준 |
-
-</div>
-
-<br />
-
-이 방식은 사용자에게는 비교 가능한 견적을,
-업체에게는 응답하기 쉬운 요청 정보를 제공합니다.
-
-<br />
-
----
-
-<br />
+이 방식은 사용자에게는 비교 가능한 견적을, 업체에게는 응답하기 쉬운 요청 정보를 제공합니다.
 
 ### 03. 업체 견적 응답
 
-업체는 자신에게 들어온 요청만 확인하고,
-요청된 서비스 항목과 행사 정보를 바탕으로 견적을 제출합니다.
-
-<br />
-
-<div align="center">
+업체는 자신에게 들어온 요청만 확인하고, 요청된 서비스 항목과 행사 정보를 바탕으로 견적을 제출합니다.
 
 ```text
 받은 요청 확인
@@ -186,241 +119,95 @@ yeON은 필요한 서비스를 **모듈 단위**로 선택하게 하여 견적 �
 견적 응답 제출
 ```
 
-</div>
-
-<br />
-
 업체는 단순 문의가 아니라 실제 예약 가능성이 있는 구조화된 요청에 응답하게 됩니다.
-
-<br />
-
----
-
-<br />
 
 ### 04. 견적 비교와 수락
 
 사용자는 업체가 제출한 견적을 한곳에서 비교합니다.
 
-단순히 금액만 보는 것이 아니라,
-업체명, 제안 메시지, 선택된 서비스 항목, 예약 가능 상태를 함께 확인할 수 있습니다.
+단순히 금액만 보는 것이 아니라, 업체명, 제안 메시지, 선택된 서비스 항목, 예약 가능 상태를 함께 확인할 수 있습니다.
 
-<br />
+| 비교 기준 | 설명 |
+| --- | --- |
+| 업체 | 어떤 업체가 응답했는지 확인 |
+| 금액 | 총 견적 금액 비교 |
+| 서비스 범위 | 어떤 모듈이 포함되었는지 확인 |
+| 메시지 | 업체의 제안 내용 확인 |
+| 상태 | 응답 대기, 수락, 확정 여부 확인 |
 
-<div align="center">
-
-| 비교 기준  | 설명                  |
-| ------ | ------------------- |
-| 업체     | 어떤 업체가 응답했는지 확인     |
-| 금액     | 총 견적 금액 비교          |
-| 서비스 범위 | 어떤 모듈이 포함되었는지 확인    |
-| 메시지    | 업체의 제안 내용 확인        |
-| 상태     | 응답 대기, 수락, 확정 여부 확인 |
-
-</div>
-
-<br />
-
-사용자가 견적을 수락하면 예약은 바로 확정되지 않고,
-**업체 최종 확정 대기 상태**로 전환됩니다.
-
-<br />
-
----
-
-<br />
+사용자가 견적을 수락하면 예약은 바로 확정되지 않고, **업체 최종 확정 대기 상태**로 전환됩니다.
 
 ### 05. 예약 상태 관리
 
 yeON은 행사 준비 상태를 명확하게 나눕니다.
 
-<br />
-
-<div align="center">
-
-| Status      | Meaning                      |
-| ----------- | ---------------------------- |
-| 견적 요청       | 사용자가 업체에 견적을 보낸 상태           |
-| 업체 응답 대기    | 업체가 견적을 준비 중인 상태             |
-| 견적 비교       | 사용자가 업체 응답을 비교하는 상태          |
+| Status | Meaning |
+| --- | --- |
+| 견적 요청 | 사용자가 업체에 견적을 보낸 상태 |
+| 업체 응답 대기 | 업체가 견적을 준비 중인 상태 |
+| 견적 비교 | 사용자가 업체 응답을 비교하는 상태 |
 | 업체 최종 확정 대기 | 사용자가 견적을 수락했고 업체 확정을 기다리는 상태 |
-| 예약 확정 완료    | 업체가 최종 확정한 상태                |
+| 예약 확정 완료 | 업체가 최종 확정한 상태 |
 
-</div>
+이 구조를 통해 사용자는 지금 자신이 해야 할 일과 업체가 처리해야 할 일을 명확히 구분할 수 있습니다.
 
-<br />
-
-이 구조를 통해 사용자는 지금 자신이 해야 할 일과
-업체가 처리해야 할 일을 명확히 구분할 수 있습니다.
-
-<br />
+---
 
 ## 👥 User Journey
 
-<table>
-  <tr>
-    <td width="50%">
-      <h3 align="center">Planner</h3>
-      <br />
-      <p align="center">
-        행사 정보를 만들고,<br />
-        업체에 견적을 요청하고,<br />
-        응답을 비교한 뒤 수락합니다.
-      </p>
-      <br />
-      <pre>
-행사 선택
-  ↓
-행사 정보 입력
-  ↓
-업체 선택
-  ↓
-서비스 모듈 선택
-  ↓
-견적 요청
-  ↓
-견적 비교
-  ↓
-견적 수락
-  ↓
-예약 상태 확인
-      </pre>
-    </td>
-    <td width="50%">
-      <h3 align="center">Vendor</h3>
-      <br />
-      <p align="center">
-        받은 요청을 확인하고,<br />
-        견적을 제출하고,<br />
-        수락된 예약을 최종 확정합니다.
-      </p>
-      <br />
-      <pre>
-요청 확인
-  ↓
-요청 상세 검토
-  ↓
-견적 응답 작성
-  ↓
-견적 제출
-  ↓
-사용자 수락 확인
-  ↓
-예약 최종 확정
-      </pre>
-    </td>
-  </tr>
-</table>
+| Planner | Vendor |
+| --- | --- |
+| 행사 정보를 만들고, 업체에 견적을 요청하고, 응답을 비교한 뒤 수락합니다. | 받은 요청을 확인하고, 견적을 제출하고, 수락된 예약을 최종 확정합니다. |
+| `행사 선택 → 행사 정보 입력 → 업체 선택 → 서비스 모듈 선택 → 견적 요청 → 견적 비교 → 견적 수락 → 예약 상태 확인` | `요청 확인 → 요청 상세 검토 → 견적 응답 작성 → 견적 제출 → 사용자 수락 확인 → 예약 최종 확정` |
 
-<br />
+---
 
 ## 💡 Product Principles
 
-<br />
+| Principle | Description |
+| --- | --- |
+| Clarity | 사용자는 항상 현재 상태와 다음 행동을 알 수 있어야 합니다. |
+| Structure | 견적 요청은 텍스트가 아니라 구조화된 서비스 모듈로 관리됩니다. |
+| Trust | 견적 수락과 예약 확정을 분리하여 실제 서비스 흐름을 반영합니다. |
+| Context | 웨딩과 장례의 다른 감정적 맥락을 서로 다른 경험으로 제공합니다. |
 
-<table>
-  <tr>
-    <td width="25%">
-      <h3 align="center">Clarity</h3>
-      <p align="center">
-        사용자는 항상 현재 상태와 다음 행동을 알 수 있어야 합니다.
-      </p>
-    </td>
-    <td width="25%">
-      <h3 align="center">Structure</h3>
-      <p align="center">
-        견적 요청은 텍스트가 아니라 구조화된 서비스 모듈로 관리됩니다.
-      </p>
-    </td>
-    <td width="25%">
-      <h3 align="center">Trust</h3>
-      <p align="center">
-        견적 수락과 예약 확정을 분리하여 실제 서비스 흐름을 반영합니다.
-      </p>
-    </td>
-    <td width="25%">
-      <h3 align="center">Context</h3>
-      <p align="center">
-        웨딩과 장례의 다른 감정적 맥락을 서로 다른 경험으로 제공합니다.
-      </p>
-    </td>
-  </tr>
-</table>
-
-<br />
+---
 
 ## 🌿 Service Value
 
 ### For Users
 
-* 여러 업체의 견적을 한곳에서 비교할 수 있습니다.
-* 어떤 요청을 보냈고 어떤 응답을 받았는지 명확히 확인할 수 있습니다.
-* 견적 수락 이후 예약이 어디까지 진행되었는지 알 수 있습니다.
-* 웨딩과 장례 각각의 상황에 맞는 플래닝 경험을 받을 수 있습니다.
-* 중요한 순간에 복잡한 의사결정을 더 차분하게 정리할 수 있습니다.
-
-<br />
+- 여러 업체의 견적을 한곳에서 비교할 수 있습니다.
+- 어떤 요청을 보냈고 어떤 응답을 받았는지 명확히 확인할 수 있습니다.
+- 견적 수락 이후 예약이 어디까지 진행되었는지 알 수 있습니다.
+- 웨딩과 장례 각각의 상황에 맞는 플래닝 경험을 받을 수 있습니다.
+- 중요한 순간에 복잡한 의사결정을 더 차분하게 정리할 수 있습니다.
 
 ### For Vendors
 
-* 구조화된 요청을 받아 더 빠르게 견적을 작성할 수 있습니다.
-* 자신에게 배정된 요청만 확인할 수 있습니다.
-* 견적 응답과 예약 확정 과정을 하나의 흐름에서 관리할 수 있습니다.
-* 사용자가 수락한 견적을 기반으로 예약을 최종 확정할 수 있습니다.
-* 반복적인 확인 과정을 줄이고 실제 예약 가능성이 높은 요청에 집중할 수 있습니다.
+- 구조화된 요청을 받아 더 빠르게 견적을 작성할 수 있습니다.
+- 자신에게 배정된 요청만 확인할 수 있습니다.
+- 견적 응답과 예약 확정 과정을 하나의 흐름에서 관리할 수 있습니다.
+- 사용자가 수락한 견적을 기반으로 예약을 최종 확정할 수 있습니다.
+- 반복적인 확인 과정을 줄이고 실제 예약 가능성이 높은 요청에 집중할 수 있습니다.
 
-<br />
+---
 
 ## 🖼️ Preview
 
-<br />
+| Planner Workspace | Vendor Dashboard |
+| --- | --- |
+| ![Planner Workspace Preview](https://placehold.co/600x360/FDF2F8/831843?text=Planner+Workspace) | ![Vendor Dashboard Preview](https://placehold.co/600x360/F1F5F9/1E293B?text=Vendor+Dashboard) |
 
-<div align="center">
-
-<table>
-  <tr>
-    <td align="center" width="50%">
-      <b>Planner Workspace</b>
-      <br />
-      <br />
-      <img src="https://placehold.co/600x360/FDF2F8/831843?text=Planner+Workspace" alt="Planner Workspace Preview" />
-    </td>
-    <td align="center" width="50%">
-      <b>Vendor Dashboard</b>
-      <br />
-      <br />
-      <img src="https://placehold.co/600x360/F1F5F9/1E293B?text=Vendor+Dashboard" alt="Vendor Dashboard Preview" />
-    </td>
-  </tr>
-  <tr>
-    <td align="center" width="50%">
-      <b>Modular Quote Builder</b>
-      <br />
-      <br />
-      <img src="https://placehold.co/600x360/FFF7ED/9A3412?text=Modular+Quote+Builder" alt="Modular Quote Builder Preview" />
-    </td>
-    <td align="center" width="50%">
-      <b>Reservation Workflow</b>
-      <br />
-      <br />
-      <img src="https://placehold.co/600x360/ECFDF5/065F46?text=Reservation+Workflow" alt="Reservation Workflow Preview" />
-    </td>
-  </tr>
-</table>
-
-</div>
-
-<br />
+| Modular Quote Builder | Reservation Workflow |
+| --- | --- |
+| ![Modular Quote Builder Preview](https://placehold.co/600x360/FFF7ED/9A3412?text=Modular+Quote+Builder) | ![Reservation Workflow Preview](https://placehold.co/600x360/ECFDF5/065F46?text=Reservation+Workflow) |
 
 > Preview images are placeholders and can be replaced with actual product screenshots.
 
-<br />
+---
 
 ## 🧩 Experience Map
-
-<br />
-
-<div align="center">
 
 ```text
 ┌──────────────────┐
@@ -463,34 +250,19 @@ yeON은 행사 준비 상태를 명확하게 나눕니다.
 └──────────────────┘
 ```
 
-</div>
-
-<br />
+---
 
 ## 🕊️ Vision
 
 yeON은 단순한 일정 관리 도구가 아닙니다.
 
-중요한 행사를 준비하는 사람과 서비스를 제공하는 업체를 연결하고,
-흩어져 있던 요청, 응답, 비교, 수락, 확정 과정을 하나의 신뢰 가능한 흐름으로 정리하는 워크플로우 플랫폼입니다.
+중요한 행사를 준비하는 사람과 서비스를 제공하는 업체를 연결하고, 흩어져 있던 요청, 응답, 비교, 수락, 확정 과정을 하나의 신뢰 가능한 흐름으로 정리하는 워크플로우 플랫폼입니다.
 
-웨딩처럼 설레는 순간도,
-장례처럼 차분해야 하는 순간도,
-사용자는 복잡한 절차 속에서 무엇을 해야 하는지 명확히 알 수 있어야 합니다.
+웨딩처럼 설레는 순간도, 장례처럼 차분해야 하는 순간도, 사용자는 복잡한 절차 속에서 무엇을 해야 하는지 명확히 알 수 있어야 합니다.
 
-<br />
+---
 
-<div align="center">
-
-<img src="https://capsule-render.vercel.app/api?type=rect&color=gradient&height=2" width="80%" />
-
-<br />
-<br />
-
-## yeON
-
-**Plan meaningful moments with clarity.**
-
-<br />
-
-</div>
+<p align="center">
+  <strong>yeON</strong><br />
+  Plan meaningful moments with clarity.
+</p>
