@@ -57,7 +57,7 @@ export default async function PlannerPage() {
         <nav className="mb-14 flex items-center justify-between">
           <Link href="/" className="group flex items-center gap-2.5">
             <div className="relative h-8 w-[52px] overflow-hidden transition-transform duration-200 group-hover:scale-105">
-              <Image src="/yeon-logo.png" alt="YeON" fill className="object-contain" />
+              <Image src="/yeon-logo.png" alt="YeON" fill sizes="52px" className="object-contain" />
             </div>
             <span className="font-[var(--font-display)] text-sm font-semibold text-foreground">YeON</span>
           </Link>

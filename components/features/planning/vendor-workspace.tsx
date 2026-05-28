@@ -140,7 +140,7 @@ export function VendorWorkspace({
     ? proposalForm.reservationId
     : "";
 
-  function loadReservation(reservation: ReservationItem) {
+  function loadReservation(reservation: ReservationItem, nextPanel?: PanelKey) {
     setSelectedReservationId(reservation.id);
     setProposalForm({
       reservationId: reservation.id,
@@ -154,6 +154,7 @@ export function VendorWorkspace({
     });
     setMessage(null);
     setError(null);
+    if (nextPanel) setActivePanel(nextPanel);
   }
 
   async function updateReservation(action: "quote" | "decline") {
@@ -384,39 +385,54 @@ export function VendorWorkspace({
             <div className="grid gap-2.5">
               {inboxReservations.length ? (
                 inboxReservations.map((r) => (
-                  <button
+                  <article
                     key={r.id}
                     className={`rounded-[1.5rem] border-y border-r border-l-4 border-l-amber-400 p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                       selectedReservationId === r.id
                         ? `border-y-amber-200 border-r-amber-200 ${theme.panel}`
                         : "border-y-border/60 border-r-border/60 bg-white/80"
                     }`}
-                    onClick={() => loadReservation(r)}
-                    type="button"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-foreground">
-                          {getQuoteServiceModuleLabel({
-                            eventType: r.eventPlan.type,
-                            serviceCategory: r.serviceCategory,
-                            serviceName: r.serviceName
-                          })}
-                        </p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {r.eventPlan.title} · {getEventTypeLabel(r.eventPlan.type ?? "ETC")}
-                        </p>
+                    <button
+                      className="w-full text-left focus-visible:outline-none"
+                      onClick={() => loadReservation(r)}
+                      type="button"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-foreground">
+                            {getQuoteServiceModuleLabel({
+                              eventType: r.eventPlan.type,
+                              serviceCategory: r.serviceCategory,
+                              serviceName: r.serviceName
+                            })}
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {r.eventPlan.title} · {getEventTypeLabel(r.eventPlan.type ?? "ETC")}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          {r.eventPlan.type === "WEDDING" ? (
+                            <Heart className="h-3.5 w-3.5 text-rose-500" />
+                          ) : (
+                            <Shield className="h-3.5 w-3.5 text-indigo-600" />
+                          )}
+                          <Badge className={getQuoteStatusMeta(r).tone}>{getQuoteStatusMeta(r).label}</Badge>
+                        </div>
                       </div>
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        {r.eventPlan.type === "WEDDING" ? (
-                          <Heart className="h-3.5 w-3.5 text-rose-500" />
-                        ) : (
-                          <Shield className="h-3.5 w-3.5 text-indigo-600" />
-                        )}
-                        <Badge className={getQuoteStatusMeta(r).tone}>{getQuoteStatusMeta(r).label}</Badge>
-                      </div>
-                    </div>
-                  </button>
+                    </button>
+                    <button
+                      className="mt-4 flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-left text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                      onClick={() => loadReservation(r, "proposals")}
+                      type="button"
+                    >
+                      <span>가능 일정과 금액을 입력하세요.</span>
+                      <span className="inline-flex shrink-0 items-center gap-1">
+                        <MessageSquareQuote className="h-3.5 w-3.5" />
+                        견적 제안 작성
+                      </span>
+                    </button>
+                  </article>
                 ))
               ) : (
                 <EmptyState emoji="📭" title={inboxEmptyText} description="새 견적 요청이 들어오면 이곳에 표시됩니다." />

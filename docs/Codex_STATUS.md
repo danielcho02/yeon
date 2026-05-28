@@ -802,9 +802,7 @@ Migration status:
 
 Claude가 건드릴 영역:
 
-- BUG-04: Step 3 모듈 미선택 인라인 validation UI.
-- BUG-05: vendor 요청 카드의 “견적 제안 작성” CTA.
-- BUG-07: Image `sizes` prop warning.
+- BUG-04/BUG-05/BUG-07은 2026-05-28 Codex 최소 UI blocker fix에서 코드 반영 완료. Claude는 브라우저 QA 후 문구/간격 polish가 필요할 때만 최소 수정한다.
 - Notification UI 연결: unread badge, list, mark read, mark all read.
 
 Claude가 건드리면 안 되는 영역:
@@ -829,3 +827,34 @@ main merge 전 backend checklist:
 - `npx prisma migrate status` up to date.
 - `npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --script` empty migration.
 - git push는 사용자가 명시적으로 요청하기 전까지 하지 않는다.
+
+## 23. Codex minimal UI blocker fix - 2026-05-28
+
+목적:
+
+- 백엔드 contract freeze 이후 남아 있던 launch blocker성 UX 경고만 최소 수정했다.
+- 서버 action, Prisma schema, migration, notification contract는 변경하지 않았다.
+
+수정 내용:
+
+- BUG-04: `ModularQuoteBuilder`에서 모듈/베이스 패키지 미선택 시 인라인 안내를 노출하고, selection guard를 추가했다.
+  - 문구: `견적 요청을 보내려면 최소 1개 이상의 서비스를 선택해 주세요.`
+  - desktop summary, module grid 상단, mobile bottom bar/bottom sheet에서 동일한 조건으로 표시된다.
+- BUG-05: vendor dashboard의 새 견적 요청 카드에 `견적 제안 작성` CTA를 추가했다.
+  - CTA 클릭 시 해당 요청을 proposal form 대상으로 선택하고 `견적 제안` 패널로 이동한다.
+  - 요청 상세 확인용 기존 카드 선택 동작은 유지했다.
+- BUG-07: `next/image` `fill` 로고 사용부에 `sizes`를 명시했다.
+  - 대상: landing/nav/account/planner/auth layout logo image.
+
+검증 결과:
+
+- `npx tsc --noEmit`: 통과
+- `npm run lint`: 통과
+- `npm run build`: 통과
+- Chrome MCP QA: 이번 작업에서는 수행하지 않음. 실제 브라우저에서 Step 3 empty selection, vendor inbox CTA, Image warning 재확인이 필요하다.
+
+Claude/UI handoff:
+
+- notification center UI는 아직 남아 있다.
+- BUG-04/05/07은 기능 기준으로 반영됐으나, Claude가 실제 화면에서 문구/간격을 QA하고 필요 시 컴포넌트 내부에서만 polish한다.
+- backend freeze 영역(`app/actions`, `app/api`, `prisma`, `lib/workflow-events.ts`, `lib/state-machine.ts`)은 계속 수정하지 않는다.

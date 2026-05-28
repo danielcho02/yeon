@@ -136,12 +136,14 @@ function SummaryPanel({
   guestCount,
   isSubmitting = false,
   onRequestQuote,
+  validationMessage,
 }: {
   builder: ReturnType<typeof useQuoteBuilder>
   theme: EventTheme
   guestCount: number
   isSubmitting?: boolean
   onRequestQuote?: () => void
+  validationMessage?: string | null
 }) {
   const config = getThemeConfig(theme)
   const { selectedModules, basePackage, totalPrice } = builder
@@ -200,6 +202,12 @@ function SummaryPanel({
         )}
       </div>
 
+      {validationMessage && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700" role="status">
+          {validationMessage}
+        </p>
+      )}
+
       <div className="border-t border-gray-100 pt-3">
         <div className="flex items-baseline justify-between">
           <span className="text-sm font-medium text-gray-600">예상 총액</span>
@@ -231,18 +239,25 @@ function MobileBottomBar({
   onOpen,
   isSubmitting = false,
   onRequestQuote,
+  validationMessage,
 }: {
   builder: ReturnType<typeof useQuoteBuilder>
   theme: EventTheme
   onOpen: () => void
   isSubmitting?: boolean
   onRequestQuote?: () => void
+  validationMessage?: string | null
 }) {
   const config = getThemeConfig(theme)
   const count = builder.selectedModules.length + (builder.basePackage ? 1 : 0)
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-100 bg-white p-4 shadow-lg lg:hidden">
+      {validationMessage && (
+        <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700" role="status">
+          {validationMessage}
+        </p>
+      )}
       <div className="flex items-center justify-between gap-3">
         <button type="button" onClick={onOpen} className="flex items-center gap-2">
           <div
@@ -331,6 +346,10 @@ export function ModularQuoteBuilder({
   const [activeCategory, setActiveCategory] = useState<string>('all')
   const [sheetOpen, setSheetOpen] = useState(false)
   const { basePackage, setBasePackage } = builder
+  const hasQuoteSelection = builder.selectedModules.length > 0 || Boolean(builder.basePackage)
+  const selectionValidationMessage = hasQuoteSelection
+    ? null
+    : '견적 요청을 보내려면 최소 1개 이상의 서비스를 선택해 주세요.'
 
   useEffect(() => {
     if (!basePackage) return
@@ -345,6 +364,7 @@ export function ModularQuoteBuilder({
     : allModules.filter((m) => m.category === activeCategory)
 
   const handleRequestQuote = () => {
+    if (!hasQuoteSelection) return
     onRequestQuote?.(builder.selectedModules, builder.basePackage)
   }
 
@@ -414,6 +434,12 @@ export function ModularQuoteBuilder({
         ))}
       </div>
 
+      {selectionValidationMessage && (
+        <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700" role="status">
+          {selectionValidationMessage}
+        </p>
+      )}
+
       {/* Desktop: 2-col layout */}
       <div className="flex gap-6">
         {/* Module Grid */}
@@ -441,14 +467,28 @@ export function ModularQuoteBuilder({
         {/* Desktop Summary Panel */}
         <div className="hidden w-72 shrink-0 lg:block">
           <div className="sticky top-4 rounded-2xl border border-gray-100 p-4 shadow-sm">
-            <SummaryPanel builder={builder} theme={theme} guestCount={guestCount} isSubmitting={isSubmitting} onRequestQuote={handleRequestQuote} />
+            <SummaryPanel
+              builder={builder}
+              theme={theme}
+              guestCount={guestCount}
+              isSubmitting={isSubmitting}
+              onRequestQuote={handleRequestQuote}
+              validationMessage={selectionValidationMessage}
+            />
           </div>
         </div>
       </div>
 
       {/* Mobile Bottom Bar */}
       <div className="h-24 lg:hidden" />
-      <MobileBottomBar builder={builder} theme={theme} onOpen={() => setSheetOpen(true)} isSubmitting={isSubmitting} onRequestQuote={handleRequestQuote} />
+      <MobileBottomBar
+        builder={builder}
+        theme={theme}
+        onOpen={() => setSheetOpen(true)}
+        isSubmitting={isSubmitting}
+        onRequestQuote={handleRequestQuote}
+        validationMessage={selectionValidationMessage}
+      />
 
       {/* Mobile Bottom Sheet */}
       <AnimatePresence>
@@ -481,6 +521,7 @@ export function ModularQuoteBuilder({
                 guestCount={guestCount}
                 isSubmitting={isSubmitting}
                 onRequestQuote={() => { setSheetOpen(false); handleRequestQuote() }}
+                validationMessage={selectionValidationMessage}
               />
             </motion.div>
           </>

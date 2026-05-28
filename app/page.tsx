@@ -49,7 +49,7 @@ export default async function HomePage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2.5 group">
             <div className="relative h-8 w-[52px] overflow-hidden transition-transform duration-200 group-hover:scale-105">
-              <Image src="/yeon-logo.png" alt="YeON" fill className="object-contain" />
+              <Image src="/yeon-logo.png" alt="YeON" fill sizes="52px" className="object-contain" />
             </div>
             <div className="leading-none">
               <p className="text-[10px] uppercase tracking-[0.32em] text-muted-foreground/70">YeON</p>
@@ -330,7 +330,7 @@ export default async function HomePage() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="relative h-7 w-[46px] overflow-hidden">
-                  <Image src="/yeon-logo.png" alt="YeON" fill className="object-contain" />
+                  <Image src="/yeon-logo.png" alt="YeON" fill sizes="46px" className="object-contain" />
                 </div>
                 <div className="leading-none">
                   <p className="font-[var(--font-display)] text-sm font-semibold text-foreground">YeON</p>

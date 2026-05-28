@@ -28,7 +28,7 @@ export default function AuthLayout({
           <div>
             <Link className="group inline-flex items-center gap-3" href="/">
               <div className="relative h-9 w-[60px] overflow-hidden transition-opacity group-hover:opacity-90">
-                <Image src="/yeon-logo.png" alt="YeON" fill className="object-contain" />
+                <Image src="/yeon-logo.png" alt="YeON" fill sizes="60px" className="object-contain" />
               </div>
               <div className="leading-none">
                 <p className="text-[10px] uppercase tracking-[0.32em] text-white/35">YeON</p>
@@ -101,7 +101,7 @@ export default function AuthLayout({
         <div className="mb-8 lg:hidden">
           <Link href="/" className="inline-flex items-center gap-2.5">
             <div className="relative h-8 w-[52px] overflow-hidden">
-              <Image src="/yeon-logo.png" alt="YeON" fill className="object-contain" />
+              <Image src="/yeon-logo.png" alt="YeON" fill sizes="52px" className="object-contain" />
             </div>
             <div className="leading-none">
               <p className="text-[10px] uppercase tracking-[0.32em] text-muted-foreground/70">YeON</p>
