@@ -77,7 +77,7 @@ export default async function WeddingPlannerPage({
           supportedEventTypes: true,
           supportedServiceModules: true,
           vendorServices: {
-            where: { isActive: true },
+            where: { isActive: true, eventType: "WEDDING" },
             select: {
               id: true,
               eventType: true,

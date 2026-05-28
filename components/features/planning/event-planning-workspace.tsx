@@ -295,7 +295,7 @@ export function EventPlanningWorkspace({
     let cancelled = false;
     setVendorModules(null);
     setVendorModuleError(false);
-    getVendorServiceModules(selectedVendorId).then((result) => {
+    getVendorServiceModules(selectedVendorId, eventType).then((result) => {
       if (cancelled) return;
       if (result.success) {
         setVendorModules(result.data);
@@ -306,7 +306,7 @@ export function EventPlanningWorkspace({
       }
     });
     return () => { cancelled = true; };
-  }, [selectedVendorId]);
+  }, [selectedVendorId, eventType]);
 
   async function refreshQuoteRequests(planId: string) {
     const result = await getQuotesByPlan(planId);
@@ -1263,7 +1263,7 @@ export function EventPlanningWorkspace({
                         onClick={() => {
                           setVendorModules(null);
                           setVendorModuleError(false);
-                          getVendorServiceModules(selectedVendorId).then((result) => {
+                          getVendorServiceModules(selectedVendorId, eventType).then((result) => {
                             if (result.success) {
                               setVendorModules(result.data);
                             } else {

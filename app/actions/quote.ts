@@ -25,7 +25,10 @@ import {
   getVendorConfirmationDueAt,
   getVendorDashboardHref
 } from "@/lib/workflow-events";
-import { vendorSupportsEventType } from "@/lib/step3.shared";
+import {
+  vendorServiceModuleCategoryMatchesEventType,
+  vendorSupportsEventType
+} from "@/lib/step3.shared";
 
 import type { ActionResult } from "@/types/common";
 import type {
@@ -119,25 +122,6 @@ const acceptQuoteResponseSchema = z.object({
 });
 
 const idsSchema = z.array(z.string().min(1)).min(1);
-const weddingModuleCategories = new Set([
-  "VENUE",
-  "PHOTO",
-  "DRESS",
-  "MAKEUP",
-  "DECORATION",
-  "CATERING",
-  "INVITATION",
-  "CEREMONY"
-]);
-const funeralModuleCategories = new Set([
-  "FUNERAL_HALL",
-  "WREATH",
-  "TRANSPORT",
-  "CEREMONY",
-  "MEAL",
-  "OBITUARY"
-]);
-
 type ValidationIssue = {
   path: ReadonlyArray<PropertyKey>;
 };
@@ -206,18 +190,6 @@ function getSubmitQuoteResponseValidationMessage(issues: ValidationIssue[]) {
   }
 
   return "입력값을 확인해 주세요.";
-}
-
-function moduleCategoryMatchesEventType(eventType: string, category: string) {
-  if (eventType === "WEDDING") {
-    return weddingModuleCategories.has(category);
-  }
-
-  if (eventType === "FUNERAL") {
-    return funeralModuleCategories.has(category);
-  }
-
-  return false;
 }
 
 function isActiveQuoteRequestDuplicate(error: unknown) {
@@ -325,7 +297,7 @@ function stringArrayFromJson(value: Prisma.JsonValue | null): string[] {
 }
 
 async function attachSelectedModuleDetails<
-  T extends { selectedModules: Prisma.JsonValue | null }
+  T extends { selectedModules: Prisma.JsonValue | null; plan?: { type?: string | null } }
 >(requests: T[]): Promise<Array<T & { selectedModuleDetails: VendorServiceModuleData[] }>> {
   const moduleIds = Array.from(
     new Set(requests.flatMap((request) => stringArrayFromJson(request.selectedModules)))
@@ -346,6 +318,11 @@ async function attachSelectedModuleDetails<
     selectedModuleDetails: stringArrayFromJson(request.selectedModules)
       .map((id) => moduleMap.get(id))
       .filter((module): module is VendorServiceModuleData => Boolean(module))
+      .filter((module) =>
+        request.plan?.type
+          ? vendorServiceModuleCategoryMatchesEventType(request.plan.type, module.category)
+          : true
+      )
   }));
 }
 
@@ -448,7 +425,11 @@ export async function createQuoteRequest(
       return actionError("선택한 모듈이 유효하지 않습니다.", "INVALID_MODULES");
     }
 
-    if (modules.some((module) => !moduleCategoryMatchesEventType(plan.type, module.category))) {
+    if (
+      modules.some((module) =>
+        !vendorServiceModuleCategoryMatchesEventType(plan.type, module.category)
+      )
+    ) {
       return actionError(
         "행사 유형과 맞지 않는 서비스가 포함되어 있습니다.",
         "INVALID_MODULES"
@@ -568,7 +549,8 @@ export async function submitQuoteResponse(
           select: {
             id: true,
             ownerId: true,
-            title: true
+            title: true,
+            type: true
           }
         },
         reservation: true
@@ -602,6 +584,22 @@ export async function submitQuoteResponse(
 
     const totalPrice = calculateModulesTotal(parsed.data.modules);
     const responseMessage = parsed.data.responseMessage ?? parsed.data.note ?? null;
+    const responseModules = [
+      ...parsed.data.modules.includedModules,
+      ...parsed.data.modules.optionalModules
+    ];
+
+    if (
+      responseModules.some((module) =>
+        !vendorServiceModuleCategoryMatchesEventType(request.plan.type, module.category)
+      )
+    ) {
+      return actionError(
+        "행사 유형과 맞지 않는 견적 항목이 포함되어 있습니다.",
+        "INVALID_MODULES"
+      );
+    }
+
     if (totalPrice <= 0) {
       return actionError("견적 총액은 0원보다 커야 합니다.", "INVALID_TOTAL_PRICE");
     }
@@ -1057,7 +1055,8 @@ export async function getQuoteRequestsByPlan(
 }
 
 export async function getVendorServiceModules(
-  vendorId: string
+  vendorId: string,
+  eventType?: "WEDDING" | "FUNERAL"
 ): Promise<ActionResult<VendorServiceModuleData[]>> {
   try {
     await requireSessionUser();
@@ -1066,12 +1065,37 @@ export async function getVendorServiceModules(
       return actionError("업체 ID가 필요합니다.", "VALIDATION_ERROR");
     }
 
+    if (eventType && eventType !== "WEDDING" && eventType !== "FUNERAL") {
+      return actionError("행사 유형을 확인해 주세요.", "VALIDATION_ERROR");
+    }
+
+    if (eventType) {
+      const vendor = await prisma.user.findFirst({
+        where: {
+          id: vendorId,
+          role: UserRole.VENDOR,
+          vendorApprovalStatus: VendorApprovalStatus.APPROVED,
+          isActive: true
+        },
+        select: { id: true, supportedEventTypes: true }
+      });
+
+      if (!vendor || !vendorSupportsEventType(vendor, eventType)) {
+        return actionSuccess([]);
+      }
+    }
+
     const modules = await prisma.vendorServiceModule.findMany({
       where: { vendorId, isActive: true },
       orderBy: [{ category: "asc" }, { sortOrder: "asc" }]
     });
+    const filteredModules = eventType
+      ? modules.filter((module) =>
+          vendorServiceModuleCategoryMatchesEventType(eventType, module.category)
+        )
+      : modules;
 
-    return actionSuccess(modules.map(mapVendorServiceModuleData));
+    return actionSuccess(filteredModules.map(mapVendorServiceModuleData));
   } catch (error) {
     return actionError(getActionError(error), "GET_VENDOR_MODULES_FAILED");
   }

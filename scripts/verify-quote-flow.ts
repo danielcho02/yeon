@@ -18,6 +18,7 @@ import {
   assertQuoteTransition,
   assertReservationTransition
 } from "../lib/state-machine";
+import { vendorServiceModuleCategoryMatchesEventType } from "../lib/step3.shared";
 import { buildVendorDashboardReservationContract } from "../lib/vendor-dashboard-contract";
 import type { VendorDashboardReservationDTO } from "../types/reservation";
 
@@ -185,28 +186,39 @@ async function readVendorDashboardContract(vendorId: string) {
 }
 
 function moduleCategoryMatchesEventType(eventType: string, category: string) {
-  const weddingCategories = new Set([
-    "VENUE",
-    "PHOTO",
-    "DRESS",
-    "MAKEUP",
-    "DECORATION",
-    "CATERING",
-    "INVITATION",
-    "CEREMONY"
-  ]);
-  const funeralCategories = new Set([
-    "FUNERAL_HALL",
-    "WREATH",
-    "TRANSPORT",
-    "CEREMONY",
-    "MEAL",
-    "OBITUARY"
-  ]);
+  return vendorServiceModuleCategoryMatchesEventType(eventType, category);
+}
 
-  if (eventType === "WEDDING") return weddingCategories.has(category);
-  if (eventType === "FUNERAL") return funeralCategories.has(category);
-  return false;
+const weddingForbiddenKeywordsInFuneral = [
+  "드레스",
+  "웨딩 영상",
+  "본식 스냅",
+  "앨범 제작",
+  "야외 촬영",
+  "브라이덜"
+];
+
+const funeralForbiddenKeywordsInWedding = [
+  "장례",
+  "조문",
+  "문상",
+  "빈소",
+  "운구",
+  "화환",
+  "제단",
+  "영정",
+  "수의",
+  "유골"
+];
+
+function assertNoKeywords(label: string, value: string, forbiddenKeywords: string[]) {
+  for (const keyword of forbiddenKeywords) {
+    assert.equal(
+      value.includes(keyword),
+      false,
+      `${label} must not include ${keyword}: ${value}`
+    );
+  }
 }
 
 async function validateQuoteRequestContract(input: {
@@ -414,7 +426,7 @@ async function canVendorConfirmReservation(reservationId: string, vendorId: stri
 async function main() {
   const checks: Record<string, boolean | string | number> = {};
 
-  const [planner, vendor, catering, guest] = await Promise.all([
+  const [planner, vendor, florist, funeralVendor, guest] = await Promise.all([
     prisma.user.findUniqueOrThrow({
       where: { email: demoAccountCredentials.planner }
     }),
@@ -425,9 +437,89 @@ async function main() {
       where: { email: demoAccountCredentials.catering }
     }),
     prisma.user.findUniqueOrThrow({
+      where: { email: demoAccountCredentials.memorial }
+    }),
+    prisma.user.findUniqueOrThrow({
       where: { email: demoAccountCredentials.guest }
     })
   ]);
+
+  const [funeralSeedModules, weddingSeedModules, floristModules, floristServices] =
+    await Promise.all([
+      prisma.vendorServiceModule.findMany({
+        where: { vendorId: funeralVendor.id, isActive: true },
+        orderBy: [{ category: "asc" }, { sortOrder: "asc" }]
+      }),
+      prisma.vendorServiceModule.findMany({
+        where: { vendorId: { in: [vendor.id, florist.id] }, isActive: true },
+        orderBy: [{ category: "asc" }, { sortOrder: "asc" }]
+      }),
+      prisma.vendorServiceModule.findMany({
+        where: { vendorId: florist.id, isActive: true }
+      }),
+      prisma.vendorService.findMany({
+        where: { vendorId: florist.id, isActive: true }
+      })
+    ]);
+
+  assert.ok(funeralSeedModules.length > 0, "funeral vendor modules must exist");
+  assert.ok(weddingSeedModules.length > 0, "wedding vendor modules must exist");
+
+  for (const module of funeralSeedModules) {
+    assert.ok(
+      moduleCategoryMatchesEventType("FUNERAL", module.category),
+      `funeral module category mismatch: ${module.name} / ${module.category}`
+    );
+    assertNoKeywords(
+      "funeral module",
+      `${module.name} ${module.description ?? ""}`,
+      weddingForbiddenKeywordsInFuneral
+    );
+  }
+  checks.funeral_modules_are_event_specific = true;
+
+  for (const module of weddingSeedModules) {
+    assert.ok(
+      moduleCategoryMatchesEventType("WEDDING", module.category),
+      `wedding module category mismatch: ${module.name} / ${module.category}`
+    );
+    assertNoKeywords(
+      "wedding module",
+      `${module.name} ${module.description ?? ""}`,
+      funeralForbiddenKeywordsInWedding
+    );
+  }
+  checks.wedding_modules_are_event_specific = true;
+
+  assert.equal(
+    floristModules.some((module) => module.category === "CATERING" || module.category === "MEAL"),
+    false
+  );
+  assert.equal(
+    floristServices.some((service) =>
+      service.module === "venue" ||
+      service.module === "funeralHall" ||
+      service.catalogKey === "funeral_food" ||
+      service.catalogKey === "catering_meal"
+    ),
+    false
+  );
+  checks.florist_vendor_not_catering_or_meal = true;
+
+  const funeralReservations = await prisma.reservation.findMany({
+    where: { eventPlan: { ownerId: planner.id, type: "FUNERAL" } },
+    include: {
+      quoteResponse: true,
+      quoteRequest: true
+    }
+  });
+  const funeralReservationPayload = JSON.stringify(funeralReservations);
+  assertNoKeywords(
+    "funeral reservation/quote payload",
+    funeralReservationPayload,
+    weddingForbiddenKeywordsInFuneral
+  );
+  checks.funeral_reservations_have_no_wedding_labels = true;
 
   const seedPlan = await prisma.eventPlan.findFirstOrThrow({
     where: { ownerId: planner.id, type: "WEDDING" }
@@ -504,7 +596,7 @@ async function main() {
   checks.non_owner_quote_request_read_rejected = true;
 
   const funeralOnlyModule = await prisma.vendorServiceModule.findFirst({
-    where: { vendorId: catering.id, category: "MEAL", isActive: true },
+    where: { vendorId: funeralVendor.id, category: "MEAL", isActive: true },
     select: { id: true }
   });
 
@@ -513,7 +605,7 @@ async function main() {
       await validateQuoteRequestContract({
         ownerId: planner.id,
         planId: plan.id,
-        vendorId: catering.id,
+        vendorId: funeralVendor.id,
         selectedModuleIds: [funeralOnlyModule.id]
       });
     });
@@ -619,7 +711,7 @@ async function main() {
 
   await expectReject("wrong vendor quote response submit", async () => {
     await validateQuoteResponseContract({
-      actorId: catering.id,
+      actorId: florist.id,
       requestId: created.requestId,
       totalPrice: quotedAmount
     });

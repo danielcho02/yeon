@@ -245,6 +245,43 @@ export function getQuoteServiceModules(type: string | null | undefined) {
   return [];
 }
 
+const weddingVendorServiceModuleCategories = new Set([
+  "VENUE",
+  "PHOTO",
+  "DRESS",
+  "MAKEUP",
+  "DECORATION",
+  "CATERING",
+  "INVITATION",
+  "CEREMONY"
+]);
+
+const funeralVendorServiceModuleCategories = new Set([
+  "FUNERAL_HALL",
+  "WREATH",
+  "TRANSPORT",
+  "CEREMONY",
+  "MEAL",
+  "OBITUARY"
+]);
+
+export function vendorServiceModuleCategoryMatchesEventType(
+  eventType: string | null | undefined,
+  category: string | null | undefined
+) {
+  if (!eventType || !category) return false;
+
+  if (eventType === "WEDDING") {
+    return weddingVendorServiceModuleCategories.has(category);
+  }
+
+  if (eventType === "FUNERAL") {
+    return funeralVendorServiceModuleCategories.has(category);
+  }
+
+  return false;
+}
+
 export function parseMvpQuoteEventType(value: string | null | undefined) {
   if (value === "WEDDING" || value === "웨딩" || value === "결혼") {
     return "WEDDING";

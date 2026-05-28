@@ -77,7 +77,7 @@ export default async function FuneralPlannerPage({
           supportedEventTypes: true,
           supportedServiceModules: true,
           vendorServices: {
-            where: { isActive: true },
+            where: { isActive: true, eventType: "FUNERAL" },
             select: {
               id: true,
               eventType: true,

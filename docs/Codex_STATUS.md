@@ -1099,3 +1099,76 @@ main merge 전 backend checklist:
 - Chrome MCP final QA PASS 확인.
 - `.env`, DB sidecar, `.next`, `generated`, `tsconfig.tsbuildinfo` 등 산출물이 커밋되지 않았는지 확인.
 - push는 사용자가 명시적으로 요청하기 전까지 하지 않는다.
+
+## 27. Domain data integrity fix - 2026-05-29
+
+범위:
+
+- QA에서 확인된 Funeral Step 3의 Wedding 모듈 노출 문제를 backend/domain mapping 기준으로 수정했다.
+- 디자인 polish, layout redesign, `docs/Claude_STATUS.md`, README 수정은 하지 않았다.
+- UI 변경은 Step 3 모듈 조회에 `eventType`을 넘기는 최소 연결부만 포함한다.
+
+해결한 도메인 문제:
+
+- BUG-D01: Funeral Step 3에서 `본식 스냅`, `드레스`, `웨딩 영상`, `앨범 제작`, `야외 촬영`, `브라이덜` 계열 모듈이 노출되지 않도록 `VendorServiceModule` category와 `eventType` 필터를 공유 helper로 고정했다.
+- BUG-D02: `catering@yeon.local` seed 계정의 역할을 `오르세 플로럴` Wedding floral vendor로 정리하고 catering/meal/funeral service mapping을 제거했다.
+- BUG-D02: `memorial@yeon.local` seed 계정을 `한결 의전` Funeral vendor로 정리하고 funeral hall, meal, obituary, wreath, transport 모듈을 연결했다.
+- BUG-D03: QuoteResponse/Reservation 조회 시 plan event type과 맞지 않는 selected module detail은 DTO에 포함되지 않도록 방어했다.
+
+Wedding/Funeral filtering 기준:
+
+- 표준 helper: `vendorServiceModuleCategoryMatchesEventType(eventType, category)` in `lib/step3.shared.ts`.
+- Wedding 허용 category: `VENUE`, `PHOTO`, `DRESS`, `MAKEUP`, `DECORATION`, `CATERING`, `INVITATION`, `CEREMONY`.
+- Funeral 허용 category: `FUNERAL_HALL`, `WREATH`, `TRANSPORT`, `CEREMONY`, `MEAL`, `OBITUARY`.
+- `CEREMONY`는 schema상 공통 category이므로 seed/label에서 event-specific 문구를 섞지 않는 방식으로 관리한다.
+- `getVendorServiceModules(vendorId, eventType)`는 vendor가 해당 event type을 지원하지 않으면 빈 배열을 반환한다.
+- planner wedding/funeral page의 initial vendor services include는 각각 `eventType: "WEDDING"` / `eventType: "FUNERAL"`로 제한한다.
+- `createQuoteRequest()`와 `submitQuoteResponse()`는 plan event type과 맞지 않는 module/category 조합을 서버에서 거부한다.
+
+Seed data 정리:
+
+- `venue@yeon.local`: Wedding venue 중심 vendor로 유지.
+- `catering@yeon.local`: `오르세 플로럴`, Wedding floral/decoration vendor로 정리. Catering/meal/funeral module을 담당하지 않는다.
+- `memorial@yeon.local`: `한결 의전`, Funeral vendor로 정리. Funeral hall, meal, obituary, wreath, transport 모듈을 담당한다.
+- 제거/대체한 혼합 seed:
+  - `테이블앤코 케이터링`의 Wedding catering + Funeral meal 혼합 mapping 제거.
+  - `블루필름 스튜디오`의 Wedding photo/video/album/outdoor modules가 Funeral account처럼 보이던 seed 제거.
+  - Wedding accepted reservation은 `오르세 플로럴 웨딩 장식`/`DECORATION`으로 대체.
+  - Funeral quote/response/reservation은 `한결 의전` 모듈로 대체.
+- `npm run db:seed` 현재 결과: `vendorServiceModules=15`, `quoteRequests=4`, `quoteResponses=2`, `reservations=3`.
+
+새 smoke test 검증 항목:
+
+- `funeral_modules_are_event_specific`: Funeral vendor modules는 Funeral category만 가진다.
+- `wedding_modules_are_event_specific`: Wedding vendor modules는 Wedding category만 가진다.
+- `florist_vendor_not_catering_or_meal`: `오르세 플로럴`은 `CATERING`/`MEAL` module이나 catering/funeral service를 갖지 않는다.
+- `funeral_reservations_have_no_wedding_labels`: Funeral reservation/quote payload에 Wedding 금지 키워드가 섞이지 않는다.
+- 기존 `module_event_type_mismatch_rejected`: Funeral-only module을 Wedding plan으로 요청하면 서버 validation이 거부한다.
+
+Claude UI handoff:
+
+- Step 3 UI는 backend에서 내려오는 event-specific vendor/module contract를 그대로 사용한다.
+- Wedding 화면에서 funeral-only labels(`장례`, `조문`, `문상`, `빈소`, `운구`, `화환`, `영정`, `수의`, `유골`)가 보이면 회귀다.
+- Funeral 화면에서 wedding-only labels(`드레스`, `웨딩 영상`, `본식 스냅`, `앨범 제작`, `야외 촬영`, `브라이덜`)가 보이면 회귀다.
+- 업체 표시에서 `오르세 플로럴`은 Wedding floral/decoration vendor로 취급한다. 장례 식사나 웨딩 케이터링 업체처럼 렌더링하지 않는다.
+- 장례 식사/운구/장례 지도/빈소 관련 UI는 `한결 의전` 또는 Funeral vendor contract를 기준으로 표시한다.
+- 남은 UI 작업: Wedding/Funeral 레이아웃 톤 분리, vendor dashboard 업무 queue형 UI, Step 4 lane UI, notification UI, image warning 정리.
+
+검증 결과:
+
+- `npx prisma generate`: 통과.
+- `npm run db:seed`: 통과.
+- `npx tsx scripts/verify-quote-flow.ts`: 통과.
+- `npx tsx scripts/launch-readiness-smoke.ts`: 통과.
+- `npx tsx scripts/server-action-read-concurrency-smoke.ts`: 통과.
+- `npx tsc --noEmit`: 통과.
+- `npm run lint`: 통과.
+- `npm run build`: 통과.
+- `npx prisma migrate status`: 통과, database schema up to date.
+
+Chrome MCP 재확인 항목:
+
+- `/planner/funeral?planId=...&step=3`에서 Wedding module/label 금지 키워드가 노출되지 않는지 확인한다.
+- `/planner/wedding?planId=...&step=3`에서 Funeral module/label 금지 키워드가 노출되지 않는지 확인한다.
+- `/planner/funeral?step=4`에서 reservation/quote response의 vendor/service/module label이 Funeral domain에 맞는지 확인한다.
+- `/vendor/dashboard`에서 `오르세 플로럴`과 `한결 의전`의 업무 queue가 서로 다른 event/service mapping을 유지하는지 확인한다.
