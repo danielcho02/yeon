@@ -2,7 +2,7 @@ import { revalidatePath } from "next/cache";
 
 import { QuoteStatus, ReservationStatus, UserRole } from "@/generated/prisma/client";
 import { getServerAuthSession } from "@/lib/auth/session";
-import { isPrismaUniqueConstraintError } from "@/lib/errors";
+import { getActionError, isDatabaseBusyError, isPrismaUniqueConstraintError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { mvpEventTypes } from "@/lib/step3.server";
 import {
@@ -26,7 +26,7 @@ function isActiveQuoteRequestDuplicate(error: unknown) {
   ]);
 }
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const session = await getServerAuthSession();
 
   if (!session?.user?.id) {
@@ -161,13 +161,24 @@ export async function POST(request: Request) {
 
   if (serviceId) {
     const vendorService = await prisma.vendorService.findFirst({
-      where: { id: serviceId, vendorId, isActive: true },
+      where: {
+        id: serviceId,
+        vendorId,
+        isActive: true,
+        eventType: plan.type,
+        module: serviceModuleOption.value
+      },
       select: { basePrice: true, name: true }
     });
-    if (vendorService) {
-      quotedAmount = vendorService.basePrice;
-      serviceName = vendorService.name;
+    if (!vendorService) {
+      return Response.json(
+        { error: "선택한 서비스가 유효하지 않습니다." },
+        { status: 400 }
+      );
     }
+
+    quotedAmount = vendorService.basePrice;
+    serviceName = vendorService.name;
   }
 
   const serviceDate = parseDateOnlyToKst(serviceDateInput);
@@ -252,4 +263,26 @@ export async function POST(request: Request) {
   revalidatePath("/vendor/dashboard");
 
   return Response.json({ ok: true });
+}
+
+export async function POST(request: Request) {
+  try {
+    return await handlePost(request);
+  } catch (error) {
+    if (isDatabaseBusyError(error)) {
+      return Response.json(
+        { error: getActionError(error) },
+        { status: 503 }
+      );
+    }
+
+    if (error instanceof SyntaxError) {
+      return Response.json(
+        { error: "요청 본문을 확인해 주세요." },
+        { status: 400 }
+      );
+    }
+
+    throw error;
+  }
 }

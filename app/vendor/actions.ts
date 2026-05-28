@@ -11,7 +11,7 @@ import {
   VendorApprovalStatus
 } from "@/generated/prisma/client";
 import { getServerAuthSession } from "@/lib/auth/session";
-import { isPrismaUniqueConstraintError } from "@/lib/errors";
+import { getActionError, isPrismaUniqueConstraintError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { assertQuoteTransition } from "@/lib/state-machine";
 import {
@@ -86,7 +86,7 @@ function buildLegacyResponseModules(
     basePackage: {
       name: reservation.serviceName,
       price: proposalAmount,
-      description: reservation.notes ?? reservation.description ?? "업체가 제출한 견적 제안입니다."
+      description: "업체가 제출한 견적 제안입니다."
     },
     includedModules: [],
     optionalModules: [],
@@ -156,8 +156,7 @@ export async function acceptReservation(reservationId: string, proposalAmount: n
                 data: {
                   basePrice: proposalAmount,
                   modules: modules as Prisma.InputJsonValue,
-                  totalPrice: proposalAmount,
-                  note: reservation.notes
+                  totalPrice: proposalAmount
                 },
                 select: { id: true }
               })
@@ -167,8 +166,7 @@ export async function acceptReservation(reservationId: string, proposalAmount: n
                 data: {
                   basePrice: proposalAmount,
                   modules: modules as Prisma.InputJsonValue,
-                  totalPrice: proposalAmount,
-                  note: reservation.notes
+                  totalPrice: proposalAmount
                 },
                 select: { id: true }
               })
@@ -179,7 +177,7 @@ export async function acceptReservation(reservationId: string, proposalAmount: n
                   basePrice: proposalAmount,
                   modules: modules as Prisma.InputJsonValue,
                   totalPrice: proposalAmount,
-                  note: reservation.notes
+                  note: null
                 },
                 select: { id: true }
               });
@@ -208,7 +206,7 @@ export async function acceptReservation(reservationId: string, proposalAmount: n
       throw new Error("이미 제출한 견적 응답이 있습니다.");
     }
 
-    throw error;
+    throw new Error(getActionError(error));
   }
 
   revalidateReservationViews(reservation.eventPlanId);

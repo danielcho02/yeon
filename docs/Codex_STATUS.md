@@ -989,3 +989,113 @@ BUG-F01 503 추가 완화:
 검증 결과:
 
 - final verification에서 `npx prisma generate`, `npm run db:seed`, 3개 smoke, `npx tsc --noEmit`, `npm run lint`, `npm run build`, `npx prisma migrate status`를 다시 실행한다.
+
+## 26. Codex backend final hardening - 2026-05-28
+
+범위:
+
+- main merge 전 backend action/API route 계약을 최종 감사했다.
+- 프론트 UI polish, layout 변경, hook 대개편, README 수정, `docs/Claude_STATUS.md` 수정은 하지 않았다.
+- Prisma schema/migration은 변경하지 않았다.
+
+이번에 처리한 backend risk:
+
+- `app/vendor/actions.ts` legacy vendor action이 `reservation.notes`/planner request memo를 `QuoteResponse.note`처럼 저장할 수 있는 경로를 제거했다.
+  - legacy action은 별도 vendor response message 입력값이 없으므로 새 `QuoteResponse.note`는 `null`로 생성한다.
+  - 기존 `QuoteResponse`를 update할 때는 note를 건드리지 않아 이미 저장된 실제 업체 응답 메시지를 보존한다.
+- `app/vendors/actions.ts` legacy FormData quote request fallback에서 계산된 예상 금액이 0 이하이면 서버에서 거부한다.
+- `app/vendors/actions.ts` legacy fallback의 unknown DB error도 `{ error: ... }` 형태로 반환하게 정리했다.
+- `app/api/reservations/route.ts` legacy request 생성 route에서 `serviceId`가 전달된 경우 같은 vendor, 같은 event type, 같은 service module에 속한 active service인지 검증한다.
+- `app/api/reservations/route.ts`, `app/api/reservations/[reservationId]/route.ts`, `app/api/vendor/reservations/[reservationId]/route.ts`에 route-level SQLite busy/SyntaxError guard를 추가했다.
+
+최종 backend contract 요약:
+
+- QuoteRequest:
+  - 표준 경로: `app/actions/quote.ts createQuoteRequest`.
+  - GENERAL plan owner만 가능하며, approved active vendor, event type, selected module, active duplicate request를 검증한다.
+  - legacy 경로(`app/vendors/actions.ts`, `app/api/reservations/route.ts`)는 유지하되 active duplicate, vendor ownership, event type, selected service, positive amount guard를 맞췄다.
+- QuoteResponse:
+  - 표준 경로: `submitQuoteResponse`.
+  - VENDOR target vendor만 가능하며, request `PENDING`, total/base mismatch, duplicate response를 차단한다.
+  - legacy vendor API route는 현재 vendor workspace에서 사용 중이며, 기존 response update 호환을 유지한다.
+- Accept:
+  - `acceptQuoteResponse`는 GENERAL plan owner만 가능하고 request `RESPONDED` 상태에서만 `ACCEPTED`로 전이한다.
+  - transaction `updateMany(status=RESPONDED)` guard와 DB unique relation으로 중복 accept/reservation 생성을 막는다.
+- Reservation Confirm:
+  - `confirmReservation`은 VENDOR reservation owner만 가능하다.
+  - linked quoteRequest가 있으면 `ACCEPTED` 상태만 확정 가능하다.
+  - `CONFIRMED` 후 `vendorConfirmationDueAt`은 null로 제거되고 pending confirmation contract에서 제외된다.
+- Vendor Dashboard:
+  - `buildVendorDashboardReservationContract()`가 `newQuoteRequests`, `quoteResponsesWaitingForUserAcceptance`, `pendingConfirmations`, `confirmedReservations`, count fields를 제공한다.
+  - vendor dashboard page는 `vendorId = session.user.id`로 조회하므로 venue/catering 간 pending confirmation이 섞이지 않는다.
+- Notification:
+  - action: `getNotifications`, `getUnreadNotificationCount`, `markNotificationAsRead`, `markAllNotificationsAsRead`.
+  - DTO: `id`, `type`, `title`, `message`, `linkHref`, `isRead`, `createdAt`, `readAt`, `metadata`.
+  - 본인 알림만 조회/읽음 처리 가능하다.
+
+권한/중복/상태 matrix 최신 기준:
+
+| Action | Planner | Vendor | Ownership Check | Duplicate Guard | Status Guard |
+| --- | --- | --- | --- | --- | --- |
+| `createQuoteRequest` | 가능 | 불가 | plan owner | active `planId+vendorId` | eventType/vendor/module |
+| `submitQuoteResponse` | 불가 | 가능 | target vendor | one response per request/vendor | request `PENDING` |
+| `acceptQuoteResponse` | 가능 | 불가 | plan owner | one accepted request + one reservation | request `RESPONDED` |
+| `confirmReservation` | 불가 | 가능 | reservation vendor | already confirmed guard | quote `ACCEPTED`, reservation `PENDING/CHANGED` |
+| `getNotifications` | 가능 | 가능 | own notification | N/A | N/A |
+| `markNotificationAsRead` | 가능 | 가능 | own notification | idempotent if already read | own notification only |
+
+Notification / ActivityLog consistency:
+
+- QuoteRequest 생성, QuoteResponse 제출, QuoteResponse 수락, Reservation 최종 확정은 notification/activity log를 핵심 DB 변경과 같은 Prisma transaction 안에서 기록한다.
+- smoke에서 notification table write/read scope, unread count 감소, ActivityLog write/delete, workflow notification/activity 생성 수를 검증한다.
+- notification UI는 아직 없다. Claude는 위 action/DTO를 그대로 연결하고 schema를 임의 확장하지 않는다.
+
+SQLite / Prisma 안정성:
+
+- `lib/prisma.ts`는 dev hot reload singleton + `PrismaBetterSqlite3 timeout=10000`을 사용한다.
+- seed는 WAL 및 `busy_timeout=10000`을 적용한다.
+- read-heavy RSC bootstrap은 `withPrismaRetry()`로 transient busy를 완화한다.
+- write action에는 무리한 retry를 넣지 않았다. 중복 생성 위험은 DB unique guard와 transaction status guard로 처리한다.
+- `.gitignore`는 `*.db`, `*.db-journal`, `*.db-wal`, `*.db-shm`, `generated/`를 제외한다.
+
+Legacy route risk:
+
+- `app/api/vendor/reservations/[reservationId]/route.ts`는 vendor workspace에서 계속 사용 중인 호환 API다. 표준 `submitQuoteResponse()`처럼 duplicate를 무조건 거부하지 않고 기존 response update를 허용한다.
+- `app/vendors/actions.ts`와 `app/api/reservations/route.ts`는 legacy `VendorService` 기반 fallback이라 `selectedModules`에 `VendorServiceModule` id가 아닌 `VendorService` id 또는 module key가 들어갈 수 있다.
+- 이번 작업에서는 정상 동작 중인 fallback을 삭제하지 않았다. main merge 후 별도 작업에서 legacy quote request 생성 경로를 표준 `createQuoteRequest()` 계약으로 완전히 수렴시키는 것이 안전하다.
+
+Smoke / verification 반복 결과:
+
+- `npx prisma generate`: 통과.
+- `npm run db:seed`: 통과.
+- `npx tsx scripts/verify-quote-flow.ts`: 2회 연속 통과.
+- `npx tsx scripts/launch-readiness-smoke.ts`: 2회 연속 통과.
+- `npx tsx scripts/server-action-read-concurrency-smoke.ts`: 2회 연속 통과.
+- `npx tsc --noEmit`: 통과.
+- `npm run lint`: 통과.
+- `npm run build`: 통과.
+- `npx prisma migrate status`: 통과, database schema up to date.
+- `npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --script`: 통과, empty migration.
+
+Chrome MCP에서 다시 확인할 항목:
+
+- Step 3 견적 요청 submit/새로고침 반복 시 Network POST 503 재발 여부.
+- vendor dashboard pending confirmation 섹션에서 확정 후 pending 섹션 제거 여부.
+- 업체 응답 textarea가 신규 응답에서 빈 값인지, planner request memo가 별도 요청사항 영역에만 보이는지.
+- legacy vendors detail modal fallback을 사용하는 경우에도 0원 이하/잘못된 serviceId 요청이 서버에서 거부되는지.
+
+Claude 이후 UI 작업:
+
+- vendor pending section polish 및 toast/success feedback.
+- response textarea 브라우저 재확인.
+- notification UI 연결.
+- image sizes warning 정리.
+- 장례 플로우 문구/톤 최종 QA.
+
+main merge 전 backend checklist:
+
+- `git status` clean.
+- 위 verification 루틴 재실행.
+- Chrome MCP final QA PASS 확인.
+- `.env`, DB sidecar, `.next`, `generated`, `tsconfig.tsbuildinfo` 등 산출물이 커밋되지 않았는지 확인.
+- push는 사용자가 명시적으로 요청하기 전까지 하지 않는다.

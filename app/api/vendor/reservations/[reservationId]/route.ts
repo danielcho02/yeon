@@ -138,7 +138,7 @@ function buildQuoteResponseModules(
   };
 }
 
-export async function PATCH(request: Request, context: RouteContext) {
+async function handlePatch(request: Request, context: RouteContext) {
   const session = await getServerAuthSession();
 
   if (!session?.user?.id || session.user.role !== UserRole.VENDOR) {
@@ -485,4 +485,26 @@ export async function PATCH(request: Request, context: RouteContext) {
   revalidateReservationViews(reservation.eventPlanId);
 
   return Response.json({ ok: true });
+}
+
+export async function PATCH(request: Request, context: RouteContext) {
+  try {
+    return await handlePatch(request, context);
+  } catch (error) {
+    if (isDatabaseBusyError(error)) {
+      return Response.json(
+        { error: getActionError(error) },
+        { status: 503 }
+      );
+    }
+
+    if (error instanceof SyntaxError) {
+      return Response.json(
+        { error: "요청 본문을 확인해 주세요." },
+        { status: 400 }
+      );
+    }
+
+    throw error;
+  }
 }

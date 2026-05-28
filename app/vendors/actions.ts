@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { QuoteStatus, ReservationStatus, UserRole } from "@/generated/prisma/client";
 import { getServerAuthSession } from "@/lib/auth/session";
-import { isPrismaUniqueConstraintError } from "@/lib/errors";
+import { getActionError, isPrismaUniqueConstraintError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { mvpEventTypes } from "@/lib/step3.server";
 import {
@@ -150,6 +150,10 @@ export async function createQuoteRequest(formData: FormData) {
       return sum + ("subtotal" in item && item.subtotal != null ? item.subtotal : (item as { price: number }).price);
     }, 0);
 
+  if (!Number.isFinite(quotedAmount) || quotedAmount <= 0) {
+    return { error: "견적 예상 금액을 확인해주세요." };
+  }
+
   // Use most-frequent module as primary service category
   const moduleCounts = selectedServices.reduce<Record<string, number>>((acc, svc) => {
     acc[svc.module] = (acc[svc.module] ?? 0) + 1;
@@ -244,7 +248,7 @@ export async function createQuoteRequest(formData: FormData) {
       return { error: "이미 진행 중인 견적 요청이 있습니다." };
     }
 
-    throw error;
+    return { error: getActionError(error) };
   }
 
   revalidateReservationViews(eventPlanId);

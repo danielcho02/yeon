@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 
 import { QuoteStatus, ReservationStatus, UserRole } from "@/generated/prisma/client";
 import { getServerAuthSession } from "@/lib/auth/session";
+import { getActionError, isDatabaseBusyError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { assertQuoteTransition, assertReservationTransition } from "@/lib/state-machine";
 import {
@@ -98,7 +99,25 @@ function getInvalidTransitionResponse(
   }
 }
 
-export async function PATCH(request: Request, context: RouteContext) {
+function routeErrorResponse(error: unknown) {
+  if (isDatabaseBusyError(error)) {
+    return Response.json(
+      { error: getActionError(error) },
+      { status: 503 }
+    );
+  }
+
+  if (error instanceof SyntaxError) {
+    return Response.json(
+      { error: "요청 본문을 확인해 주세요." },
+      { status: 400 }
+    );
+  }
+
+  throw error;
+}
+
+async function handlePatch(request: Request, context: RouteContext) {
   const session = await getServerAuthSession();
 
   if (!session?.user?.id) {
@@ -219,7 +238,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   return Response.json({ ok: true });
 }
 
-export async function DELETE(_request: Request, context: RouteContext) {
+async function handleDelete(_request: Request, context: RouteContext) {
   const session = await getServerAuthSession();
 
   if (!session?.user?.id) {
@@ -309,4 +328,20 @@ export async function DELETE(_request: Request, context: RouteContext) {
   revalidateReservationViews(reservation.eventPlanId);
 
   return Response.json({ ok: true });
+}
+
+export async function PATCH(request: Request, context: RouteContext) {
+  try {
+    return await handlePatch(request, context);
+  } catch (error) {
+    return routeErrorResponse(error);
+  }
+}
+
+export async function DELETE(request: Request, context: RouteContext) {
+  try {
+    return await handleDelete(request, context);
+  } catch (error) {
+    return routeErrorResponse(error);
+  }
 }
