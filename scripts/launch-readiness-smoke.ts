@@ -124,19 +124,35 @@ async function main() {
   });
   assert.equal(markPlannerRead.count, 1);
 
+  const plannerUnreadAfterRead = await prisma.notification.count({
+    where: { userId: planner.id, readAt: null, id: notification.id }
+  });
+  assert.equal(plannerUnreadAfterRead, 0);
+
   const crossUserReadAttempt = await prisma.notification.updateMany({
     where: { userId: planner.id, id: vendorNotification.id, readAt: null },
     data: { readAt: new Date() }
   });
   assert.equal(crossUserReadAttempt.count, 0);
 
+  const vendorUnreadBeforeMarkAll = await prisma.notification.count({
+    where: { userId: venue.id, readAt: null, id: vendorNotification.id }
+  });
+  assert.equal(vendorUnreadBeforeMarkAll, 1);
+
   const markVendorAllRead = await prisma.notification.updateMany({
     where: { userId: venue.id, readAt: null, id: { in: created.notificationIds } },
     data: { readAt: new Date() }
   });
   assert.equal(markVendorAllRead.count, 1);
+
+  const vendorUnreadAfterMarkAll = await prisma.notification.count({
+    where: { userId: venue.id, readAt: null, id: vendorNotification.id }
+  });
+  assert.equal(vendorUnreadAfterMarkAll, 0);
   checks.notification_read_scope_enforced = true;
   checks.notification_mark_all_scope_enforced = true;
+  checks.notification_unread_count_decreases = true;
 
   const activityLog = await prisma.activityLog.create({
     data: {

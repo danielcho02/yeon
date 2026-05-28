@@ -700,3 +700,132 @@ Claude/UI 담당자 handoff:
 - BUG-07: Next Image `sizes` prop 경고를 제거한다.
 - 알림 UI를 붙일 때는 `NotificationDTO`와 notification actions만 사용하고 schema를 임의 확장하지 않는다.
 - Codex가 더 건드리지 말아야 할 UI 영역: `components/`, `hooks/`, global CSS/Tailwind visual polish, 알림센터 UI, vendor line item editor UX.
+
+## 22. 2026-05-28 Backend Final Audit / PR Readiness
+
+이번 감사는 main merge 전 backend contract freeze를 목적으로 수행했다. 새 UI/UX 작업은 하지 않았고 `components/`, `hooks/`, `app/globals.css`, `tailwind.config.ts`, `docs/Claude_STATUS.md`는 수정하지 않았다. README는 repo root에 없어 충돌 내용이 없었다.
+
+현재 백엔드 완료 상태:
+
+- 표준 플로우는 `QuoteRequest(PENDING)` → `QuoteResponse` → `QuoteRequest(ACCEPTED)` → `Reservation(PENDING)` → 업체 `Reservation(CONFIRMED)`이다.
+- 견적 수락은 일반 사용자 action이고, 예약 최종 확정은 업체 action이다.
+- QuoteRequest 생성, 업체 응답, 견적 수락, 업체 최종 확정은 notification/activity log를 같은 Prisma transaction 안에서 기록한다.
+- DB guard는 active `QuoteRequest(planId, vendorId)` partial unique index, `QuoteResponse(requestId, vendorId)` unique index, `Reservation.quoteRequestId`, `Reservation.quoteResponseId` unique relation으로 구성된다.
+
+Action contract 목록:
+
+- `createQuoteRequest(input)` → `ActionResult<QuoteRequestDTO>`
+  - GENERAL만 가능.
+  - plan owner, approved active vendor, vendor eventType, active selected module, module category eventType, active duplicate request를 검증한다.
+- `getQuotesByPlan(planId)` / `getQuoteRequestsByPlan(planId)` → `ActionResult<QuoteRequestWithResponsesDTO[]>`
+  - GENERAL plan owner만 가능.
+  - vendor, plan summary, selected module detail, reservation, responses를 ISO date DTO로 반환한다.
+- `getQuoteRequestsForVendor()` → `ActionResult<QuoteRequestForVendorDTO[]>`
+  - VENDOR만 가능.
+  - 로그인 vendor에게 온 요청만 반환한다.
+- `submitQuoteResponse(input)` → `ActionResult<QuoteResponseDTO>`
+  - VENDOR만 가능.
+  - target vendor, request `PENDING`, duplicate response, `totalPrice > 0`, base/total mismatch를 검증한다.
+- `acceptQuoteResponse(input)` → `ActionResult<AcceptQuoteResult>`
+  - GENERAL plan owner만 가능.
+  - request `RESPONDED`만 수락 가능하며 기존 placeholder reservation을 재사용한다.
+- `confirmReservation(reservationId)` → `ActionResult<ReservationDTO>`
+  - VENDOR reservation owner만 가능.
+  - quote request가 있으면 `ACCEPTED`인 경우만 `CONFIRMED`로 전이한다.
+- Notification actions:
+  - `getNotifications()` → 본인 알림 최신 50개.
+  - `getUnreadNotificationCount()` → 본인 unread count.
+  - `markNotificationAsRead(notificationId)` → 본인 알림만 읽음 처리.
+  - `markAllNotificationsAsRead()` → 본인 unread 알림만 일괄 읽음 처리.
+
+권한/중복/상태 matrix:
+
+| Action | Planner | Vendor | Ownership Check | Duplicate Guard | Status Guard |
+| --- | --- | --- | --- | --- | --- |
+| `createQuoteRequest` | 가능 | 불가 | plan owner | active `planId+vendorId` | WEDDING/FUNERAL, vendor eventType, module category |
+| `getQuotesByPlan` | 가능 | 불가 | plan owner | N/A | N/A |
+| `getQuoteRequestsForVendor` | 불가 | 가능 | current vendor | N/A | N/A |
+| `submitQuoteResponse` | 불가 | 가능 | target vendor | one response per request/vendor | `PENDING` only |
+| `acceptQuoteResponse` | 가능 | 불가 | plan owner | one accepted request via transaction guard | `RESPONDED` only |
+| `confirmReservation` | 불가 | 가능 | reservation vendor | already confirmed guard | quote `ACCEPTED`, reservation `PENDING/CHANGED` |
+| `getNotifications` | 가능 | 가능 | own notification | N/A | N/A |
+| `markNotificationAsRead` | 가능 | 가능 | own notification | idempotent if already read | N/A |
+| `markAllNotificationsAsRead` | 가능 | 가능 | own notifications | N/A | unread only |
+
+상태 전이 matrix:
+
+| Domain | From | To | Actor | Guard |
+| --- | --- | --- | --- | --- |
+| QuoteRequest | `PENDING` | `RESPONDED` | Vendor | target vendor, no existing response |
+| QuoteRequest | `RESPONDED` | `ACCEPTED` | Planner | plan owner, transaction `updateMany(status=RESPONDED)` |
+| QuoteRequest | `PENDING/RESPONDED` | `CANCELED` | Planner/Vendor legacy cancel | actor owns plan or vendor request |
+| Reservation | `PENDING` | `CONFIRMED` | Vendor | reservation vendor, quote accepted if linked |
+| Reservation | `CHANGED` | `CONFIRMED` | Vendor | reservation vendor |
+| Reservation | `PENDING/CONFIRMED/CHANGED` | `CANCELED` | Planner/Vendor | actor owns reservation side |
+| Reservation | `CONFIRMED` | `COMPLETED` | Vendor API legacy route | confirmed reservation only |
+
+Legacy route audit:
+
+- `app/api/vendor/reservations/[reservationId]/route.ts`는 현재 vendor workspace에서 사용 중이다. 같은 `QuoteResponse`를 새로 중복 생성하지 않고 기존 응답을 update할 수 있는 호환 경로다.
+- 표준 `submitQuoteResponse()`는 first-submission contract로 duplicate response를 거부한다.
+- 두 경로는 모두 target vendor, positive amount, request status, `QuoteResponse(requestId, vendorId)` DB unique guard를 사용한다.
+- `app/vendors/actions.ts`와 `app/api/reservations/route.ts`는 legacy vendor-service 기반 quote request fallback이다. `selectedModules`에 `VendorService` id 또는 service module key가 저장될 수 있어 표준 `VendorServiceModule` detail mapping과 완전히 동일하지 않다.
+- 이번 PR에서는 정상 동작 중인 legacy UI를 깨지 않기 위해 대규모 통합은 하지 않았다. main merge 후에는 legacy request 생성 경로를 표준 `createQuoteRequest()`로 수렴시키는 별도 작업이 필요하다.
+
+Notification backend contract:
+
+- DTO 필드: `id`, `type`, `title`, `message`, `linkHref`, `isRead`, `createdAt`, `readAt`, `metadata`.
+- Date는 ISO string으로 직렬화된다.
+- 다른 사용자의 notification은 조회/읽음 처리할 수 없다.
+- smoke에서 본인 알림 읽음 처리 후 unread count가 감소하고, cross-user read attempt가 0건인 것을 검증한다.
+- Claude/UI는 알림센터 UI를 만들 때 schema를 확장하지 말고 위 action/DTO만 사용한다.
+
+Smoke test 실행 방법:
+
+- `npm run db:seed`
+- `npx tsx scripts/verify-quote-flow.ts`
+- `npx tsx scripts/launch-readiness-smoke.ts`
+- 반복 안정성 확인은 위 smoke 두 개를 연속 2회 실행한다.
+
+반복 실행 안정성:
+
+- `scripts/verify-quote-flow.ts`는 독립 smoke plan slug에 timestamp를 사용하고 finally cleanup으로 생성 plan/request/response/reservation/notification/activity를 제거한다.
+- `scripts/launch-readiness-smoke.ts`는 생성 notification/activity id만 cleanup한다.
+- 반복 실행에서 active QuoteRequest unique, duplicate QuoteResponse, notification read state가 다음 실행을 오염시키지 않아야 한다.
+
+Migration status:
+
+- Prisma schema 변경은 이번 final audit에서 추가하지 않았다.
+- 현재 필요한 migration은 `20260527000000_prevent_duplicate_quote_response`, `20260528002000_workflow_notifications_and_sla`, `20260528003000_prevent_duplicate_active_quote_request`까지 포함된다.
+- merge 전 기준은 `npx prisma migrate status`가 up to date이고 `migrate diff`가 empty migration이어야 한다.
+- 가능하면 clean temp DB에서 `prisma migrate deploy`와 `npm run db:seed`를 함께 확인한다.
+
+Claude가 건드릴 영역:
+
+- BUG-04: Step 3 모듈 미선택 인라인 validation UI.
+- BUG-05: vendor 요청 카드의 “견적 제안 작성” CTA.
+- BUG-07: Image `sizes` prop warning.
+- Notification UI 연결: unread badge, list, mark read, mark all read.
+
+Claude가 건드리면 안 되는 영역:
+
+- `prisma/schema.prisma`, `prisma/migrations`, `app/actions`, `app/api`, `lib/state-machine.ts`, `lib/workflow-events.ts`는 backend contract freeze 영역이다.
+- 상태 용어는 `견적 요청`, `업체 응답 대기`, `견적 수락`, `업체 최종 확정 대기`, `예약 확정 완료`를 유지한다.
+
+남은 Chrome MCP QA 항목:
+
+- planner → vendor → planner → vendor confirm 전체 클릭 플로우.
+- `/plans` CTA와 `step` query 새로고침 fallback 재확인.
+- `CONFIRMED` reservation이 Step 4 pending 섹션에 남지 않는지 재확인.
+- notification UI가 붙은 뒤 unread count/read 처리 QA.
+
+main merge 전 backend checklist:
+
+- `git status` clean.
+- `npm run db:seed` 통과.
+- `npx tsx scripts/verify-quote-flow.ts` 2회 연속 통과.
+- `npx tsx scripts/launch-readiness-smoke.ts` 2회 연속 통과.
+- `npx tsc --noEmit`, `npm run lint`, `npm run build` 통과.
+- `npx prisma migrate status` up to date.
+- `npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --script` empty migration.
+- git push는 사용자가 명시적으로 요청하기 전까지 하지 않는다.
