@@ -591,3 +591,112 @@ Claude/UI 담당자 handoff:
 - `/planner/wedding?planId=...&step=3`, `step=4`, 잘못된 `step=abc`를 각각 새로고침해 query 우선/상태 기반 fallback이 맞는지 확인한다.
 - 업체 최종 확정 후 Step 4에서 동일 항목이 “업체 최종 확정 대기 중”과 “확정된 예약”에 동시에 표시되지 않는지 확인한다.
 - `/vendor/requests` 직접 접근이 `/vendor/dashboard`로 redirect되는지 확인한다.
+
+## 21. 2026-05-28 Backend Readiness 보강
+
+이번 작업은 Chrome MCP 재QA나 UI 수정 없이 Codex 담당 영역의 서버 validation, notification action 계약, workflow smoke test, handoff 문서를 보강했다. `components/`, `hooks/`, `app/globals.css`, `tailwind.config.ts`, `docs/Claude_STATUS.md`는 수정하지 않았다.
+
+강화한 서버 validation:
+
+- `createQuoteRequest()`:
+  - `selectedModuleIds`가 비어 있으면 `최소 1개 이상의 서비스를 선택해 주세요.`를 반환한다.
+  - `vendorId`가 없으면 `견적 요청을 보낼 업체를 선택해 주세요.`를 반환한다.
+  - 존재하지 않거나 비활성/미승인 vendor는 `업체를 찾을 수 없습니다.`로 거부한다.
+  - vendor의 `supportedEventTypes`가 plan type과 맞지 않으면 `선택한 업체는 이 행사 유형을 지원하지 않습니다.`로 거부한다.
+  - 선택 모듈이 해당 vendor의 active `VendorServiceModule`이 아니면 `선택한 모듈이 유효하지 않습니다.`로 거부한다.
+  - plan type과 맞지 않는 module category는 `행사 유형과 맞지 않는 서비스가 포함되어 있습니다.`로 거부한다.
+  - plan owner가 아니면 기존대로 `플랜을 찾을 수 없습니다.`로 조회/생성을 차단한다.
+- `submitQuoteResponse()`:
+  - `requestId`가 없으면 `견적 요청 ID가 필요합니다.`를 반환한다.
+  - 현재 사용자가 vendor가 아니면 `업체 사용자만 실행할 수 있습니다.`가 ActionResult error로 내려간다.
+  - 요청 대상 vendor가 아니면 `이 요청에 응답할 권한이 없습니다.`로 거부한다.
+  - `totalPrice <= 0`이면 `견적 총액은 0원보다 커야 합니다.`로 거부한다.
+  - 이미 같은 `requestId + vendorId` 응답이 있으면 `이미 제출한 견적 응답이 있습니다.`로 거부한다.
+  - base package 금액 또는 총액 합계가 payload와 다르면 기존 mismatch error를 유지한다.
+- `acceptQuoteResponse()`:
+  - 현재 plan owner가 아닌 사용자는 응답을 찾을 수 없도록 차단한다.
+  - 이미 수락된 견적은 `이미 수락된 견적입니다.`로 거부한다.
+  - `RESPONDED` 상태가 아닌 견적은 `업체 응답이 도착한 견적만 수락할 수 있습니다.`로 거부한다.
+  - 기존 placeholder reservation을 재사용해 같은 quoteResponse로 reservation이 중복 생성되지 않게 한다.
+- `confirmReservation()`:
+  - 현재 vendor가 대상 reservation vendor가 아니면 `예약을 찾을 수 없습니다.`로 차단한다.
+  - quote request가 `ACCEPTED`가 아니면 `사용자가 수락한 견적만 확정할 수 있습니다.`로 거부한다.
+  - 이미 확정된 예약은 `이미 최종 확정된 예약입니다.`로 거부한다.
+  - `PENDING | CHANGED` 외 상태는 `최종 확정할 수 있는 예약 상태가 아닙니다.`로 거부한다.
+
+Notification backend 계약:
+
+- 추가 파일: `types/notification.ts`, `app/actions/notification.ts`
+- `NotificationDTO` 필드:
+  - `id`
+  - `type`
+  - `title`
+  - `message`
+  - `linkHref`
+  - `isRead`
+  - `createdAt`
+  - `readAt`
+  - `metadata`
+- action 목록:
+  - `getNotifications()` → 로그인 사용자 본인 알림 최신 50개 반환.
+  - `getUnreadNotificationCount()` → 로그인 사용자 본인의 unread count 반환.
+  - `markNotificationAsRead(notificationId)` → 본인 알림만 읽음 처리. 다른 사용자 알림은 `알림을 찾을 수 없습니다.`로 차단.
+  - `markAllNotificationsAsRead()` → 본인 unread 알림만 일괄 읽음 처리하고 `{ updatedCount }` 반환.
+- UI handoff:
+  - 알림센터 UI는 이번 작업에서 만들지 않았다.
+  - Claude/UI는 `linkHref`로 이동 링크를 연결하고, `isRead`/`readAt` 기준으로 읽음 상태를 표시하면 된다.
+  - 알림 count badge는 `getUnreadNotificationCount()`만 호출하면 된다.
+
+ActivityLog / workflow event 상태:
+
+- `QuoteRequest` 생성, `QuoteResponse` 제출, `QuoteResponse` 수락, `Reservation(CONFIRMED)` 전환 시 기존 `createWorkflowActivity()` 호출을 유지한다.
+- `createWorkflowNotification()`과 `createWorkflowActivity()`는 핵심 DB 변경과 같은 Prisma transaction 안에서 호출된다.
+- 이번 smoke에서 workflow notification/activity 생성 수를 다시 검증했다.
+
+Smoke test 보강:
+
+- `scripts/verify-quote-flow.ts` 추가 검증:
+  - 빈 `selectedModuleIds` 거부.
+  - 존재하지 않는 vendor/module 거부.
+  - plan owner가 아닌 user의 create/read/accept 차단 조건.
+  - eventType과 맞지 않는 module category 거부.
+  - 일반 사용자의 quote response 제출 거부.
+  - 대상 vendor가 아닌 vendor의 quote response 제출 거부.
+  - `totalPrice` 0/음수 거부.
+  - 같은 vendor의 중복 response 거부.
+  - 같은 quoteResponse 중복 accept 거부.
+  - accept 후 `Reservation(PENDING)`은 하나만 유지.
+  - confirm 후 `Reservation(CONFIRMED)`이 pending count에 포함되지 않음.
+  - workflow notification/activity 생성 확인.
+- `scripts/launch-readiness-smoke.ts` 추가 검증:
+  - Notification table read/write.
+  - 다른 사용자의 알림 read update가 적용되지 않는 owner scope.
+  - `markAll`에 해당하는 owner-scoped bulk read 조건.
+  - ActivityLog write/delete.
+
+실행 방법:
+
+- `npm run db:seed`
+- `npx tsx scripts/verify-quote-flow.ts`
+- `npx tsx scripts/launch-readiness-smoke.ts`
+
+검증 결과:
+
+- `npx prisma generate`: 통과.
+- `npm run db:seed`: 통과. `users=6`, `eventPlans=2`, `reservations=4`, `vendorServiceModules=16`, `quoteRequests=5`, `quoteResponses=3`.
+- `npx tsx scripts/verify-quote-flow.ts`: 통과. sandbox 내부 IPC `EPERM` 때문에 sandbox 밖 재실행으로 확인.
+- `npx tsx scripts/launch-readiness-smoke.ts`: 통과. sandbox 내부 IPC `EPERM` 때문에 sandbox 밖 재실행으로 확인.
+- `npx tsc --noEmit`: 통과.
+- `npm run lint`: 통과.
+- `npm run build`: 통과.
+- `npx prisma migrate status`: 통과, `Database schema is up to date!`.
+- `npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --script`: empty migration.
+
+Claude/UI 담당자 handoff:
+
+- Chrome MCP 전체 QA는 아직 남아 있다.
+- BUG-04: Step 3 모듈 미선택 시 서버 error `최소 1개 이상의 서비스를 선택해 주세요.`를 인라인 validation UI로 표시한다.
+- BUG-05: 업체 요청 카드에서 “견적 제안 작성” CTA를 더 명확히 노출한다.
+- BUG-07: Next Image `sizes` prop 경고를 제거한다.
+- 알림 UI를 붙일 때는 `NotificationDTO`와 notification actions만 사용하고 schema를 임의 확장하지 않는다.
+- Codex가 더 건드리지 말아야 할 UI 영역: `components/`, `hooks/`, global CSS/Tailwind visual polish, 알림센터 UI, vendor line item editor UX.

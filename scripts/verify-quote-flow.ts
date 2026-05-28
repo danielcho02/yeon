@@ -7,7 +7,9 @@ import {
   Prisma,
   PrismaClient,
   QuoteStatus,
-  ReservationStatus
+  ReservationStatus,
+  UserRole,
+  VendorApprovalStatus
 } from "../generated/prisma/client";
 import {
   demoAccountCredentials
@@ -59,6 +61,176 @@ async function expectReject(label: string, task: () => Promise<unknown>) {
   }
 
   throw new Error(`${label} should have failed`);
+}
+
+function stringArrayFromJson(value: Prisma.JsonValue | null): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function moduleCategoryMatchesEventType(eventType: string, category: string) {
+  const weddingCategories = new Set([
+    "VENUE",
+    "PHOTO",
+    "DRESS",
+    "MAKEUP",
+    "DECORATION",
+    "CATERING",
+    "INVITATION",
+    "CEREMONY"
+  ]);
+  const funeralCategories = new Set([
+    "FUNERAL_HALL",
+    "WREATH",
+    "TRANSPORT",
+    "CEREMONY",
+    "MEAL",
+    "OBITUARY"
+  ]);
+
+  if (eventType === "WEDDING") return weddingCategories.has(category);
+  if (eventType === "FUNERAL") return funeralCategories.has(category);
+  return false;
+}
+
+async function validateQuoteRequestContract(input: {
+  ownerId: string;
+  planId: string;
+  vendorId: string;
+  selectedModuleIds: string[];
+}) {
+  const selectedModuleIds = Array.from(new Set(input.selectedModuleIds));
+
+  if (selectedModuleIds.length === 0) {
+    throw new Error("최소 1개 이상의 서비스를 선택해 주세요.");
+  }
+
+  const plan = await prisma.eventPlan.findFirst({
+    where: {
+      id: input.planId,
+      ownerId: input.ownerId,
+      type: { in: ["WEDDING", "FUNERAL"] }
+    },
+    select: { id: true, type: true }
+  });
+
+  if (!plan) {
+    throw new Error("플랜을 찾을 수 없습니다.");
+  }
+
+  const vendor = await prisma.user.findFirst({
+    where: {
+      id: input.vendorId,
+      role: UserRole.VENDOR,
+      vendorApprovalStatus: VendorApprovalStatus.APPROVED,
+      isActive: true
+    },
+    select: { id: true, supportedEventTypes: true }
+  });
+
+  if (!vendor) {
+    throw new Error("업체를 찾을 수 없습니다.");
+  }
+
+  if (!stringArrayFromJson(vendor.supportedEventTypes).includes(plan.type)) {
+    throw new Error("선택한 업체는 이 행사 유형을 지원하지 않습니다.");
+  }
+
+  const modules = await prisma.vendorServiceModule.findMany({
+    where: {
+      id: { in: selectedModuleIds },
+      vendorId: vendor.id,
+      isActive: true
+    },
+    select: { id: true, category: true }
+  });
+
+  if (modules.length !== selectedModuleIds.length) {
+    throw new Error("선택한 모듈이 유효하지 않습니다.");
+  }
+
+  if (modules.some((module) => !moduleCategoryMatchesEventType(plan.type, module.category))) {
+    throw new Error("행사 유형과 맞지 않는 서비스가 포함되어 있습니다.");
+  }
+}
+
+async function validateQuoteResponseContract(input: {
+  actorId: string;
+  requestId: string;
+  totalPrice: number;
+}) {
+  const actor = await prisma.user.findUniqueOrThrow({
+    where: { id: input.actorId },
+    select: { id: true, role: true }
+  });
+
+  if (actor.role !== UserRole.VENDOR) {
+    throw new Error("업체 사용자만 실행할 수 있습니다.");
+  }
+
+  if (input.totalPrice <= 0) {
+    throw new Error("견적 총액은 0원보다 커야 합니다.");
+  }
+
+  const request = await prisma.quoteRequest.findUnique({
+    where: { id: input.requestId },
+    select: { id: true, vendorId: true, status: true }
+  });
+
+  if (!request) {
+    throw new Error("견적 요청을 찾을 수 없습니다.");
+  }
+
+  if (request.vendorId !== actor.id) {
+    throw new Error("이 요청에 응답할 권한이 없습니다.");
+  }
+
+  const existingResponse = await prisma.quoteResponse.findFirst({
+    where: { requestId: request.id, vendorId: actor.id },
+    select: { id: true }
+  });
+
+  if (existingResponse) {
+    throw new Error("이미 이 요청에 대한 견적 응답이 제출되었습니다.");
+  }
+
+  if (request.status !== QuoteStatus.PENDING) {
+    throw new Error("응답 가능한 견적 요청이 아닙니다.");
+  }
+}
+
+async function validateQuoteAcceptContract(input: {
+  ownerId: string;
+  quoteResponseId: string;
+}) {
+  const response = await prisma.quoteResponse.findFirst({
+    where: {
+      id: input.quoteResponseId,
+      request: {
+        plan: {
+          ownerId: input.ownerId
+        }
+      }
+    },
+    include: {
+      request: {
+        select: { status: true }
+      }
+    }
+  });
+
+  if (!response) {
+    throw new Error("견적 응답을 찾을 수 없습니다.");
+  }
+
+  if (response.request.status === QuoteStatus.ACCEPTED) {
+    throw new Error("이미 수락된 견적입니다.");
+  }
+
+  if (response.request.status !== QuoteStatus.RESPONDED) {
+    throw new Error("업체 응답이 도착한 견적만 수락할 수 있습니다.");
+  }
 }
 
 async function canVendorConfirmReservation(reservationId: string, vendorId: string) {
@@ -127,12 +299,18 @@ async function canVendorConfirmReservation(reservationId: string, vendorId: stri
 async function main() {
   const checks: Record<string, boolean | string | number> = {};
 
-  const [planner, vendor] = await Promise.all([
+  const [planner, vendor, catering, guest] = await Promise.all([
     prisma.user.findUniqueOrThrow({
       where: { email: demoAccountCredentials.planner }
     }),
     prisma.user.findUniqueOrThrow({
       where: { email: demoAccountCredentials.venue }
+    }),
+    prisma.user.findUniqueOrThrow({
+      where: { email: demoAccountCredentials.catering }
+    }),
+    prisma.user.findUniqueOrThrow({
+      where: { email: demoAccountCredentials.guest }
     })
   ]);
 
@@ -163,6 +341,78 @@ async function main() {
   assert.ok(modules.length > 0, "vendor modules must exist; run npx prisma db seed first");
 
   const selectedModules = modules.map((module) => module.id);
+  await expectReject("empty selected modules", async () => {
+    await validateQuoteRequestContract({
+      ownerId: planner.id,
+      planId: plan.id,
+      vendorId: vendor.id,
+      selectedModuleIds: []
+    });
+  });
+  checks.empty_selected_modules_rejected = true;
+
+  await expectReject("nonexistent vendor", async () => {
+    await validateQuoteRequestContract({
+      ownerId: planner.id,
+      planId: plan.id,
+      vendorId: "missing-vendor-id",
+      selectedModuleIds: selectedModules
+    });
+  });
+  checks.nonexistent_vendor_rejected = true;
+
+  await expectReject("nonexistent module", async () => {
+    await validateQuoteRequestContract({
+      ownerId: planner.id,
+      planId: plan.id,
+      vendorId: vendor.id,
+      selectedModuleIds: ["missing-module-id"]
+    });
+  });
+  checks.nonexistent_module_rejected = true;
+
+  await expectReject("non-owner quote request create", async () => {
+    await validateQuoteRequestContract({
+      ownerId: guest.id,
+      planId: plan.id,
+      vendorId: vendor.id,
+      selectedModuleIds: selectedModules
+    });
+  });
+  checks.non_owner_quote_request_create_rejected = true;
+
+  const nonOwnerPlanRead = await prisma.eventPlan.findFirst({
+    where: { id: plan.id, ownerId: guest.id },
+    select: { id: true }
+  });
+  assert.equal(nonOwnerPlanRead, null);
+  checks.non_owner_quote_request_read_rejected = true;
+
+  const funeralOnlyModule = await prisma.vendorServiceModule.findFirst({
+    where: { vendorId: catering.id, category: "MEAL", isActive: true },
+    select: { id: true }
+  });
+
+  if (funeralOnlyModule) {
+    await expectReject("module event type mismatch", async () => {
+      await validateQuoteRequestContract({
+        ownerId: planner.id,
+        planId: plan.id,
+        vendorId: catering.id,
+        selectedModuleIds: [funeralOnlyModule.id]
+      });
+    });
+    checks.module_event_type_mismatch_rejected = true;
+  }
+
+  await validateQuoteRequestContract({
+    ownerId: planner.id,
+    planId: plan.id,
+    vendorId: vendor.id,
+    selectedModuleIds: selectedModules
+  });
+  checks.valid_quote_request_contract_passed = true;
+
   const guestCount = plan.guestTarget ?? 80;
   const quotedAmount = modules.reduce(
     (sum, module) =>
@@ -242,6 +492,49 @@ async function main() {
 
   checks.quote_request_created = createdRequest.quoteRequest.status === QuoteStatus.PENDING;
   checks.placeholder_created = createdRequest.reservation.quoteRequestId === created.requestId;
+
+  await expectReject("non-vendor quote response submit", async () => {
+    await validateQuoteResponseContract({
+      actorId: planner.id,
+      requestId: created.requestId,
+      totalPrice: quotedAmount
+    });
+  });
+  checks.non_vendor_quote_response_rejected = true;
+
+  await expectReject("wrong vendor quote response submit", async () => {
+    await validateQuoteResponseContract({
+      actorId: catering.id,
+      requestId: created.requestId,
+      totalPrice: quotedAmount
+    });
+  });
+  checks.wrong_vendor_quote_response_rejected = true;
+
+  await expectReject("zero quote response total", async () => {
+    await validateQuoteResponseContract({
+      actorId: vendor.id,
+      requestId: created.requestId,
+      totalPrice: 0
+    });
+  });
+  checks.zero_quote_response_total_rejected = true;
+
+  await expectReject("negative quote response total", async () => {
+    await validateQuoteResponseContract({
+      actorId: vendor.id,
+      requestId: created.requestId,
+      totalPrice: -1
+    });
+  });
+  checks.negative_quote_response_total_rejected = true;
+
+  await validateQuoteResponseContract({
+    actorId: vendor.id,
+    requestId: created.requestId,
+    totalPrice: quotedAmount
+  });
+  checks.valid_quote_response_contract_passed = true;
 
   await expectReject("duplicate active quote request for same plan/vendor", async () => {
     await prisma.quoteRequest.create({
@@ -400,6 +693,20 @@ async function main() {
   assert.equal(afterVendorResponse.responses.length, 1);
   assert.equal(afterVendorResponse.reservation?.quoteResponseId, created.responseId);
 
+  await expectReject("non-owner quote response accept", async () => {
+    await validateQuoteAcceptContract({
+      ownerId: guest.id,
+      quoteResponseId: created.responseId
+    });
+  });
+  checks.non_owner_quote_accept_rejected = true;
+
+  await validateQuoteAcceptContract({
+    ownerId: planner.id,
+    quoteResponseId: created.responseId
+  });
+  checks.valid_quote_accept_contract_passed = true;
+
   await expectReject("duplicate reservation for quote response", async () => {
     const duplicate = await prisma.reservation.create({
       data: {
@@ -413,6 +720,15 @@ async function main() {
     created.duplicateReservationId = duplicate.id;
   });
   checks.duplicate_quote_response_reservation_rejected = true;
+
+  await expectReject("duplicate quote response contract", async () => {
+    await validateQuoteResponseContract({
+      actorId: vendor.id,
+      requestId: created.requestId,
+      totalPrice: quotedAmount
+    });
+  });
+  checks.duplicate_quote_response_contract_rejected = true;
 
   await expectReject("duplicate quote response for request/vendor", async () => {
     await prisma.quoteResponse.create({
@@ -541,6 +857,14 @@ async function main() {
 
   assert.equal(reservationCountAfterAccept, 1);
 
+  await expectReject("duplicate quote response accept", async () => {
+    await validateQuoteAcceptContract({
+      ownerId: planner.id,
+      quoteResponseId: created.responseId
+    });
+  });
+  checks.duplicate_quote_accept_rejected = true;
+
   const confirmResult = await canVendorConfirmReservation(created.reservationId, vendor.id);
   created.notificationIds.push(confirmResult.notification.id);
   created.activityLogIds.push(confirmResult.activity.id);
@@ -558,6 +882,12 @@ async function main() {
     afterConfirm.quoteRequests[0]?.reservation?.status === ReservationStatus.CONFIRMED;
   checks.vendor_confirmation_due_cleared =
     afterConfirm.quoteRequests[0]?.reservation?.vendorConfirmationDueAt === null;
+
+  const pendingAfterConfirm = await prisma.reservation.count({
+    where: { id: created.reservationId, status: ReservationStatus.PENDING }
+  });
+  checks.confirmed_reservation_not_pending = pendingAfterConfirm === 0;
+  assert.equal(pendingAfterConfirm, 0);
 
   const [workflowNotifications, workflowActivities] = await Promise.all([
     prisma.notification.count({ where: { id: { in: created.notificationIds } } }),

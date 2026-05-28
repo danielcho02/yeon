@@ -25,6 +25,7 @@ import {
   getVendorConfirmationDueAt,
   getVendorDashboardHref
 } from "@/lib/workflow-events";
+import { vendorSupportsEventType } from "@/lib/step3.shared";
 
 import type { ActionResult } from "@/types/common";
 import type {
@@ -106,7 +107,7 @@ const submitQuoteResponseSchema = z.object({
   requestId: z.string().min(1),
   basePrice: z.number().int().nonnegative(),
   modules: quoteResponseModulesSchema,
-  totalPrice: z.number().int().nonnegative(),
+  totalPrice: z.number().int(),
   note: z.string().trim().optional()
 });
 
@@ -116,6 +117,28 @@ const acceptQuoteResponseSchema = z.object({
 });
 
 const idsSchema = z.array(z.string().min(1)).min(1);
+const weddingModuleCategories = new Set([
+  "VENUE",
+  "PHOTO",
+  "DRESS",
+  "MAKEUP",
+  "DECORATION",
+  "CATERING",
+  "INVITATION",
+  "CEREMONY"
+]);
+const funeralModuleCategories = new Set([
+  "FUNERAL_HALL",
+  "WREATH",
+  "TRANSPORT",
+  "CEREMONY",
+  "MEAL",
+  "OBITUARY"
+]);
+
+type ValidationIssue = {
+  path: ReadonlyArray<PropertyKey>;
+};
 
 function revalidateQuoteViews(planId?: string, vendorId?: string) {
   revalidatePath("/account");
@@ -133,6 +156,66 @@ function calculateModulesTotal(modules: QuoteResponseModules) {
     modules.basePackage.price +
     modules.includedModules.reduce((sum, module) => sum + module.price, 0)
   );
+}
+
+function validationHasPath(issues: ValidationIssue[], path: string) {
+  return issues.some((issue) => issue.path[0] === path);
+}
+
+function getCreateQuoteRequestValidationMessage(issues: ValidationIssue[]) {
+  if (validationHasPath(issues, "selectedModuleIds")) {
+    return "최소 1개 이상의 서비스를 선택해 주세요.";
+  }
+
+  if (validationHasPath(issues, "vendorId")) {
+    return "견적 요청을 보낼 업체를 선택해 주세요.";
+  }
+
+  if (validationHasPath(issues, "planId")) {
+    return "연결할 플랜을 선택해 주세요.";
+  }
+
+  if (validationHasPath(issues, "requirements")) {
+    return "요청사항을 입력해 주세요.";
+  }
+
+  if (validationHasPath(issues, "guestCount")) {
+    return "인원 수를 확인해 주세요.";
+  }
+
+  if (validationHasPath(issues, "budget")) {
+    return "예산을 확인해 주세요.";
+  }
+
+  return "입력값을 확인해 주세요.";
+}
+
+function getSubmitQuoteResponseValidationMessage(issues: ValidationIssue[]) {
+  if (validationHasPath(issues, "requestId")) {
+    return "견적 요청 ID가 필요합니다.";
+  }
+
+  if (validationHasPath(issues, "modules")) {
+    return "견적 항목을 확인해 주세요.";
+  }
+
+  if (validationHasPath(issues, "totalPrice")) {
+    return "견적 총액을 확인해 주세요.";
+  }
+
+  return "입력값을 확인해 주세요.";
+}
+
+function moduleCategoryMatchesEventType(eventType: string, category: string) {
+  if (eventType === "WEDDING") {
+    return weddingModuleCategories.has(category);
+  }
+
+  if (eventType === "FUNERAL") {
+    return funeralModuleCategories.has(category);
+  }
+
+  return false;
 }
 
 function isActiveQuoteRequestDuplicate(error: unknown) {
@@ -272,7 +355,10 @@ export async function createQuoteRequest(
     const parsed = createQuoteRequestSchema.safeParse(payload);
 
     if (!parsed.success) {
-      return actionError("입력값을 확인해 주세요.", "VALIDATION_ERROR");
+      return actionError(
+        getCreateQuoteRequestValidationMessage(parsed.error.issues),
+        "VALIDATION_ERROR"
+      );
     }
 
     const plan = await prisma.eventPlan.findFirst({
@@ -299,11 +385,18 @@ export async function createQuoteRequest(
         vendorApprovalStatus: VendorApprovalStatus.APPROVED,
         isActive: true
       },
-      select: { id: true, name: true, companyName: true }
+      select: { id: true, name: true, companyName: true, supportedEventTypes: true }
     });
 
     if (!vendor) {
       return actionError("업체를 찾을 수 없습니다.", "VENDOR_NOT_FOUND");
+    }
+
+    if (!vendorSupportsEventType(vendor, plan.type)) {
+      return actionError(
+        "선택한 업체는 이 행사 유형을 지원하지 않습니다.",
+        "VENDOR_EVENT_TYPE_MISMATCH"
+      );
     }
 
     const activeRequest = await prisma.quoteRequest.findFirst({
@@ -351,6 +444,13 @@ export async function createQuoteRequest(
 
     if (modules.length !== selectedModuleIds.length) {
       return actionError("선택한 모듈이 유효하지 않습니다.", "INVALID_MODULES");
+    }
+
+    if (modules.some((module) => !moduleCategoryMatchesEventType(plan.type, module.category))) {
+      return actionError(
+        "행사 유형과 맞지 않는 서비스가 포함되어 있습니다.",
+        "INVALID_MODULES"
+      );
     }
 
     const preferredDate = parseActionDate(parsed.data.preferredDate);
@@ -449,11 +549,18 @@ export async function submitQuoteResponse(
     const parsed = submitQuoteResponseSchema.safeParse(payload);
 
     if (!parsed.success) {
-      return actionError("입력값을 확인해 주세요.", "VALIDATION_ERROR");
+      return actionError(
+        getSubmitQuoteResponseValidationMessage(parsed.error.issues),
+        "VALIDATION_ERROR"
+      );
     }
 
-    const request = await prisma.quoteRequest.findFirst({
-      where: { id: parsed.data.requestId, vendorId: vendor.id },
+    if (parsed.data.totalPrice <= 0) {
+      return actionError("견적 총액은 0원보다 커야 합니다.", "INVALID_TOTAL_PRICE");
+    }
+
+    const request = await prisma.quoteRequest.findUnique({
+      where: { id: parsed.data.requestId },
       include: {
         plan: {
           select: {
@@ -468,6 +575,10 @@ export async function submitQuoteResponse(
 
     if (!request) {
       return actionError("견적 요청을 찾을 수 없습니다.", "NOT_FOUND");
+    }
+
+    if (request.vendorId !== vendor.id) {
+      return actionError("이 요청에 응답할 권한이 없습니다.", "FORBIDDEN");
     }
 
     const existingResponse = await prisma.quoteResponse.findFirst({
@@ -488,6 +599,10 @@ export async function submitQuoteResponse(
     assertQuoteTransition(currentStatus, "RESPONDED");
 
     const totalPrice = calculateModulesTotal(parsed.data.modules);
+    if (totalPrice <= 0) {
+      return actionError("견적 총액은 0원보다 커야 합니다.", "INVALID_TOTAL_PRICE");
+    }
+
     if (parsed.data.basePrice !== parsed.data.modules.basePackage.price) {
       return actionError("기본 패키지 금액이 일치하지 않습니다.", "QUOTE_BASE_PRICE_MISMATCH");
     }
@@ -629,7 +744,7 @@ export async function acceptQuoteResponse(
     const currentStatus = mapQuoteStatus(response.request.status);
 
     if (currentStatus === "ACCEPTED") {
-      return actionError("이미 수락된 견적 요청입니다.", "QUOTE_ALREADY_ACCEPTED");
+      return actionError("이미 수락된 견적입니다.", "QUOTE_ALREADY_ACCEPTED");
     }
 
     if (currentStatus !== "RESPONDED") {

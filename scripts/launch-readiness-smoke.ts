@@ -12,7 +12,7 @@ const prisma = new PrismaClient({
 });
 
 const created = {
-  notificationId: "",
+  notificationIds: [] as string[],
   activityLogId: ""
 };
 
@@ -99,7 +99,44 @@ async function main() {
       metadata: { script: "launch-readiness-smoke" }
     }
   });
-  created.notificationId = notification.id;
+  created.notificationIds.push(notification.id);
+
+  const vendorNotification = await prisma.notification.create({
+    data: {
+      userId: venue.id,
+      type: "LAUNCH_READINESS_SMOKE",
+      title: "Launch readiness vendor smoke",
+      message: "Notification owner scoping check",
+      href: "/vendor/dashboard",
+      metadata: { script: "launch-readiness-smoke" }
+    }
+  });
+  created.notificationIds.push(vendorNotification.id);
+
+  const plannerUnreadBefore = await prisma.notification.count({
+    where: { userId: planner.id, readAt: null, id: notification.id }
+  });
+  assert.equal(plannerUnreadBefore, 1);
+
+  const markPlannerRead = await prisma.notification.updateMany({
+    where: { userId: planner.id, id: notification.id, readAt: null },
+    data: { readAt: new Date() }
+  });
+  assert.equal(markPlannerRead.count, 1);
+
+  const crossUserReadAttempt = await prisma.notification.updateMany({
+    where: { userId: planner.id, id: vendorNotification.id, readAt: null },
+    data: { readAt: new Date() }
+  });
+  assert.equal(crossUserReadAttempt.count, 0);
+
+  const markVendorAllRead = await prisma.notification.updateMany({
+    where: { userId: venue.id, readAt: null, id: { in: created.notificationIds } },
+    data: { readAt: new Date() }
+  });
+  assert.equal(markVendorAllRead.count, 1);
+  checks.notification_read_scope_enforced = true;
+  checks.notification_mark_all_scope_enforced = true;
 
   const activityLog = await prisma.activityLog.create({
     data: {
@@ -125,8 +162,8 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
-    if (created.notificationId) {
-      await prisma.notification.deleteMany({ where: { id: created.notificationId } });
+    if (created.notificationIds.length > 0) {
+      await prisma.notification.deleteMany({ where: { id: { in: created.notificationIds } } });
     }
     if (created.activityLogId) {
       await prisma.activityLog.deleteMany({ where: { id: created.activityLogId } });

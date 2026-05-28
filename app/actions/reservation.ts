@@ -222,6 +222,20 @@ export async function confirmReservation(
       return actionError("사용자가 수락한 견적만 확정할 수 있습니다.", "QUOTE_NOT_ACCEPTED");
     }
 
+    if (reservation.status === PrismaReservationStatus.CONFIRMED) {
+      return actionError("이미 최종 확정된 예약입니다.", "RESERVATION_ALREADY_CONFIRMED");
+    }
+
+    if (
+      reservation.status !== PrismaReservationStatus.PENDING &&
+      reservation.status !== PrismaReservationStatus.CHANGED
+    ) {
+      return actionError(
+        "최종 확정할 수 있는 예약 상태가 아닙니다.",
+        "INVALID_RESERVATION_STATUS"
+      );
+    }
+
     assertReservationTransition(mapReservationStatus(reservation.status), "CONFIRMED");
 
     const updated = await prisma.$transaction(async (tx) => {
