@@ -50,27 +50,35 @@
 
 ---
 
-## 3. 백엔드 후속 작업 명세 (Backend Follow-up Needed)
-현재 프론트엔드 레벨에서 완벽하게 카테고리 분류 및 준비 상태 보드를 완성하였으나, 더욱 견고한 프로덕션 운영을 위해 다음 DTO 설계가 추후 백엔드에서 지원되면 이상적입니다:
+## 3. 백엔드/도메인 DTO 및 Contract 안정화 완료 (Backend/Domain DTO Stabilization Completed)
+기존에 프론트엔드 레벨에서 추론하던 비즈니스 카테고리 매핑 및 준비 상태 관리를 백엔드 도메인 아키텍처 및 DTO 레벨에서 안전하게 완성하여 프론트엔드가 이를 완벽히 수동적으로 소비하도록 통합 완료했습니다:
 
-*   **categoryGroups DTO**: API 단에서 결혼/장례 각각의 서비스 도메인 카테고리를 명시적으로 구조화하여 내려주는 DTO.
-*   **selectedModule category map**: `QuoteRequest` 생성 및 응답 시 카테고리 매핑 관계를 DB Schema 레벨에서 보장해 주는 메타 테이블 구조.
-*   **vendor category role contract**: 파트너사의 주력 전공 분야 카테고리를 명시적으로 규정하여 잘못된 매핑을 시스템 레벨에서 막아주는 검증 규칙.
+*   **Step 3 Preparation Group DTO (`Step3PreparationGroupDTO`)**:
+    *   API 단에서 벤더가 제공하는 모듈의 카테고리별 공급 성격과 기본 패키지(`mode: PACKAGE` vs `mode: ADDON`), 포함/선택 모듈 ID 리스트를 백엔드에서 정밀 구조화하여 반환합니다.
+*   **Step 4 Category Status DTO (`Step4CategoryStatusDTO`)**:
+    *   API 단에서 각 서비스 대분류별 진행 현황(`status`)을 결정해 내려주며, 동일 `comparableGroupKey` 내에 제안서가 2개 이상일 때만 `canCompare`를 `true`로 설정하여 프론트엔드의 잘못된 가격 비교를 논리적으로 원천 차단합니다.
+*   **완벽한 UI 동기화**:
+    *   `event-planning-workspace.tsx`에서 플랜 상태가 변할 때마다 `getStep4DashboardData` 액션이 동기적으로 호출되어, 화면상의 상태 정보가 단 한 치의 오차도 없이 실시간으로 정합성을 갖추게 설계했습니다.
 
 ---
 
 ## 4. 검증 결과 (Verification Checks)
-Next.js 로컬 터미널 컴파일 및 코드 빌드 파이프라인 검증이 완벽하게 통과되었습니다.
+Next.js 로컬 터미널 컴파일 및 최적화 빌드 파이프라인 검증이 완벽하게 통과되었습니다.
 
 1.  **TypeScript 검증 (`npx tsc --noEmit`)**: **PASS** (0 Errors)
 2.  **Linter 검증 (`npm run lint`)**: **PASS** (0 Warnings / 0 Errors)
-3.  **Next.js Production Build (`npm run build`)**: **PASS** (정적 경로 컴파일 및 RSC 번들링 완벽 통과 - 19/19 pages successfully generated)
-4.  **Data Flow Contract 검증**:
-    *   `/plans`의 하드 네비게이션 `<a>` 속성이 정상 보존되어 CSR 오작동을 차단함을 확인.
-    *   `QuoteRequest` -> `QuoteResponse` -> `Accept` -> `Reservation` 흐름과 DTO 변환이 무결하게 작동함을 확인했습니다.
+3.  **Next.js Production Build (`npm run build`)**: **PASS** (RSC 최적화 및 정적/동적 경로 컴파일 완벽 통과 - 19/19 pages successfully generated)
+4.  **도메인 정합성 및 스모크 테스트 검증**:
+    *   `verify-demo-data-integrity`: **PASS**
+    *   `verify-quote-flow`: **PASS** (견적/예약/확정 전체 라이프사이클 통과)
+    *   `launch-readiness-smoke`: **PASS**
+    *   `server-action-read-concurrency-smoke`: **PASS**
+    *   `verify-planner-auth-redirect`: **PASS**
+    *   `prisma migrate status`: **PASS** (Database schema is up to date!)
 
 ---
 
 ## 5. 커밋 및 형상 관리
 *   **현재 브랜치**: `codex/step3-main-logic-rewrite`
-*   **작업 조건 준수**: 새 브랜치를 만들지 않고 로컬 커밋 상태를 그대로 유지하며, `git push` 금지 제약 및 `tsconfig.tsbuildinfo` 커밋 대상 배제 규칙을 완벽하게 엄수합니다.
+*   **작업 조건 준수**: 새 브랜치를 만들지 않고 로컬 커밋 상태를 유지하며, `git push` 금지 제약 및 `tsconfig.tsbuildinfo` 커밋 대상 배제 규칙을 완벽하게 엄수했습니다.
+

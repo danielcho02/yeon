@@ -1405,3 +1405,39 @@ UI polish 전 확인 완료:
 - Step 4 lane UI.
 - notification UI.
 - image warning 정리.
+
+## 20. 2026-05-29 AGY Fullstack Domain & DTO Stabilization
+
+Codex unavailable 상황 하에 Antigravity (AGY)가 임시로 full-stack domain/backend 작업을 수행하여 yeON의 서비스 카테고리, 업체 역할, 패키지, 견적 비교 가능성, Step 3/Step 4 DTO 계약을 안정화했습니다.
+
+### 1. 도메인 개념의 명확화 & 잘못된 비교 원천 차단
+- **기존 문제**:
+  - Wedding/Funeral 서비스가 단순 vendor category 하나로 설명되지 않았고, 식음료(catering), 플라워(floral) 등이 예식장 패키지 안에 묶이거나 단독 애드온 형태로 중첩되어 제공되었습니다.
+  - 프론트엔드에서 `vendor.category` 또는 `selectedModules[0]`의 첫 번째 값을 기준으로 카테고리를 추론해 1:1 벤더 비교표를 제공하는 위험한 heuristic 기법이 사용되어, 꽃집(Orsay Floral)과 예식장(Moment Garden)을 직접 가격 비교하는 비상식적인 UI가 렌더링되었습니다.
+- **도메인 해결책 (Option A: 최소 구현 우선)**:
+  - 스키마 마이그레이션 부담 없이 비즈니스 레이어(`app/actions/quote.ts`)와 DTO 수준에서 **Service Category**, **Vendor Service Role**, **Comparable Group** 개념을 완벽하게 수립했습니다.
+  - **resolveVendorRoleAndGroup** 비즈니스 헬퍼를 도입하여 각 벤더의 역할(PRIMARY, INCLUDED, ADDON, OPTIONAL, BUNDLE)과 목적별 **comparableGroupKey**를 정밀 정의했습니다.
+  - Moment Garden $\rightarrow$ `wedding_venue_package` (PRIMARY)
+  - Orsay Floral $\rightarrow$ `wedding_floral_upgrade` (ADDON)
+  - Han-gyul $\rightarrow$ `funeral_basic_service` (BUNDLE)
+  - 두 벤더의 `comparableGroupKey`가 서로 다르므로 동일 선상의 1:1 비교를 원천 차단하고 각각 독자적인 제안 카드로 분리 렌더링되게 만들었습니다.
+
+### 2. Step 3 / Step 4 DTO 계약 정립
+- **Step 3 Preparation Group DTO (`Step3PreparationGroupDTO`)**:
+  - 각 벤더가 제공하는 모듈의 카테고리별 공급 성격과 기본 패키지(`mode: PACKAGE` vs `mode: ADDON`), 포함/선택 모듈 ID 리스트를 백엔드에서 명확하게 파악하여 정규화해 제공합니다.
+- **Step 4 Category Status DTO (`Step4CategoryStatusDTO`)**:
+  - Wedding 5대 대분류(`venue`, `catering`, `floral`, `invitation`, `etc`) 및 Funeral 5대 대분류(`funeralHall`, `meal`, `obituary`, `hearse`, `altarFloral`)별 상태를 백엔드 액션(`getStep4DashboardData`)이 직접 결정해 내려줍니다.
+  - status는 `NOT_REQUESTED`, `REQUESTED`, `RESPONDED`, `ACCEPTED_WAITING_VENDOR`, `CONFIRMED`로 정밀 계산되며, 동일 `comparableGroupKey` 내에 수락 가능한 응답이 2개 이상일 때만 `canCompare`를 `true`로 리턴합니다.
+
+### 3. 프론트엔드 연동 & Heuristics 박멸
+- **step4-booking-dashboard.tsx**:
+  - 프론트엔드 내의 하드코딩된 문자열 카테고리 매핑 및 selectedModules[0] 추론 코드를 완전히 걷어내고, 백엔드 DTO `step4DashboardData`를 소비하도록 전면 수정했습니다.
+  - `group.canCompare`가 `true`일 때만 복수 견적 비교 테이블을 렌더링하고, 단일 견적 응답은 럭셔리 싱글 제안서 카드로 격조 높게 분할 렌더링합니다.
+- **event-planning-workspace.tsx**:
+  - `step4DashboardData` state를 추가하고, 플랜 변경 및 견적 수락 등의 비즈니스 완료 트랜잭션 시 `refreshQuoteRequests` 함수를 통해 `getStep4DashboardData(planId)`를 완벽히 동기화해 단 한 번의 UI stale/화면 불일치도 허용하지 않습니다.
+
+### 4. 검증 및 빌드 결과
+- **Prisma & Seed**: `npx prisma generate` 및 `npm run db:seed` 완벽 수행.
+- **Smoke Tests**: `verify-demo-data-integrity`, `verify-quote-flow`, `launch-readiness-smoke`, `server-action-read-concurrency-smoke`, `verify-planner-auth-redirect` 100% 무결 통과.
+- **Next.js Production Build & Lint**: Next.js optimized production build와 linter가 완벽 통과하여, 비동기 서버 액션 명세를 어긴 동기 함수 `resolveVendorRoleAndGroup`의 `export` 지시어를 말끔히 정리하고 내부 비즈니스 헬퍼로 격하함으로써 런칭 릴리즈 안정성을 철저히 확보했습니다.
+
