@@ -101,11 +101,15 @@ export default async function VendorDashboardPage() {
     ])
   );
 
+  if (!vendor) {
+    redirect("/login?callbackUrl=/vendor/dashboard");
+  }
+
   const supportedEventTypes = getVendorSupportedEventTypes({
-    supportedEventTypes: vendor?.supportedEventTypes
+    supportedEventTypes: vendor.supportedEventTypes
   });
   const supportedServiceModules = getVendorSupportedServiceModules({
-    supportedServiceModules: vendor?.supportedServiceModules
+    supportedServiceModules: vendor.supportedServiceModules
   });
 
   if (supportedEventTypes.length === 0) {

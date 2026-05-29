@@ -427,6 +427,15 @@ export async function completeVendorOnboarding(formData: FormData) {
     redirect("/vendor/dashboard");
   }
 
+  const userExists = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true }
+  });
+
+  if (!userExists) {
+    redirect("/login");
+  }
+
   await prisma.user.update({
     where: { id: session.user.id },
     data: { supportedEventTypes, supportedServiceModules }
