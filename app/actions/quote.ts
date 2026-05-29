@@ -1324,6 +1324,12 @@ export async function getStep4DashboardData(
 
     for (const cat of categories) {
       const matchedRequests = requests.filter(req => {
+        const { role } = resolveVendorRoleAndGroup(req.vendor.companyName ?? req.vendor.name, eventType);
+        
+        if (role === "PRIMARY" || role === "BUNDLE") {
+          return cat.key === (eventType === "WEDDING" ? "venue" : "funeralHall");
+        }
+
         const reqModuleIds = Array.isArray(req.selectedModules)
           ? req.selectedModules.filter((id): id is string => typeof id === "string")
           : [];
@@ -1332,26 +1338,22 @@ export async function getStep4DashboardData(
           return mCat && cat.dbCategory.includes(mCat);
         });
 
-        if (hasMatchingModule) return true;
-
-        const { role } = resolveVendorRoleAndGroup(req.vendor.companyName ?? req.vendor.name, eventType);
-        if (role === "PRIMARY" || role === "BUNDLE") {
-          return cat.key === (eventType === "WEDDING" ? "venue" : "funeralHall");
-        }
-        return false;
+        return hasMatchingModule;
       });
 
       const matchedReservations = reservations.filter(res => {
+        const { role } = resolveVendorRoleAndGroup(res.vendor.companyName ?? res.vendor.name, eventType);
+        
+        if (role === "PRIMARY" || role === "BUNDLE") {
+          return cat.key === (eventType === "WEDDING" ? "venue" : "funeralHall");
+        }
+
         if (res.serviceCategory && cat.dbCategory.includes(res.serviceCategory)) return true;
         
         if (res.quoteRequestId) {
           return matchedRequests.some(req => req.id === res.quoteRequestId);
         }
 
-        const { role } = resolveVendorRoleAndGroup(res.vendor.companyName ?? res.vendor.name, eventType);
-        if (role === "PRIMARY" || role === "BUNDLE") {
-          return cat.key === (eventType === "WEDDING" ? "venue" : "funeralHall");
-        }
         return false;
       });
 

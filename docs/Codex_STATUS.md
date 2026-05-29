@@ -1439,5 +1439,20 @@ Codex unavailable 상황 하에 Antigravity (AGY)가 임시로 full-stack domain
 ### 4. 검증 및 빌드 결과
 - **Prisma & Seed**: `npx prisma generate` 및 `npm run db:seed` 완벽 수행.
 - **Smoke Tests**: `verify-demo-data-integrity`, `verify-quote-flow`, `launch-readiness-smoke`, `server-action-read-concurrency-smoke`, `verify-planner-auth-redirect` 100% 무결 통과.
+
+## 21. 2026-05-29 QA Stabilization & Bug Fixes
+
+Claude QA에서 발견된 핵심 버그 5종을 완벽하게 Stabilization 완료했습니다.
+
+### 1. 주요 버그 해결
+*   **QA-06 (Funeral Step 4 중복 카테고리 매칭)**: BUNDLE/PRIMARY 역할을 가진 벤더는 오로지 대관(`venue`/`funeralHall`) 카테고리에만 매칭되도록 통제하여 한결 의전의 제안서가 `meal` 레인에 동시에 등장하던 오류를 원천 박멸했습니다.
+*   **QA-02 (Vendor Dashboard Priority Banner)**: 고객 견적 수락 수신 시 벤더 워크스페이스 최상단에 **"예약 최종 확정 필요"** 우선순위 배너를 노출하고, 5열로 확장된 메트릭 카드를 통해 **"최종 확정 필요 N건"** 메트릭을 신설하여 벤더가 즉각 액션을 취할 수 있게 했습니다.
+*   **QA-03 (Frontend Heuristic 제거)**: `step4-booking-dashboard.tsx` 내의 getCategoryKeyOfRequest, getCategoryKeyOfReservation 헬퍼 함수를 완전히 걷어내고 오직 백엔드 DTO `step4DashboardData`만을 100% Source of Truth로 정립했습니다.
+*   **QA-04 (Funeral empty state Sparkles 교체)**: 장례 Step 4 비어있음 화면에서 부적절한 Sparkles 아이콘을 제거하고 정중한 `ClipboardList` 아이콘으로 전환했습니다.
+*   **QA-05 (Vendor Dashboard raw enum 한글화)**: `CATEGORY_LABEL_MAP` 프리미엄 매핑 사전을 `lib/step3.shared.ts`에 도입하여 `FUNERAL_HALL`, `ALTAR_FLORAL` 등의 raw enum을 격식 있는 한글 라벨로 자동 교정했습니다.
+
+### 2. Regression 방지 검증 도입
+*   `scripts/verify-service-category-contract.ts`를 신규 구축하여 Moment Garden & Orsay Floral의 격리성, 중복 응답 방지, 그리고 예약 상태 분할 로직을 매 CI/CD 단계에서 자동으로 감지하게 보강했습니다.
+
 - **Next.js Production Build & Lint**: Next.js optimized production build와 linter가 완벽 통과하여, 비동기 서버 액션 명세를 어긴 동기 함수 `resolveVendorRoleAndGroup`의 `export` 지시어를 말끔히 정리하고 내부 비즈니스 헬퍼로 격하함으로써 런칭 릴리즈 안정성을 철저히 확보했습니다.
 

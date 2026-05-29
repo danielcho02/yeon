@@ -47,46 +47,6 @@ export function Step4BookingDashboard({
 }: Step4BookingDashboardProps) {
   const isWedding = eventType === "WEDDING";
 
-  // Helper definitions
-  const WEDDING_CATEGORIES = [
-    { key: "venue", name: "예식장/공간", dbCategory: ["venue"] },
-    { key: "catering", name: "식음료", dbCategory: ["catering"] },
-    { key: "floral", name: "플라워/장식", dbCategory: ["floral"] },
-    { key: "invitation", name: "초대장", dbCategory: ["invitation"] },
-    { key: "etc", name: "기타 옵션", dbCategory: ["studio", "dress", "makeup", "honeymoon", "weddingOther"] },
-  ];
-
-  const FUNERAL_CATEGORIES = [
-    { key: "funeralHall", name: "장례식장", dbCategory: ["funeralHall"] },
-    { key: "meal", name: "문상객 식사", dbCategory: ["meal"] },
-    { key: "obituary", name: "부고 안내", dbCategory: ["obituary", "funeralOther"] },
-    { key: "hearse", name: "운구", dbCategory: ["hearse", "cremation", "ossuary", "shroud"] },
-    { key: "altarFloral", name: "제단꽃/화환", dbCategory: ["altarFloral"] },
-  ];
-
-  const categories = isWedding ? WEDDING_CATEGORIES : FUNERAL_CATEGORIES;
-
-  const getCategoryKeyOfRequest = (req: QuoteRequestWithResponses): string => {
-    if (req.vendor?.category) {
-      return req.vendor.category.toLowerCase();
-    }
-    if (req.selectedModules && req.selectedModules.length > 0) {
-      return req.selectedModules[0].toLowerCase();
-    }
-    return "etc";
-  };
-
-  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-  const getCategoryKeyOfReservation = (res: any): string => {
-    if (res.serviceCategory) {
-      return res.serviceCategory.toLowerCase();
-    }
-    if (res.vendor?.category) {
-      return res.vendor.category.toLowerCase();
-    }
-    return "etc";
-  };
-
   const getCategoryIcon = (categoryKey: string) => {
     switch (categoryKey) {
       case "venue":
@@ -108,64 +68,39 @@ export function Step4BookingDashboard({
     }
   };
 
-  const categoryGroups = categories.map(catItem => {
-    const dto = step4DashboardData?.find(d => d.key === catItem.key);
+  // Safe empty / loading fallback when DTO is absent
+  if (!step4DashboardData) {
+    return (
+      <div className="rounded-[1.75rem] border border-dashed border-border/40 bg-white/50 p-8 text-center flex flex-col items-center justify-center min-h-[300px]">
+        <ClipboardList className="h-8 w-8 text-muted-foreground/60 mb-3" />
+        <p className="text-sm font-semibold text-foreground">견적 상태 분석 데이터를 조회하고 있습니다.</p>
+        <p className="mt-1.5 text-xs text-muted-foreground">잠시만 기다려 주십시오...</p>
+      </div>
+    );
+  }
 
-    let matchedRequests = (quoteRequestsData ?? []).filter(req => {
-      const cat = getCategoryKeyOfRequest(req);
-      return catItem.dbCategory.map(c => c.toLowerCase()).includes(cat) || cat === catItem.key.toLowerCase();
-    });
-
-    let matchedReservations = planReservations.filter(res => {
-      const cat = getCategoryKeyOfReservation(res);
-      return catItem.dbCategory.map(c => c.toLowerCase()).includes(cat) || cat === catItem.key.toLowerCase();
-    });
+  const categoryGroups = step4DashboardData.map(dto => {
+    const matchedRequests = (quoteRequestsData ?? []).filter(req => 
+      dto.vendorSummaries.some(v => v.quoteRequestId === req.id)
+    );
+    const matchedReservations = planReservations.filter(res => 
+      dto.vendorSummaries.some(v => v.reservationId === res.id)
+    );
 
     let status: "요청 전" | "응답 대기" | "견적 도착" | "수락 가능" | "업체 최종 확정 대기" | "예약 확정 완료" = "요청 전";
-    let canCompare = false;
-
-    if (dto) {
-      matchedRequests = (quoteRequestsData ?? []).filter(req => 
-        dto.vendorSummaries.some(v => v.quoteRequestId === req.id)
-      );
-      matchedReservations = planReservations.filter(res => 
-        dto.vendorSummaries.some(v => v.reservationId === res.id)
-      );
-      
-      if (dto.status === "CONFIRMED") status = "예약 확정 완료";
-      else if (dto.status === "ACCEPTED_WAITING_VENDOR") status = "업체 최종 확정 대기";
-      else if (dto.status === "RESPONDED") status = "수락 가능";
-      else if (dto.status === "REQUESTED") status = "응답 대기";
-      else status = "요청 전";
-
-      canCompare = dto.canCompare;
-    } else {
-      const hasConfirmed = matchedReservations.some(r => r.status === "CONFIRMED" || r.status === "COMPLETED");
-      const hasAccepted = matchedRequests.some(req => req.status === "ACCEPTED") || matchedReservations.some(r => r.status === "PENDING" && r.quoteRequestStatus === "ACCEPTED");
-      const hasResponded = matchedRequests.some(req => req.status === "RESPONDED");
-      const hasPending = matchedRequests.some(req => req.status === "PENDING");
-
-      if (hasConfirmed) {
-        status = "예약 확정 완료";
-      } else if (hasAccepted) {
-        status = "업체 최종 확정 대기";
-      } else if (hasResponded) {
-        status = "수락 가능";
-      } else if (hasPending) {
-        status = "응답 대기";
-      }
-
-      const responded = matchedRequests.filter(req => req.status === "RESPONDED");
-      canCompare = responded.length > 1;
-    }
+    if (dto.status === "CONFIRMED") status = "예약 확정 완료";
+    else if (dto.status === "ACCEPTED_WAITING_VENDOR") status = "업체 최종 확정 대기";
+    else if (dto.status === "RESPONDED") status = "수락 가능";
+    else if (dto.status === "REQUESTED") status = "응답 대기";
+    else status = "요청 전";
 
     return {
-      categoryKey: catItem.key,
-      categoryName: catItem.name,
+      categoryKey: dto.key,
+      categoryName: dto.label,
       requests: matchedRequests,
       reservations: matchedReservations,
       status,
-      canCompare
+      canCompare: dto.canCompare
     };
   });
 
@@ -417,7 +352,11 @@ export function Step4BookingDashboard({
         ) : (
           <div className="rounded-[1.75rem] border border-dashed border-border/40 bg-white/50 p-8 text-center flex flex-col items-center justify-center">
             <div className="mb-3 rounded-xl bg-muted/40 p-2.5 text-muted-foreground/60">
-              <Sparkles className="h-5 w-5" />
+              {isWedding ? (
+                <Sparkles className="h-5 w-5" />
+              ) : (
+                <ClipboardList className="h-5 w-5" />
+              )}
             </div>
             <p className="text-sm font-semibold text-foreground">확정된 예약 내역이 없습니다.</p>
             <p className="mt-1.5 text-xs leading-5 text-muted-foreground max-w-xs">견적을 승인하신 후 파트너사의 승인이 완료되면 최종 확정서가 자동 발행됩니다.</p>

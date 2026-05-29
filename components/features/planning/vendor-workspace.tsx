@@ -277,6 +277,27 @@ export function VendorWorkspace({
 
   return (
     <div className="grid gap-6">
+      {/* ── Priority Banner for Pending Confirmations ──────────────────────────────────── */}
+      {pendingConfirmationReservations.length > 0 && (
+        <div className="relative overflow-hidden rounded-2xl border border-violet-200 bg-violet-50/50 p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-fade-in">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-violet-100 text-violet-700">
+              <Clock className="h-5 w-5 text-violet-700 animate-pulse" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-violet-800">예약 최종 확정 필요 (우선 작업 권장)</p>
+              <p className="text-[11px] text-violet-700/80">고객이 견적을 최종 수락했습니다. 일정을 최종 승인해 예약 확정서를 완성해 주세요.</p>
+            </div>
+          </div>
+          <button
+            onClick={scrollToPendingConfirmations}
+            className="px-4 h-9 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl transition-all shadow-sm"
+          >
+            대기 건 {pendingConfirmationReservations.length}개 확인하기
+          </button>
+        </div>
+      )}
+
       {/* ── Vendor header (Editorial & Premium) ──────────────────────────────────────────── */}
       <section className="relative overflow-hidden rounded-2xl border border-[#e5e2da] bg-[#faf9f5] p-6 sm:p-8">
         <div className="relative grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
@@ -301,9 +322,16 @@ export function VendorWorkspace({
             </div>
 
             {/* Metrics row */}
-            <div className="grid gap-3 sm:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-5">
               <MetricCard icon={Inbox} label="신규 요청" value={`${inboxReservations.length}건`} highlight={inboxReservations.length > 0} />
               <MetricCard icon={MessageSquareQuote} label="진행 제안" value={`${inProgressReservations.length}건`} />
+              <MetricCard 
+                icon={BadgeCheck} 
+                label="최종 확정 필요" 
+                value={`${pendingConfirmationReservations.length}건`} 
+                highlight={pendingConfirmationReservations.length > 0}
+                highlightTone="violet"
+              />
               <MetricCard icon={BadgeCheck} label="확정 예약" value={`${confirmedReservations.length}건`} />
               <MetricCard icon={Wallet} label="확정 총액" value={formatCurrency(confirmedTotal)} />
             </div>
@@ -872,21 +900,28 @@ function Field({ label, name, children }: { label: string; name: string; childre
   );
 }
 
-function MetricCard({ icon: Icon, label, value, highlight = false }: {
+function MetricCard({ icon: Icon, label, value, highlight = false, highlightTone = "amber" }: {
   icon: typeof Sparkles;
   label: string;
   value: string;
   highlight?: boolean;
+  highlightTone?: "amber" | "violet";
 }) {
+  const isViolet = highlightTone === "violet";
+  const borderTone = isViolet ? "border-violet-300 ring-1 ring-violet-200" : "border-[#ebdccf] ring-1 ring-[#ebdccf]/30";
+  const dotTone = isViolet ? "bg-violet-500" : "bg-amber-500";
+  const pingTone = isViolet ? "bg-violet-400" : "bg-amber-400";
+  const iconTone = isViolet ? "text-violet-700 bg-violet-50 border-violet-100" : "text-[#c4977a] bg-[#faf9f5] border-[#e5e2da]/40";
+
   return (
-    <div className={`relative rounded-xl border bg-white p-4 transition-all duration-150 hover:-translate-y-0.5 ${highlight ? "border-[#ebdccf] ring-1 ring-[#ebdccf]/30" : "border-[#e5e2da]/70"}`}>
+    <div className={`relative rounded-xl border bg-white p-4 transition-all duration-150 hover:-translate-y-0.5 ${highlight ? borderTone : "border-[#e5e2da]/70"}`}>
       {highlight && (
         <span className="absolute -right-0.5 -top-0.5 flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
+          <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${pingTone}`} />
+          <span className={`relative inline-flex h-2 w-2 rounded-full ${dotTone}`} />
         </span>
       )}
-      <div className="mb-2 inline-flex rounded-lg p-1.5 bg-[#faf9f5] border border-[#e5e2da]/40 text-[#c4977a]">
+      <div className={`mb-2 inline-flex rounded-lg p-1.5 border ${iconTone}`}>
         <Icon className="h-3.5 w-3.5" />
       </div>
       <p className="text-[10px] text-muted-foreground">{label}</p>

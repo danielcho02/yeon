@@ -395,11 +395,52 @@ export function getQuoteServiceModule(
   return getQuoteServiceModules(type).find((module) => module.value === value?.toLowerCase()) ?? null;
 }
 
+const CATEGORY_LABEL_MAP: Record<string, string> = {
+  // DB UPPERCASE values
+  VENUE: "예식장·식대",
+  CATERING: "식음료",
+  DECORATION: "꽃장식",
+  INVITATION: "초대장",
+  PHOTO: "스튜디오",
+  DRESS: "드레스",
+  MAKEUP: "메이크업",
+  CEREMONY: "기타",
+  FUNERAL_HALL: "장례식장·빈소",
+  MEAL: "문상객 식사",
+  OBITUARY: "부고 안내",
+  TRANSPORT: "운구",
+  WREATH: "제단꽃",
+
+  // Step3 lowercase values
+  venue: "예식장·식대",
+  catering: "식음료",
+  floral: "꽃장식",
+  invitation: "초대장",
+  studio: "스튜디오",
+  dress: "드레스",
+  makeup: "메이크업",
+  honeymoon: "신혼여행",
+  weddingOther: "기타",
+  funeralHall: "장례식장·빈소",
+  altarFloral: "제단꽃",
+  hearse: "운구",
+  cremation: "화장",
+  ossuary: "납골당",
+  shroud: "수의",
+  funeralOther: "기타",
+};
+
 export function getQuoteServiceModuleLabel(params: {
   eventType?: string | null;
   serviceCategory?: string | null;
   serviceName?: string | null;
 }) {
+  const cat = params.serviceCategory;
+  if (cat) {
+    const upperCat = cat.toUpperCase();
+    if (CATEGORY_LABEL_MAP[upperCat]) return CATEGORY_LABEL_MAP[upperCat];
+    if (CATEGORY_LABEL_MAP[cat]) return CATEGORY_LABEL_MAP[cat];
+  }
   return (
     getQuoteServiceModule(params.eventType, params.serviceCategory)?.label ??
     params.serviceName ??
