@@ -1277,46 +1277,52 @@ export async function getStep4DashboardData(
   try {
     const user = await requireGeneralUser();
 
-    const plan = await prisma.eventPlan.findFirst({
-      where: { id: planId, ownerId: user.id },
-      select: { id: true, type: true }
+    const { plan, requests, reservations, modules } = await withPrismaRetry(async () => {
+      const plan = await prisma.eventPlan.findFirst({
+        where: { id: planId, ownerId: user.id },
+        select: { id: true, type: true }
+      });
+      if (!plan) return { plan: null, requests: [], reservations: [], modules: [] };
+
+      const requests = await prisma.quoteRequest.findMany({
+        where: { planId: plan.id },
+        include: {
+          vendor: true,
+          responses: {
+            include: { vendor: true }
+          },
+          reservation: true
+        }
+      });
+
+      const reservations = await prisma.reservation.findMany({
+        where: { eventPlanId: plan.id },
+        include: { vendor: true, quoteRequest: true }
+      });
+
+      const allSelectedModuleIds = Array.from(
+        new Set(
+          requests.flatMap(req => {
+            if (Array.isArray(req.selectedModules)) {
+              return req.selectedModules.filter((id): id is string => typeof id === "string");
+            }
+            return [];
+          })
+        )
+      );
+
+      const modules = allSelectedModuleIds.length > 0
+        ? await prisma.vendorServiceModule.findMany({
+            where: { id: { in: allSelectedModuleIds } }
+          })
+        : [];
+
+      return { plan, requests, reservations, modules };
     });
+
     if (!plan) return actionError("플랜을 찾을 수 없습니다.", "NOT_FOUND");
 
     const eventType = plan.type === "WEDDING" ? "WEDDING" : "FUNERAL";
-
-    const requests = await prisma.quoteRequest.findMany({
-      where: { planId: plan.id },
-      include: {
-        vendor: true,
-        responses: {
-          include: { vendor: true }
-        },
-        reservation: true
-      }
-    });
-
-    const reservations = await prisma.reservation.findMany({
-      where: { eventPlanId: plan.id },
-      include: { vendor: true, quoteRequest: true }
-    });
-
-    const allSelectedModuleIds = Array.from(
-      new Set(
-        requests.flatMap(req => {
-          if (Array.isArray(req.selectedModules)) {
-            return req.selectedModules.filter((id): id is string => typeof id === "string");
-          }
-          return [];
-        })
-      )
-    );
-
-    const modules = allSelectedModuleIds.length > 0
-      ? await prisma.vendorServiceModule.findMany({
-          where: { id: { in: allSelectedModuleIds } }
-        })
-      : [];
     const moduleCategoryMap = new Map(modules.map(m => [m.id, m.category]));
 
     const categories = eventType === "WEDDING" ? WEDDING_CATEGORIES : FUNERAL_CATEGORIES;

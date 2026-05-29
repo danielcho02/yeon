@@ -20,12 +20,15 @@ import { getServerAuthSession } from "@/lib/auth/session";
 import { formatDate } from "@/lib/format";
 import type { PlanDashboardData, PlanDashboardNextAction } from "@/types/plan";
 
-function getNextActionMeta(nextAction: PlanDashboardNextAction) {
+function getNextActionMeta(nextAction: PlanDashboardNextAction, eventType: string) {
+  const isWedding = eventType === "WEDDING";
   switch (nextAction) {
     case "create_quote_request":
       return {
         label: "파트너 선택",
-        description: "yeON이 추천 구성을 준비했습니다. 파트너를 선택해 보세요.",
+        description: isWedding
+          ? "yeON이 추천 구성을 준비했습니다. 파트너를 선택해 보세요."
+          : "yeON이 장례 절차의 정밀 기본 구성을 정돈했습니다. 상담 파트너사를 확인하세요.",
         badge: "bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/60",
         cta: "파트너 선택하기",
         ctaVariant: "weddingGold",
@@ -34,7 +37,9 @@ function getNextActionMeta(nextAction: PlanDashboardNextAction) {
     case "waiting_for_vendor":
       return {
         label: "파트너 응답 대기",
-        description: "견적 요청이 파트너사로 전달되었습니다. 회신을 기다리는 중입니다.",
+        description: isWedding
+          ? "견적 요청이 파트너사로 전달되었습니다. 회신을 기다리는 중입니다."
+          : "의전 상담 요청이 파트너사로 전달되었습니다. 회신을 대기하고 있습니다.",
         badge: "bg-[#faf8f4] text-[#8c8275] border border-[#e5e2da]",
         cta: "견적 현황 보기",
         ctaVariant: "outlineDark",
@@ -44,7 +49,9 @@ function getNextActionMeta(nextAction: PlanDashboardNextAction) {
     case "accept_quote":
       return {
         label: "제안서 조율 완료",
-        description: "도도하게 정비된 견적서가 도착했습니다. 지금 항목을 확인해 보세요.",
+        description: isWedding
+          ? "도도하게 정비된 견적서가 도착했습니다. 지금 항목을 확인해 보세요."
+          : "장례 준비 항목에 대한 정중한 제안서가 도착했습니다. 지금 항목을 확인해 보세요.",
         badge: "bg-[#eafaf1] text-[#0f9652] border border-emerald-100",
         cta: "제안서 확인하기",
         ctaVariant: "emerald",
@@ -53,7 +60,9 @@ function getNextActionMeta(nextAction: PlanDashboardNextAction) {
     case "reservation_pending":
       return {
         label: "최종 승인 대기",
-        description: "고객 승인이 완료되어 파트너사의 최종 스케줄 승인을 대기하고 있습니다.",
+        description: isWedding
+          ? "고객 승인이 완료되어 파트너사의 최종 스케줄 승인을 대기하고 있습니다."
+          : "의전 승인이 완료되어 파트너사의 최종 승인을 대기하고 있습니다.",
         badge: "bg-[#f5f3ff] text-[#6d28d9] border border-purple-100",
         cta: "예약 대기 확인",
         ctaVariant: "purple",
@@ -62,7 +71,9 @@ function getNextActionMeta(nextAction: PlanDashboardNextAction) {
     case "confirmed":
       return {
         label: "예약 확정 완료",
-        description: "예약 조율 및 스케줄이 완벽하게 확정되었습니다.",
+        description: isWedding
+          ? "예약 조율 및 스케줄이 완벽하게 확정되었습니다."
+          : "예약 조율 및 장례 준비 일정이 최종 확정되었습니다.",
         badge: "bg-[#eafaf1] text-[#0f9652] border border-emerald-200",
         cta: "확정 예약서 보기",
         ctaVariant: "emerald",
@@ -158,7 +169,7 @@ export default async function PlansPage() {
         ) : (
           <div className="space-y-4">
             {plans.map((plan) => {
-              const meta = getNextActionMeta(plan.summary.nextAction);
+              const meta = getNextActionMeta(plan.summary.nextAction, plan.eventType);
               const { Icon } = meta;
               const plannerLink = getPlannerLink(plan);
               const isWedding = plan.eventType === "WEDDING";

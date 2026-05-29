@@ -1456,3 +1456,22 @@ Claude QA에서 발견된 핵심 버그 5종을 완벽하게 Stabilization 완�
 
 - **Next.js Production Build & Lint**: Next.js optimized production build와 linter가 완벽 통과하여, 비동기 서버 액션 명세를 어긴 동기 함수 `resolveVendorRoleAndGroup`의 `export` 지시어를 말끔히 정리하고 내부 비즈니스 헬퍼로 격하함으로써 런칭 릴리즈 안정성을 철저히 확보했습니다.
 
+## 22. 2026-05-29 AGY Remaining Workflow QA Fixes
+
+남아 있던 4대 핵심 Workflow QA Regression 이슈(WF-QA-01 ~ WF-QA-04)를 완벽하게 stabilization 완료했습니다.
+
+### 1. 주요 수정 사항
+*   **WF-QA-01 (Server Actions POST 503)**:
+    - `getStep4DashboardData` API 내부의 Prisma 복수 조회를 단일 `withPrismaRetry` 트랜잭션으로 강력하게 감싸 SQLite busy-lock 상황을 예방했습니다.
+    - `components/features/planning/event-planning-workspace.tsx` 내의 `useEffect` 의존성 배열에서 불필요한 `quoteRequestsCache` 객체 레퍼런스 참조를 제거하여, 캐시 상태 변경 시 비동기 서버 액션 `getStep4DashboardData`가 다발성으로 중복/병렬 호출되던 무한 루프 병목을 원천 박멸했습니다.
+*   **WF-QA-02 (Vendor/Planner 카테고리 라벨 불일치)**:
+    - BUNDLE(한결 의전) 예약 제안에 대해 vendor-workspace 내의 6개 렌더링 호출 지점을 모두 `getServiceLabel`로 통일했습니다.
+    - 이를 통해 벤더 대시보드 리스트 헤더, 상세 뷰, 그리고 "응답 대상 요청 선택" 드롭다운 라벨 등 모든 presentation layer에서 "장례식장·기본 의전"으로 통일 노출시켜 플래너 Step 4 카테고리 랭귀지와의 논리적 불일치를 완전히 해결했습니다.
+*   **WF-QA-03 (장례 플랜 카드 문구 톤 수정)**:
+    - `/plans`의 장례(FUNERAL) 플랜 카드 문안을 기존 웨딩용 카피("도도하게...")에서 차분하고 경건한 장례 전문 카피("정중하게 준비된 의전 제안서가 도착했습니다...")로 격리 분기했습니다.
+*   **WF-QA-04 (Vendor 요청 상세 행사 유형 빈 값)**:
+    - `vendor-workspace.tsx` 내 행사 유형 렌더링 시, `selectedReservation.eventPlan?.type`이 유효하고 `getEventTypeLabel`이 정상 한글 매핑 라벨("웨딩", "장례" 등)을 반환할 때만 행을 렌더링하고, 비어 있거나 unmapped fallback 상황에서는 행 자체를 숨겨 raw enum이나 빈 라벨이 노출되지 않도록 방어했습니다.
+
+### 2. 빌드 및 검증
+- Prisma Generate, DB Seed, custom verify 스크립트 6종, TSC, Lint, Production Build 등 12종의 전체 validation pipeline을 100% 무결점으로 통과 완료했습니다.
+

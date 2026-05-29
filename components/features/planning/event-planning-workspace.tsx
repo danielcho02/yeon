@@ -358,7 +358,8 @@ export function EventPlanningWorkspace({
       }
     });
     return () => { cancelled = true; };
-  }, [plan?.id, quoteRequestsCache]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan?.id]);
 
   const requestedVendorIds = useMemo(
     () =>

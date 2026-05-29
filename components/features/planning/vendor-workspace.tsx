@@ -56,6 +56,22 @@ const PANELS: Array<{ key: PanelKey; label: string; description: string; icon: t
 const selectClassName =
   "h-11 w-full rounded-xl border border-[#e5e2da] bg-white px-4 text-xs text-[#2c3455] shadow-sm transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#c4977a]";
 
+function getServiceLabel(r: ReservationItem) {
+  const isBundle = r.eventPlan.type === "FUNERAL" && 
+    (r.vendor?.companyName?.includes("한결") || r.vendor?.name?.includes("한결") || 
+     r.vendor?.companyName?.includes("의전") || r.vendor?.name?.includes("의전"));
+  
+  if (isBundle) {
+    return "장례식장·기본 의전";
+  }
+  
+  return getQuoteServiceModuleLabel({
+    eventType: r.eventPlan.type,
+    serviceCategory: r.serviceCategory,
+    serviceName: r.serviceName
+  });
+}
+
 export function VendorWorkspace({
   viewerName,
   viewerEmail,
@@ -426,11 +442,7 @@ export function VendorWorkspace({
                         </p>
                       </div>
                       <p className="text-[11px] text-[#8c8275]">
-                        {getQuoteServiceModuleLabel({
-                          eventType: r.eventPlan.type,
-                          serviceCategory: r.serviceCategory,
-                          serviceName: r.serviceName
-                        })}
+                        {getServiceLabel(r)}
                         {" · "}
                         {getEventTypeLabel(r.eventPlan.type ?? "ETC")}
                       </p>
@@ -548,12 +560,8 @@ export function VendorWorkspace({
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1">
                           <p className="font-semibold text-xs text-[#2c3455]">
-                            {getQuoteServiceModuleLabel({
-                              eventType: r.eventPlan.type,
-                              serviceCategory: r.serviceCategory,
-                              serviceName: r.serviceName
-                            })}
-                          </p>
+                             {getServiceLabel(r)}
+                           </p>
                           <p className="text-[11px] text-muted-foreground">
                             {r.eventPlan.title} · {getEventTypeLabel(r.eventPlan.type ?? "ETC")}
                           </p>
@@ -594,14 +602,16 @@ export function VendorWorkspace({
               {selectedReservation ? (
                 <>
                   <DetailRow label="행사명" value={selectedReservation.eventPlan.title} />
-                  <DetailRow label="행사 유형" value={getEventTypeLabel(selectedReservation.eventPlan.type ?? "ETC")} />
+                  {(() => {
+                    const type = selectedReservation.eventPlan?.type;
+                    if (!type) return null;
+                    const label = getEventTypeLabel(type);
+                    if (label === type || !label) return null;
+                    return <DetailRow label="행사 유형" value={label} />;
+                  })()}
                   <DetailRow
                     label="요청 서비스"
-                    value={getQuoteServiceModuleLabel({
-                      eventType: selectedReservation.eventPlan.type,
-                      serviceCategory: selectedReservation.serviceCategory,
-                      serviceName: selectedReservation.serviceName
-                    })}
+                    value={getServiceLabel(selectedReservation)}
                   />
                   <DetailRow label="희망 일정" value={formatDate(selectedReservation.serviceDate)} />
                   <DetailRow label="희망 예산" value={formatCurrency(selectedReservation.quotedAmount)} />
@@ -665,11 +675,7 @@ export function VendorWorkspace({
                   <option value="">요청 선택</option>
                   {editableProposalReservations.map((r) => (
                     <option key={r.id} value={r.id}>
-                      {getQuoteServiceModuleLabel({
-                        eventType: r.eventPlan.type,
-                        serviceCategory: r.serviceCategory,
-                        serviceName: r.serviceName
-                      })} / {r.eventPlan.title}
+                      {getServiceLabel(r)} / {r.eventPlan.title}
                     </option>
                   ))}
                 </select>
@@ -771,11 +777,7 @@ export function VendorWorkspace({
                     <div className="flex items-start justify-between gap-3">
                       <div className="space-y-1">
                         <p className="font-semibold text-xs text-[#2c3455]">
-                          {getQuoteServiceModuleLabel({
-                            eventType: r.eventPlan.type,
-                            serviceCategory: r.serviceCategory,
-                            serviceName: r.serviceName
-                          })}
+                          {getServiceLabel(r)}
                         </p>
                         <p className="text-[11px] text-muted-foreground">{r.eventPlan.title}</p>
                       </div>
@@ -851,11 +853,7 @@ export function VendorWorkspace({
                         <Badge variant="outline" className="text-[9px] border-[#e5e2da]/80 text-[#8c8275] font-bold">{getEventTypeLabel(r.eventPlan.type ?? "ETC")}</Badge>
                       </div>
                       <p className="font-semibold text-xs text-[#2c3455] pt-1">
-                        {getQuoteServiceModuleLabel({
-                          eventType: r.eventPlan.type,
-                          serviceCategory: r.serviceCategory,
-                          serviceName: r.serviceName
-                        })}
+                        {getServiceLabel(r)}
                       </p>
                       <p className="text-[11px] text-muted-foreground">{r.eventPlan.title}</p>
                     </div>

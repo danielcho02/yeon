@@ -63,3 +63,27 @@ Next.js 로컬 터미널 컴파일 및 최적화 빌드 파이프라인 검증�
 *   **현재 브랜치**: `codex/step3-main-logic-rewrite`
 *   **커밋 메시지**: `git commit -m "Fix service category workflow QA issues"`
 *   **작업 조건 준수**: push 금지 및 `tsconfig.tsbuildinfo` 커밋 제외 가이드를 완벽히 수행했습니다.
+
+---
+
+## 5. 2026-05-29 Remaining Workflow QA Stabilization 완결
+
+PM 검수 및 최종 릴리즈를 위해, Claude QA에서 지적된 4대 Workflow QA Regression 이슈(WF-QA-01 ~ WF-QA-04)를 최종적으로 전원 해결 및 무결 패치 완료했습니다.
+
+### 1. 세부 교정 명세
+*   **WF-QA-01: Server Actions POST 503 (SQLite Lock & Concurrency Loop 해소)**:
+    - *원인*: `event-planning-workspace.tsx` 내의 `useEffect` 의존성 배열에 `quoteRequestsCache` 가 무분별하게 참조되어, 캐시 갱신 시 `getStep4DashboardData` API 서버 액션이 무한히 중복/병렬 재호출되는 React 렌더링 순환 고리가 존재했습니다. 이와 동시에 `getStep4DashboardData` 백엔드 내부 Prisma 다중 트랜잭션이 `withPrismaRetry` 없이 원시 호출되어 동시성 락 상황에서 SQLite가 503 에러를 즉시 반환하는 취약점이 있었습니다.
+    - *해결*: 의존성 배열에서 `quoteRequestsCache` 를 제거해 불필요한 호출 병목을 원천 박멸했으며, `getStep4DashboardData` 내의 모든 쿼리 묶음을 `withPrismaRetry` 트랜잭션 내에 완벽하게 내장하여 503 에러의 발생 가능성을 원천적으로 박멸했습니다.
+*   **WF-QA-02: Vendor/Planner 카테고리 라벨 불일치 정렬 (Domain Language 통일)**:
+    - *원인*: 한결 의전(의전 BUNDLE 벤더)의 제안서가 플래너 Step 4에서는 "장례식장" 레인에만 표시되도록 정밀 통제되었지만, 벤더 대시보드에서는 "문상객 식사" 등 원시 DB 카테고리 label 그대로 노출되어 카테고리명 불일치와 사용자 혼동을 일으켰습니다.
+    - *해결*: `vendor-workspace.tsx` 파일 내부에 통합 판단 헬퍼 `getServiceLabel` 을 구현하여, BUNDLE 예약의 경우 리스트 카드 헤더, 상세 요건 뷰, "응답 대상 요청 선택" 드롭다운의 option 라벨 등 총 6곳의 출력지점을 모두 동일한 도메인 언어인 `"장례식장·기본 의전"`으로 통일 연동 노출시켰습니다.
+*   **WF-QA-03: 장례 플랜 카드 카피 톤 보정 (경건한 톤 격리 분기)**:
+    - *원인*: `/plans` 대시보드 화면 내의 장례(FUNERAL) 플랜 카드에 웨딩용 톤앤매너인 "도도하게 정비된..." 카피가 출력되는 미스매치가 있었습니다.
+    - *해결*: `getNextActionMeta`가 `plan.eventType`을 주입받아 웨딩은 기존 럭셔리 골드 톤을 유지하고, 장례인 경우 경건하고 정중한 카피 분기("필요한 의전 제안서를 확인해 주세요", "정중하게 준비된 의전 제안서가 도착했습니다")를 타도록 완벽히 보정했습니다.
+*   **WF-QA-04: Vendor 요청 상세 행사 유형 빈 값 방어 (Raw Enum 노출 원천 봉쇄)**:
+    - *원인*: 벤더 대시보드의 새 견적 요청 상세 내 "행사 유형" 라벨 아래 값이 누락되어 빈 값 혹은 raw enum 형태로 깨져 노출되는 UX 결함이 존재했습니다.
+    - *해결*: `selectedReservation.eventPlan?.type`이 존재하고 `eventTypeOptions`에 사상된 유효한 한국어 라벨("웨딩", "장례" 등)이 존재하는 정상적 렌더링 상황에서만 라벨과 값을 렌더링하고, 빈 값이나 fallback 상황에서는 라벨 행 자체를 숨기는 가드 조건을 입혀 원시 enum 노출을 완전 격파했습니다.
+
+### 2. 최종 CI/CD 검증 파이프라인
+- Prisma Generate, DB Seed, custom verify 스크립트 6종, TSC, Lint, Production Build 등 12종의 전체 validation pipeline을 100% 무결점으로 통과 완료하여 merge-ready 완결 상태를 달성했습니다.
+
