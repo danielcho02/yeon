@@ -285,6 +285,7 @@ export function EventPlanningWorkspace({
   const [isQuoteActionPending, setIsQuoteActionPending] = useState(false);
   const quoteActionLockedRef = useRef(false);
   const [confettiActive, setConfettiActive] = useState(false);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   function navigateStep(next: StepKey) {
     const currentIdx = STEPS.findIndex((s) => s.key === activeStep);
@@ -644,8 +645,10 @@ export function EventPlanningWorkspace({
       });
       if (!result.success) { showNotice("error", result.error); return; }
       showNotice("success", "견적을 수락했습니다. 업체의 최종 확정을 기다리는 중입니다.");
-      setConfettiActive(true);
-      setTimeout(() => setConfettiActive(false), 1600);
+      if (eventType === "WEDDING") {
+        setConfettiActive(true);
+        setTimeout(() => setConfettiActive(false), 1600);
+      }
       if (plan?.id) await refreshQuoteRequests(plan.id);
       startTransition(() => router.refresh());
     } finally {
@@ -889,7 +892,7 @@ export function EventPlanningWorkspace({
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <FieldGroup label={eventType === "WEDDING" ? "행사 이름 💒" : "행사 이름 🌹"}>
+                    <FieldGroup label="행사 이름">
                       <Input
                         placeholder={eventType === "WEDDING" ? "예: 박민준 · 이서연 결혼식" : "예: 故 박민준 님 장례"}
                         value={planForm.title}
@@ -897,7 +900,7 @@ export function EventPlanningWorkspace({
                         required
                       />
                     </FieldGroup>
-                    <FieldGroup label="지역 📍">
+                    <FieldGroup label="지역">
                       <Input
                         placeholder="서울"
                         value={planForm.region}
@@ -907,14 +910,14 @@ export function EventPlanningWorkspace({
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <FieldGroup label={eventType === "WEDDING" ? "행사일 📅" : "행사일 🗓️"}>
+                    <FieldGroup label="행사일">
                       <Input
                         type="date"
                         value={planForm.scheduledAt}
                         onChange={(e) => setPlanForm((c) => ({ ...c, scheduledAt: e.target.value }))}
                       />
                     </FieldGroup>
-                    <FieldGroup label={`${theme.guestLabel} 수 👥`}>
+                    <FieldGroup label={`${theme.guestLabel} 수`}>
                       <Input
                         inputMode="numeric"
                         placeholder="예: 160"
@@ -924,7 +927,7 @@ export function EventPlanningWorkspace({
                     </FieldGroup>
                   </div>
 
-                  <FieldGroup label="예산 💰">
+                  <FieldGroup label="예산">
                     <Input
                       inputMode="numeric"
                       placeholder="예: 30000000"
@@ -933,7 +936,7 @@ export function EventPlanningWorkspace({
                     />
                   </FieldGroup>
 
-                  <FieldGroup label="메모 📝">
+                  <FieldGroup label="메모">
                     <Textarea
                       placeholder={eventType === "WEDDING" ? "분위기, 참고 스타일, 요청 사항" : "종교, 지역 관습, 특이 사항"}
                       value={planForm.description}
@@ -1226,7 +1229,7 @@ export function EventPlanningWorkspace({
                   })}
                 </div>
               ) : (
-                <EmptyState emoji="🏢" title="등록된 업체가 없습니다." description="현재 연결 가능한 업체가 없습니다." />
+                <EmptyState icon={Building2} title="등록된 업체가 없습니다." description="현재 연결 가능한 업체가 없습니다." />
               )}
 
               {selectedVendorId && plan && (
@@ -1238,31 +1241,46 @@ export function EventPlanningWorkspace({
                     </span>
                   </p>
 
-                  {/* Date + notes always shown */}
-                  <div className="mb-4 grid gap-4 sm:grid-cols-2">
-                    <FieldGroup label="희망 날짜">
-                      <Input
-                        type="date"
-                        value={requestForm.serviceDate}
-                        onChange={(e) => setRequestForm((c) => ({ ...c, serviceDate: e.target.value }))}
-                      />
-                    </FieldGroup>
-                    <FieldGroup label={`${theme.guestLabel} 수`}>
-                      <Input
-                        inputMode="numeric"
-                        value={requestForm.guestCount}
-                        onChange={(e) => setRequestForm((c) => ({ ...c, guestCount: e.target.value }))}
-                      />
-                    </FieldGroup>
-                  </div>
-                  <div className="mb-4">
-                    <FieldGroup label="요청 메모">
-                      <Textarea
-                        placeholder="현장 분위기, 필요 조건, 상담 요청 사항"
-                        value={requestForm.notes}
-                        onChange={(e) => setRequestForm((c) => ({ ...c, notes: e.target.value }))}
-                      />
-                    </FieldGroup>
+                  {/* Progressive Disclosure Toggle */}
+                  <div className="mb-5">
+                    <button
+                      type="button"
+                      onClick={() => setIsDetailOpen(!isDetailOpen)}
+                      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-border/40 bg-white/50 hover:bg-white hover:text-foreground transition-all duration-150 ${theme.accentText}`}
+                    >
+                      <span>{isDetailOpen ? "일정 및 상세 조건 접기" : "일정 및 상세 조건 설정 (선택)"}</span>
+                      <span className="text-[9px] transition-transform duration-200">{isDetailOpen ? "▲" : "▼"}</span>
+                    </button>
+
+                    {isDetailOpen && (
+                      <div className="mt-4 space-y-4 border-t border-dashed border-border/50 pt-4 animate-fade-in">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <FieldGroup label="희망 날짜">
+                            <Input
+                              type="date"
+                              value={requestForm.serviceDate}
+                              onChange={(e) => setRequestForm((c) => ({ ...c, serviceDate: e.target.value }))}
+                            />
+                          </FieldGroup>
+                          <FieldGroup label={`${theme.guestLabel} 수`}>
+                            <Input
+                              inputMode="numeric"
+                              value={requestForm.guestCount}
+                              onChange={(e) => setRequestForm((c) => ({ ...c, guestCount: e.target.value }))}
+                            />
+                          </FieldGroup>
+                        </div>
+                        <div>
+                          <FieldGroup label="요청 메모">
+                            <Textarea
+                              placeholder="현장 분위기, 필요 조건, 상담 요청 사항"
+                              value={requestForm.notes}
+                              onChange={(e) => setRequestForm((c) => ({ ...c, notes: e.target.value }))}
+                            />
+                          </FieldGroup>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Module picker: real data → ModularQuoteBuilder, loading → skeleton, error → retry, fallback → old checklist */}
@@ -1467,7 +1485,7 @@ export function EventPlanningWorkspace({
                   </div>
                 ))
               ) : (
-                <EmptyState emoji="📬" title="아직 요청이 없습니다." description="업체를 선택해 견적 요청을 보내세요." />
+                <EmptyState icon={ClipboardList} title="아직 요청이 없습니다." description="업체를 선택해 견적 요청을 보내세요." />
               )}
 
               {comparisonQuotes.length > 0 && (
@@ -1501,10 +1519,10 @@ export function EventPlanningWorkspace({
                 </div>
 
                 {/* Quiet Luxury Info Callout Board */}
-                <div className="rounded-2xl border border-[#ebdccf] bg-[#fdfcf9] p-5 shadow-[0_4px_16px_rgba(196,151,122,0.02)]">
-                  <div className="flex flex-wrap items-center gap-2 border-b border-[#f2ece4]/50 pb-2.5 mb-3.5">
-                    <Badge className="bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/50 text-[10px]">예약 안전 가이드</Badge>
-                    <span className="text-xs font-semibold text-[#8c8275]">
+                <div className={`rounded-2xl border p-5 shadow-sm ${theme.accentBorder} ${theme.cardHighlight}`}>
+                  <div className="flex flex-wrap items-center gap-2 border-b border-border/40 pb-2.5 mb-3.5">
+                    <Badge className={`${theme.badge} text-[10px]`}>예약 안전 가이드</Badge>
+                    <span className="text-xs font-semibold text-muted-foreground">
                       견적 수락과 예약 확정은 분리된 단계입니다.
                     </span>
                   </div>
@@ -1520,24 +1538,28 @@ export function EventPlanningWorkspace({
                       count={pendingQuoteRequests.length}
                       label="파트너 응답 대기"
                       description="제안 요청서 수신 대기"
+                      isWedding={eventType === "WEDDING"}
                     />
                     <WorkflowStep
                       active={respondedRequests.length > 0}
                       count={respondedRequests.length}
                       label="도착한 견적 비교"
                       description="총액 및 포함 항목 검토"
+                      isWedding={eventType === "WEDDING"}
                     />
                     <WorkflowStep
                       active={acceptedRequests.length > 0}
                       count={acceptedRequests.length}
                       label="파트너 최종 승인 대기"
                       description="고객 수락 완료 단계"
+                      isWedding={eventType === "WEDDING"}
                     />
                     <WorkflowStep
                       active={confirmedRes.length > 0}
                       count={confirmedRes.length}
                       label="예약 확정 완료"
                       description="계약 및 최종 스케줄 확정"
+                      isWedding={eventType === "WEDDING"}
                     />
                   </div>
                 </div>
@@ -1618,7 +1640,7 @@ export function EventPlanningWorkspace({
                   </div>
                 ) : acceptedRequests.length === 0 && quoteRequestsData !== null ? (
                   <EmptyState
-                    emoji="📩"
+                    icon={Clock}
                     title="수신 대기 중인 견적이 없습니다."
                     description="선택한 파트너사에서 견적서를 작성하는 대로 즉시 리포트가 수집됩니다."
                   />
@@ -1711,7 +1733,7 @@ export function EventPlanningWorkspace({
                     </div>
                   </div>
                 ) : (
-                  <EmptyState emoji="✨" title="확정된 예약 내역이 없습니다." description="견적을 승인하신 후 파트너사의 승인이 완료되면 최종 확정서가 자동 발행됩니다." />
+                  <EmptyState icon={Sparkles} title="확정된 예약 내역이 없습니다." description="견적을 승인하신 후 파트너사의 승인이 완료되면 최종 확정서가 자동 발행됩니다." />
                 )}
               </div>
             </div>
@@ -1731,12 +1753,16 @@ function FieldGroup({ label, children }: { label: string; children: ReactNode })
   );
 }
 
-function EmptyState({ title, description, emoji }: { title: string; description: string; emoji?: string }) {
+function EmptyState({ title, description, icon: Icon }: { title: string; description: string; icon?: React.ComponentType<{ className?: string }> }) {
   return (
-    <div className="rounded-[1.75rem] border border-dashed border-border/40 bg-white/50 p-8 text-center">
-      {emoji && <p className="mb-3 text-3xl">{emoji}</p>}
+    <div className="rounded-[1.75rem] border border-dashed border-border/40 bg-white/50 p-8 text-center flex flex-col items-center justify-center">
+      {Icon && (
+        <div className="mb-3 rounded-xl bg-muted/40 p-2.5 text-muted-foreground/60">
+          <Icon className="h-5 w-5" />
+        </div>
+      )}
       <p className="text-sm font-semibold text-foreground">{title}</p>
-      <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{description}</p>
+      <p className="mt-1.5 text-xs leading-5 text-muted-foreground max-w-xs">{description}</p>
     </div>
   );
 }
@@ -1745,18 +1771,27 @@ function WorkflowStep({
   active,
   count,
   label,
-  description
+  description,
+  isWedding
 }: {
   active: boolean;
   count: number;
   label: string;
   description: string;
+  isWedding: boolean;
 }) {
+  const activeBg = isWedding
+    ? "bg-[#fcf8f2] border-[#ebdccf] text-[#c4977a]"
+    : "bg-[#eef2f6] border-[#cbd3e0] text-[#475569]";
+  const activeBadge = isWedding
+    ? "bg-[#c4977a] text-white"
+    : "bg-[#2c3455] text-white";
+
   return (
     <div
       className={`rounded-2xl border px-3.5 py-3 transition-colors ${
         active
-          ? "border-primary/20 bg-primary/5 text-foreground"
+          ? `${activeBg}`
           : "border-border/40 bg-muted/20 text-muted-foreground"
       }`}
     >
@@ -1764,7 +1799,7 @@ function WorkflowStep({
         <p className="text-xs font-bold">{label}</p>
         <span
           className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-            active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+            active ? activeBadge : "bg-muted text-muted-foreground"
           }`}
         >
           {count}

@@ -54,7 +54,7 @@ const PANELS: Array<{ key: PanelKey; label: string; description: string; icon: t
 ];
 
 const selectClassName =
-  "h-11 w-full rounded-xl border border-[#e5e2da] bg-white px-4 text-sm text-[#2c3455] shadow-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#c4977a]";
+  "h-11 w-full rounded-xl border border-[#e5e2da] bg-white px-4 text-xs text-[#2c3455] shadow-sm transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#c4977a]";
 
 export function VendorWorkspace({
   viewerName,
@@ -123,9 +123,9 @@ export function VendorWorkspace({
   const ThemeIcon = theme.toneIcon;
   const inboxEmptyText =
     vendorPrimaryType === "WEDDING"
-      ? "새로운 웨딩 견적 요청이 없습니다 💍"
+      ? "새로운 웨딩 견적 요청이 없습니다."
       : vendorPrimaryType === "FUNERAL"
-      ? "새로운 장례 서비스 요청이 없습니다 🕯️"
+      ? "새로운 장례 서비스 요청이 없습니다."
       : "새 요청이 없습니다.";
 
   function getRequestMemo(reservation: ReservationItem | null | undefined) {
@@ -278,25 +278,25 @@ export function VendorWorkspace({
   return (
     <div className="grid gap-6">
       {/* ── Vendor header (Editorial & Premium) ──────────────────────────────────────────── */}
-      <section className="relative overflow-hidden rounded-2xl border border-[#e5e2da] bg-[#faf9f5] p-6 shadow-[0_4px_24px_rgba(0,0,0,0.015)] sm:p-8">
+      <section className="relative overflow-hidden rounded-2xl border border-[#e5e2da] bg-[#faf9f5] p-6 sm:p-8">
         <div className="relative grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           {/* Left: Company info + metrics */}
           <div className="space-y-6">
             <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white border border-[#ebdccf] text-[#c4977a] shadow-sm">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white border border-[#ebdccf] text-[#c4977a]">
                 <ThemeIcon className="h-5 w-5" />
               </div>
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge className="bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/60 hover:bg-[#fcf8f2]">파트너 워크스페이스</Badge>
+                  <Badge className="bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/60 hover:bg-[#fcf8f2] text-[10px]">파트너 워크스페이스</Badge>
                   {inboxReservations.length > 0 && (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[10px] font-bold text-amber-700">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[9px] font-bold text-amber-700">
                       신규 요청 {inboxReservations.length}건
                     </span>
                   )}
                 </div>
                 <h2 className="font-[var(--font-serif)] text-xl font-bold tracking-tight text-[#2c3455] sm:text-2xl">{companyName}</h2>
-                <p className="text-xs text-muted-foreground">정교한 행사 관리 및 파트너 컨시어지 대시보드입니다.</p>
+                <p className="text-xs text-[#8c8275]">정교한 행사 관리 및 파트너 컨시어지 대시보드입니다.</p>
               </div>
             </div>
 
@@ -310,11 +310,11 @@ export function VendorWorkspace({
           </div>
 
           {/* Right: Status panel */}
-          <div className="rounded-xl border border-[#ebdccf]/50 bg-white p-5 shadow-sm space-y-4">
+          <div className="rounded-xl border border-[#ebdccf]/50 bg-white p-5 space-y-4">
             <div>
-              <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">활성 파트너 계정</p>
-              <p className="mt-1 font-[var(--font-serif)] text-sm font-semibold text-[#2c3455]">{viewerName}</p>
-              <p className="text-xs text-muted-foreground">{viewerEmail}</p>
+              <p className="text-[9px] font-bold uppercase tracking-wider text-[#8c8275]">활성 파트너 계정</p>
+              <p className="mt-1 font-[var(--font-serif)] text-xs font-semibold text-[#2c3455]">{viewerName}</p>
+              <p className="text-[11px] text-[#8c8275]">{viewerEmail}</p>
             </div>
             
             <div className="space-y-1.5 border-t border-[#f2ece4] pt-3">
@@ -333,7 +333,7 @@ export function VendorWorkspace({
                     type="button"
                   >
                     <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-violet-700" />
-                    <p className="text-[11px] text-violet-800">
+                    <p className="text-[10px] text-violet-800 leading-relaxed">
                       사용자 수락 <span className="font-bold">{pendingConfirmationReservations.length}건</span> 대기 중. 최종 승인을 완료해 주세요.
                     </p>
                   </button>
@@ -345,7 +345,7 @@ export function VendorWorkspace({
                     type="button"
                   >
                     <TrendingUp className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-                    <p className="text-[11px] text-amber-800">
+                    <p className="text-[10px] text-amber-800">
                       신규 견적 요청 <span className="font-bold">{inboxReservations.length}건</span> 접수 대기 중.
                     </p>
                   </button>
@@ -356,23 +356,23 @@ export function VendorWorkspace({
         </div>
       </section>
 
-      {/* ── Pending Confirmations (Priority Task Queue) ─────────────────── */}
+      {/* ── Pending Confirmations (Priority Task Queue List) ─────────────────── */}
       {pendingConfirmationReservations.length > 0 && (
         <section
           ref={pendingConfirmationsRef}
-          className="scroll-mt-6 rounded-2xl border border-[#ebdccf] bg-[#fdfbf9] p-6 shadow-[0_4px_24px_rgba(196,151,122,0.04)]"
+          className="scroll-mt-6 rounded-2xl border border-[#ebdccf] bg-[#faf9f5]/55 p-6"
         >
-          <div className="mb-6 flex flex-wrap items-start justify-between gap-3 border-b border-[#f2ece4] pb-4">
+          <div className="mb-5 flex items-center justify-between border-b border-[#f2ece4] pb-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-violet-500 animate-pulse" />
-                <h2 className="font-[var(--font-serif)] text-lg font-bold text-[#2c3455]">예약 최종 확정 필요</h2>
-                <Badge className="bg-violet-50 text-violet-700 border border-violet-100 hover:bg-violet-50">
-                  {pendingConfirmationReservations.length}건
+                <h2 className="font-[var(--font-serif)] text-base font-bold text-[#2c3455]">오늘 처리할 일: 예약 최종 확정</h2>
+                <Badge className="bg-violet-50 text-violet-700 border border-violet-100 hover:bg-violet-50 text-[10px]">
+                  {pendingConfirmationReservations.length}건 대기
                 </Badge>
               </div>
-              <p className="text-xs text-muted-foreground">
-                사용자가 견적 제안을 수락했습니다. 아래 목록을 검토한 후 최종 예약을 확정해 주세요.
+              <p className="text-xs text-[#8c8275]">
+                사용자가 제안을 최종 수락했습니다. 아래 목록의 최종 일정 및 상세 요건을 검토하신 후 예약을 최종 승인해 주세요.
               </p>
             </div>
           </div>
@@ -385,14 +385,19 @@ export function VendorWorkspace({
               return (
                 <article
                   key={r.id}
-                  className="py-6 first:pt-0 last:pb-0 flex flex-col md:flex-row md:items-center justify-between gap-6"
+                  className="py-5 first:pt-0 last:pb-0 flex flex-col md:flex-row md:items-center justify-between gap-6"
                 >
                   <div className="space-y-3 flex-1">
                     <div className="space-y-1">
-                      <p className="font-[var(--font-serif)] text-base font-bold text-[#2c3455]">
-                        {r.eventPlan.title ?? "(제목 없음)"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1 rounded bg-violet-50 text-violet-700 px-2 py-0.5 text-[9px] font-bold border border-violet-100">
+                          수락 완료 · 최종 확정 필요
+                        </span>
+                        <p className="font-[var(--font-serif)] text-sm font-bold text-[#2c3455]">
+                          {r.eventPlan.title ?? "(제목 없음)"}
+                        </p>
+                      </div>
+                      <p className="text-[11px] text-[#8c8275]">
                         {getQuoteServiceModuleLabel({
                           eventType: r.eventPlan.type,
                           serviceCategory: r.serviceCategory,
@@ -405,51 +410,47 @@ export function VendorWorkspace({
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
                       <div>
-                        <span className="text-[10px] text-muted-foreground block">희망 날짜</span>
-                        <span className="font-medium text-[#2c3455]">{formatDate(r.serviceDate)}</span>
+                        <span className="text-[9px] text-[#8c8275] block">희망 날짜</span>
+                        <span className="font-semibold text-[#2c3455]">{formatDate(r.serviceDate)}</span>
                       </div>
                       <div>
-                        <span className="text-[10px] text-muted-foreground block">장소</span>
-                        <span className="font-medium text-[#2c3455]">{r.eventPlan.region ?? "미정"}</span>
+                        <span className="text-[9px] text-[#8c8275] block">행사 지역</span>
+                        <span className="font-semibold text-[#2c3455]">{r.eventPlan.region ?? "미정"}</span>
                       </div>
                       <div>
-                        <span className="text-[10px] text-muted-foreground block">참석 인원</span>
-                        <span className="font-medium text-[#2c3455]">{r.guestCount ? `${r.guestCount}명` : "미정"}</span>
+                        <span className="text-[9px] text-[#8c8275] block">예상 하객</span>
+                        <span className="font-semibold text-[#2c3455]">{r.guestCount ? `${r.guestCount}명` : "미정"}</span>
                       </div>
                       <div>
-                        <span className="text-[10px] text-muted-foreground block">제안 총액</span>
+                        <span className="text-[9px] text-[#8c8275] block">제안 금액</span>
                         <span className="font-bold text-[#c4977a]">{formatCurrency(amount)}</span>
                       </div>
                     </div>
 
                     {r.vendorConfirmationDueAt && (
-                      <div className="flex items-center gap-1.5 text-xs text-violet-700 font-medium">
+                      <div className="flex items-center gap-1.5 text-xs text-violet-700 font-semibold">
                         <Clock className="h-3.5 w-3.5" />
-                        <span>확정 기한: {formatDate(r.vendorConfirmationDueAt)} 까지</span>
+                        <span>확정 기한: {formatDate(r.vendorConfirmationDueAt)} 까지 (SLA 3일)</span>
                       </div>
                     )}
 
                     {requestMemo && (
-                      <div className="rounded-lg bg-white border border-[#ebdccf]/40 p-3 text-xs text-[#2c3455] space-y-1 max-w-2xl">
-                        <span className="text-[9px] font-bold text-[#c4977a] uppercase tracking-wider block">사용자 요청 메시지</span>
-                        <p className="leading-relaxed">{requestMemo}</p>
+                      <div className="rounded-xl bg-white border border-[#ebdccf]/40 p-3.5 text-xs text-[#2c3455] space-y-1 max-w-2xl">
+                        <span className="text-[9px] font-bold text-[#c4977a] uppercase tracking-wider block">사용자 요청사항</span>
+                        <p className="leading-relaxed font-normal">{requestMemo}</p>
                       </div>
                     )}
                   </div>
 
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
-                    <span className="inline-flex items-center gap-1 rounded-full border border-violet-100 bg-violet-50/50 px-2.5 py-1 text-[11px] font-semibold text-violet-700">
-                      <CheckCircle2 className="h-3 w-3" />
-                      사용자 수락 상태
-                    </span>
+                  <div className="flex shrink-0">
                     <Button
                       disabled={isPending || busyReservationId === r.id}
                       onClick={() => confirmAcceptedReservation(r.id)}
                       size="sm"
-                      className="bg-[#2c3455] text-white hover:bg-[#1e2645] transition-all duration-200"
+                      className="bg-[#2c3455] text-white hover:bg-[#1e2645] transition-colors duration-150 rounded-xl h-9 text-xs font-semibold px-4"
                     >
                       <BadgeCheck className="mr-1 h-3.5 w-3.5" />
-                      {busyReservationId === r.id ? "확정 중..." : "예약 최종 확정"}
+                      {busyReservationId === r.id ? "승인 중..." : "예약 최종 확정"}
                     </Button>
                   </div>
                 </article>
@@ -468,7 +469,7 @@ export function VendorWorkspace({
           return (
             <button
               key={panel.key}
-              className={`flex items-center gap-2 px-6 py-3 text-xs font-semibold tracking-wide transition-all relative border-b-2 -mb-0.5 focus-visible:outline-none ${
+              className={`flex items-center gap-2 px-5 py-3 text-xs font-semibold tracking-wide transition-all relative border-b-2 -mb-0.5 focus-visible:outline-none ${
                 isActive
                   ? "border-[#c4977a] text-[#2c3455]"
                   : "border-transparent text-muted-foreground hover:text-[#2c3455]"
@@ -497,7 +498,7 @@ export function VendorWorkspace({
           <div className="rounded-2xl border border-[#e5e2da] bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center justify-between">
               <p className="font-[var(--font-serif)] text-sm font-bold text-[#2c3455]">새 견적 요청 목록</p>
-              <Badge className="bg-[#faf6f2] text-[#c4977a] border border-[#ebdccf]/50">{inboxReservations.length}건 대기</Badge>
+              <Badge className="bg-[#faf6f2] text-[#c4977a] border border-[#ebdccf]/50 text-[10px]">{inboxReservations.length}건 대기</Badge>
             </div>
 
             <div className="grid gap-3">
@@ -505,7 +506,7 @@ export function VendorWorkspace({
                 inboxReservations.map((r) => (
                   <article
                     key={r.id}
-                    className={`rounded-xl border p-4 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#c4977a] ${
+                    className={`rounded-xl border p-4 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#c4977a] ${
                       selectedReservationId === r.id
                         ? "border-[#c4977a] bg-[#faf9f5]"
                         : "border-[#e5e2da]/70 bg-white hover:border-[#ebdccf] hover:bg-[#faf9f5]/30"
@@ -518,14 +519,14 @@ export function VendorWorkspace({
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1">
-                          <p className="font-semibold text-sm text-[#2c3455]">
+                          <p className="font-semibold text-xs text-[#2c3455]">
                             {getQuoteServiceModuleLabel({
                               eventType: r.eventPlan.type,
                               serviceCategory: r.serviceCategory,
                               serviceName: r.serviceName
                             })}
                           </p>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-[11px] text-muted-foreground">
                             {r.eventPlan.title} · {getEventTypeLabel(r.eventPlan.type ?? "ETC")}
                           </p>
                         </div>
@@ -535,16 +536,16 @@ export function VendorWorkspace({
                           ) : (
                             <Shield className="h-3 w-3 text-indigo-500" />
                           )}
-                          <Badge className="bg-[#faf6f2] text-[#c4977a] border border-[#ebdccf]/40 text-[10px]">{getQuoteStatusMeta(r).label}</Badge>
+                          <Badge className="bg-[#faf6f2] text-[#c4977a] border border-[#ebdccf]/40 text-[9px] font-bold">{getQuoteStatusMeta(r).label}</Badge>
                         </div>
                       </div>
                     </button>
                     <button
-                      className="mt-3.5 flex w-full items-center justify-between gap-3 rounded-lg border border-[#ebdccf] bg-[#fcfaf7] px-3.5 py-2.5 text-left text-xs font-semibold text-[#a87f63] transition-colors hover:bg-[#faf6f2] focus-visible:outline-none"
+                      className="mt-3 flex w-full items-center justify-between gap-3 rounded-lg border border-[#ebdccf]/60 bg-[#fcfaf7] px-3.5 py-2.5 text-left text-xs font-semibold text-[#a87f63] transition-colors hover:bg-[#faf6f2] focus-visible:outline-none"
                       onClick={() => loadReservation(r, "proposals")}
                       type="button"
                     >
-                      <span className="font-normal text-muted-foreground">가능 일정과 금액을 입력하세요.</span>
+                      <span className="font-normal text-muted-foreground/75">가능 일정과 금액을 입력하세요.</span>
                       <span className="inline-flex shrink-0 items-center gap-1">
                         <MessageSquareQuote className="h-3.5 w-3.5" />
                         견적 제안 작성
@@ -553,14 +554,14 @@ export function VendorWorkspace({
                   </article>
                 ))
               ) : (
-                <EmptyState emoji="📭" title={inboxEmptyText} description="새 견적 요청이 들어오면 이곳에 표시됩니다." />
+                <EmptyState emoji="📭" title={inboxEmptyText} description="새 견적 요청이 접수되면 이곳에 표시됩니다." />
               )}
             </div>
           </div>
 
           {/* Request detail */}
           <div className="rounded-2xl border border-[#e5e2da] bg-[#faf9f5] p-6 shadow-sm">
-            <h3 className="mb-5 font-[var(--font-serif)] text-sm font-bold text-[#2c3455]">상세 내역</h3>
+            <h3 className="mb-5 font-[var(--font-serif)] text-sm font-bold text-[#2c3455]">상세 요청 내역</h3>
             <div className="grid gap-3">
               {selectedReservation ? (
                 <>
@@ -584,7 +585,7 @@ export function VendorWorkspace({
                   )}
                   {selectedReservation.selectedServiceOptions && selectedReservation.selectedServiceOptions.length > 0 && (
                     <div className="rounded-xl border border-[#ebdccf]/50 bg-white p-4">
-                      <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">선택 세부 항목</p>
+                      <p className="mb-3 text-[9px] font-bold uppercase tracking-wider text-[#8c8275]">선택 세부 항목</p>
                       <div className="space-y-2">
                         {selectedReservation.selectedServiceOptions.map((opt, i) => (
                           <div key={i} className="flex items-center justify-between text-xs border-b border-[#f2ece4]/40 pb-2 last:border-0 last:pb-0">
@@ -605,7 +606,7 @@ export function VendorWorkspace({
                   )}
                 </>
               ) : (
-                <EmptyState emoji="👆" title="요청을 선택해 주세요." description="왼쪽에서 요청을 클릭하면 상세 정보가 보입니다." />
+                <EmptyState emoji="👆" title="요청을 선택해 주세요." description="왼쪽 목록에서 요청을 클릭하면 상세 요건을 확인하실 수 있습니다." />
               )}
             </div>
           </div>
@@ -618,7 +619,7 @@ export function VendorWorkspace({
           {/* Response form */}
           <div className="rounded-2xl border border-[#e5e2da] bg-[#faf9f5] p-6 shadow-sm">
             <div className="mb-5 flex items-center">
-              <Badge className="bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/60">견적/제안서 작성</Badge>
+              <Badge className="bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/60 text-[10px]">견적/제안서 작성</Badge>
             </div>
 
             <div className="grid gap-5">
@@ -658,7 +659,7 @@ export function VendorWorkspace({
                     </p>
                   )}
                   <Button
-                    className="mt-2 bg-violet-600 text-white hover:bg-violet-700 transition-all"
+                    className="mt-2 bg-violet-600 text-white hover:bg-violet-700 transition-all rounded-xl text-xs h-9 font-semibold"
                     disabled={busyReservationId === selectedProposalReservation.id}
                     onClick={() => confirmAcceptedReservation(selectedProposalReservation.id)}
                     size="sm"
@@ -672,7 +673,7 @@ export function VendorWorkspace({
               {selectedProposalRequestMemo && (
                 <div className="rounded-xl border border-[#ebdccf]/40 bg-white p-4 text-xs text-[#2c3455] space-y-1">
                   <p className="text-[9px] font-bold text-[#c4977a] uppercase tracking-wider">사용자 특별 요청 사항</p>
-                  <p className="leading-relaxed">{selectedProposalRequestMemo}</p>
+                  <p className="leading-relaxed font-normal">{selectedProposalRequestMemo}</p>
                 </div>
               )}
 
@@ -684,7 +685,7 @@ export function VendorWorkspace({
                     disabled={isSelectedAcceptedProposal}
                     value={proposalForm.serviceDate}
                     onChange={(e) => setProposalForm((c) => ({ ...c, serviceDate: e.target.value }))}
-                    className="rounded-xl border-[#e5e2da] bg-white text-xs h-10"
+                    className="rounded-xl border-[#e5e2da] bg-white text-xs h-10 focus-visible:ring-1 focus-visible:ring-[#c4977a]"
                   />
                 </Field>
                 <Field label="견적 제안 금액 (원)" name="proposalAmount">
@@ -694,7 +695,7 @@ export function VendorWorkspace({
                     disabled={isSelectedAcceptedProposal}
                     value={proposalForm.proposalAmount}
                     onChange={(e) => setProposalForm((c) => ({ ...c, proposalAmount: e.target.value }))}
-                    className="rounded-xl border-[#e5e2da] bg-white text-xs h-10"
+                    className="rounded-xl border-[#e5e2da] bg-white text-xs h-10 focus-visible:ring-1 focus-visible:ring-[#c4977a]"
                   />
                 </Field>
               </div>
@@ -706,7 +707,7 @@ export function VendorWorkspace({
                   disabled={isSelectedAcceptedProposal}
                   value={proposalForm.notes}
                   onChange={(e) => setProposalForm((c) => ({ ...c, notes: e.target.value }))}
-                  className="rounded-xl border-[#e5e2da] bg-white text-xs min-h-[90px] resize-none"
+                  className="rounded-xl border-[#e5e2da] bg-white text-xs min-h-[90px] resize-none focus-visible:ring-1 focus-visible:ring-[#c4977a]"
                 />
               </Field>
 
@@ -714,7 +715,7 @@ export function VendorWorkspace({
                 <Button
                   disabled={isPending || isSelectedAcceptedProposal || busyReservationId === proposalForm.reservationId}
                   onClick={() => updateReservation("quote")}
-                  className="flex-1 bg-[#2c3455] text-white hover:bg-[#1e2645] transition-all rounded-xl h-10"
+                  className="flex-1 bg-[#2c3455] text-white hover:bg-[#1e2645] transition-all rounded-xl h-10 text-xs font-semibold"
                 >
                   <MessageSquareQuote className="mr-1.5 h-4 w-4" />
                   {busyReservationId === proposalForm.reservationId ? "제안 전송 중..." : "견적 제안 전송"}
@@ -723,7 +724,7 @@ export function VendorWorkspace({
                   disabled={isPending || isSelectedAcceptedProposal || busyReservationId === proposalForm.reservationId}
                   onClick={() => updateReservation("decline")}
                   variant="destructive"
-                  className="rounded-xl h-10"
+                  className="rounded-xl h-10 text-xs font-semibold"
                 >
                   <XCircle className="mr-1.5 h-4 w-4" />
                   일정 불가 회신
@@ -741,21 +742,21 @@ export function VendorWorkspace({
                   <div key={r.id} className="rounded-xl border border-[#e5e2da]/70 bg-white p-4 transition-all duration-200 hover:border-[#ebdccf] hover:shadow-[0_4px_16px_rgba(0,0,0,0.01)]">
                     <div className="flex items-start justify-between gap-3">
                       <div className="space-y-1">
-                        <p className="font-semibold text-sm text-[#2c3455]">
+                        <p className="font-semibold text-xs text-[#2c3455]">
                           {getQuoteServiceModuleLabel({
                             eventType: r.eventPlan.type,
                             serviceCategory: r.serviceCategory,
                             serviceName: r.serviceName
                           })}
                         </p>
-                        <p className="text-xs text-muted-foreground">{r.eventPlan.title}</p>
+                        <p className="text-[11px] text-muted-foreground">{r.eventPlan.title}</p>
                       </div>
-                      <Badge className={r.quoteRequestStatus === "ACCEPTED" ? "bg-violet-50 text-violet-700 border border-violet-100" : "bg-[#faf6f2] text-[#c4977a] border border-[#ebdccf]/50"}>
+                      <Badge className={r.quoteRequestStatus === "ACCEPTED" ? "bg-violet-50 text-violet-700 border border-violet-100 text-[9px] font-bold" : "bg-[#faf6f2] text-[#c4977a] border border-[#ebdccf]/50 text-[9px] font-bold"}>
                         {r.quoteRequestStatus === "ACCEPTED" ? "사용자 수락 완료" : "제안 발송 완료"}
                       </Badge>
                     </div>
                     
-                    <div className="mt-3.5 grid gap-1.5 text-xs text-muted-foreground border-t border-[#f2ece4]/40 pt-3">
+                    <div className="mt-3.5 grid gap-1.5 text-xs text-[#8c8275] border-t border-[#f2ece4]/40 pt-3">
                       <div className="flex items-center gap-2 text-[#2c3455]"><CalendarDays className="h-3.5 w-3.5 text-muted-foreground/60" />{formatDate(r.serviceDate)}</div>
                       <div className="flex items-center gap-2 text-[#2c3455]"><Wallet className="h-3.5 w-3.5 text-muted-foreground/60" />{formatCurrency(r.confirmedAmount ?? r.quotedAmount)}</div>
                       {r.quoteRequestStatus === "ACCEPTED" && r.vendorConfirmationDueAt && (
@@ -772,19 +773,19 @@ export function VendorWorkspace({
                           disabled={isPending || busyReservationId === r.id}
                           onClick={() => confirmAcceptedReservation(r.id)}
                           size="sm"
-                          className="bg-[#2c3455] text-white hover:bg-[#1e2645] transition-all"
+                          className="bg-[#2c3455] text-white hover:bg-[#1e2645] transition-all rounded-xl text-xs h-8 font-semibold px-3"
                         >
                           <BadgeCheck className="mr-1 h-3.5 w-3.5" />
                           {busyReservationId === r.id ? "확정 중..." : "예약 최종 확정"}
                         </Button>
                       ) : (
-                        <span className="text-[10px] text-muted-foreground">사용자의 수락 및 피드백 대기 중</span>
+                        <span className="text-[10px] text-[#8c8275]/60">사용자의 수락 및 피드백 대기 중</span>
                       )}
                     </div>
                   </div>
                 ))
               ) : (
-                <EmptyState emoji="💌" title="진행 중인 견적이 없습니다." description="견적 제안을 전송하면 이곳에 리스팅됩니다." />
+                <EmptyState emoji="💌" title="진행 중인 견적이 없습니다." description="견적 제안을 회신하시면 이곳에서 모니터링하실 수 있습니다." />
               )}
             </div>
           </div>
@@ -796,13 +797,13 @@ export function VendorWorkspace({
         <section className="animate-fade-in rounded-2xl border border-[#e5e2da] bg-white p-6 shadow-sm">
           <div className="mb-5 flex items-center justify-between">
             <p className="font-[var(--font-serif)] text-sm font-bold text-[#2c3455]">최종 확정된 예약 일정</p>
-            <Badge className="bg-[#faf6f2] text-[#c4977a] border border-[#ebdccf]/50">{confirmedReservations.length}건 확정</Badge>
+            <Badge className="bg-[#faf6f2] text-[#c4977a] border border-[#ebdccf]/50 text-[10px]">{confirmedReservations.length}건 확정</Badge>
           </div>
 
           {confirmedReservations.length > 0 && (
-            <div className="mb-6 rounded-xl border border-[#ebdccf]/40 bg-[#fdfbf9] p-4 flex justify-between items-center">
+            <div className="mb-6 rounded-xl border border-[#ebdccf]/40 bg-[#fdfbf9] p-4 flex justify-between items-center shadow-[0_1px_4px_rgba(0,0,0,0.005)]">
               <span className="text-xs font-semibold text-muted-foreground">확정 완료 계약 총액</span>
-              <span className="font-[var(--font-serif)] text-lg font-bold text-[#c4977a]">{formatCurrency(confirmedTotal)}</span>
+              <span className="font-[var(--font-serif)] text-base font-bold text-[#c4977a]">{formatCurrency(confirmedTotal)}</span>
             </div>
           )}
 
@@ -811,24 +812,24 @@ export function VendorWorkspace({
               confirmedReservations.map((r) => (
                 <article
                   key={r.id}
-                  className="rounded-xl border border-[#e5e2da]/70 bg-white p-5 transition-all duration-200 hover:border-[#ebdccf] hover:shadow-[0_4px_16px_rgba(0,0,0,0.01)]"
+                  className="rounded-xl border border-[#e5e2da]/70 bg-white p-5 transition-all duration-200 hover:border-[#ebdccf]"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#f2ece4]/40 pb-3 mb-3">
                     <div className="space-y-1">
                       <div className="flex flex-wrap gap-1.5">
-                        <Badge className="bg-[#eafaf1] text-[#0f9652] border border-emerald-100 hover:bg-[#eafaf1] text-[10px]">
+                        <Badge className="bg-[#eafaf1] text-[#0f9652] border border-emerald-100 hover:bg-[#eafaf1] text-[9px] font-bold">
                           {getQuoteStatusMeta(r).label}
                         </Badge>
-                        <Badge variant="outline" className="text-[10px] border-[#e5e2da]/80 text-muted-foreground">{getEventTypeLabel(r.eventPlan.type ?? "ETC")}</Badge>
+                        <Badge variant="outline" className="text-[9px] border-[#e5e2da]/80 text-[#8c8275] font-bold">{getEventTypeLabel(r.eventPlan.type ?? "ETC")}</Badge>
                       </div>
-                      <p className="font-semibold text-sm text-[#2c3455] pt-1">
+                      <p className="font-semibold text-xs text-[#2c3455] pt-1">
                         {getQuoteServiceModuleLabel({
                           eventType: r.eventPlan.type,
                           serviceCategory: r.serviceCategory,
                           serviceName: r.serviceName
                         })}
                       </p>
-                      <p className="text-xs text-muted-foreground">{r.eventPlan.title}</p>
+                      <p className="text-[11px] text-muted-foreground">{r.eventPlan.title}</p>
                     </div>
                     <Button
                       disabled={isPending || busyReservationId === r.id || r.status === "COMPLETED"}
@@ -852,7 +853,7 @@ export function VendorWorkspace({
               ))
             ) : (
               <div className="col-span-2">
-                <EmptyState emoji="✨" title="확정된 예약 일정이 없습니다." description="최종 예약을 승인하면 여기에 스케줄링됩니다." />
+                <EmptyState emoji="✨" title="확정된 예약 일정이 없습니다." description="최종 예약을 확정하시면 스케줄 목록에 반영됩니다." />
               </div>
             )}
           </div>
@@ -878,7 +879,7 @@ function MetricCard({ icon: Icon, label, value, highlight = false }: {
   highlight?: boolean;
 }) {
   return (
-    <div className={`relative rounded-xl border bg-white p-4 shadow-[0_2px_8px_rgba(0,0,0,0.01)] transition-all duration-200 hover:-translate-y-0.5 ${highlight ? "border-[#ebdccf] ring-1 ring-[#ebdccf]/40" : "border-[#e5e2da]/70"}`}>
+    <div className={`relative rounded-xl border bg-white p-4 transition-all duration-150 hover:-translate-y-0.5 ${highlight ? "border-[#ebdccf] ring-1 ring-[#ebdccf]/30" : "border-[#e5e2da]/70"}`}>
       {highlight && (
         <span className="absolute -right-0.5 -top-0.5 flex h-2 w-2">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
@@ -896,20 +897,20 @@ function MetricCard({ icon: Icon, label, value, highlight = false }: {
 
 function StatusRow({ label, done }: { label: string; done: boolean }) {
   return (
-    <div className="flex items-center gap-2.5 rounded-lg border border-[#e5e2da]/30 bg-[#faf9f5]/50 px-3 py-2 transition-all duration-200 hover:bg-[#faf9f5]">
-      <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors duration-200 ${
+    <div className="flex items-center gap-2.5 rounded-lg border border-[#e5e2da]/30 bg-[#faf9f5]/50 px-3 py-2 transition-all duration-150 hover:bg-[#faf9f5]">
+      <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors duration-150 ${
         done ? "bg-[#c4977a] text-white" : "bg-[#f2ece4] text-[#8c8275]"
       }`}>
         {done ? <BadgeCheck className="h-3 w-3" /> : <ClipboardList className="h-3 w-3" />}
       </div>
-      <p className={`text-xs font-medium transition-colors ${done ? "text-[#2c3455]" : "text-muted-foreground"}`}>{label}</p>
+      <p className={`text-xs font-medium transition-colors duration-150 ${done ? "text-[#2c3455]" : "text-muted-foreground"}`}>{label}</p>
     </div>
   );
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-[#e5e2da]/50 bg-white px-4 py-3 transition-all duration-200 hover:bg-[#faf9f5]/30">
+    <div className="rounded-xl border border-[#e5e2da]/50 bg-white px-4 py-3 transition-all duration-150 hover:bg-[#faf9f5]/30">
       <p className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-wider">{label}</p>
       <p className="mt-0.5 text-xs font-semibold text-[#2c3455]">{value}</p>
     </div>
@@ -918,10 +919,10 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 
 function EmptyState({ title, description, emoji }: { title: string; description: string; emoji?: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-[#ebdccf] bg-[#fdfbf9]/50 p-8 text-center max-w-md mx-auto">
+    <div className="rounded-xl border border-dashed border-[#ebdccf] bg-[#faf9f5]/30 p-8 text-center max-w-md mx-auto">
       {emoji && <p className="mb-3 text-2xl">{emoji}</p>}
       <p className="text-xs font-semibold text-[#2c3455]">{title}</p>
-      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{description}</p>
+      <p className="mt-1.5 text-xs leading-relaxed text-[#8c8275]">{description}</p>
     </div>
   );
 }
@@ -929,7 +930,7 @@ function EmptyState({ title, description, emoji }: { title: string; description:
 function Notice({ tone, children }: { tone: "success" | "error"; children: ReactNode }) {
   return (
     <div className={`animate-slide-up rounded-xl border px-4 py-3 text-xs font-medium ${
-      tone === "success" ? "border-emerald-100 bg-emerald-50/50 text-emerald-800" : "border-rose-100 bg-rose-50/50 text-rose-800"
+      tone === "success" ? "border-emerald-100 bg-[#eafaf1]/40 text-emerald-800" : "border-rose-100 bg-rose-50/50 text-rose-800"
     }`}>
       {children}
     </div>

@@ -43,36 +43,36 @@ export default async function HomePage() {
   const publicVendorHref = isVendor ? "/vendor/dashboard" : "/vendors";
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-[#faf9f5] text-[#2c3455] selection:bg-[#ebdccf] selection:text-[#2c3455]">
       {/* ─── Sticky Nav ──────────────────────────────────────── */}
-      <header className="sticky top-0 z-50 border-b border-white/50 bg-white/88 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="relative h-8 w-[52px] overflow-hidden transition-transform duration-200 group-hover:scale-105">
-              <Image src="/yeon-logo.png" alt="YeON" fill sizes="52px" className="object-contain" />
+      <header className="sticky top-0 z-50 border-b border-[#e5e2da] bg-[#faf9f5]/85 backdrop-blur-md transition-colors duration-200">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="relative h-7 w-[46px] overflow-hidden transition-opacity duration-150 group-hover:opacity-85">
+              <Image src="/yeon-logo.png" alt="YeON" fill sizes="46px" priority className="object-contain" />
             </div>
             <div className="leading-none">
-              <p className="text-[10px] uppercase tracking-[0.32em] text-muted-foreground/70">YeON</p>
-              <p className="font-[var(--font-display)] text-sm font-semibold text-foreground">사람과 마음을 잇다</p>
+              <p className="text-[9px] uppercase tracking-[0.35em] text-[#8c8275] font-semibold">YeON</p>
+              <p className="font-[var(--font-serif)] text-xs font-bold text-[#2c3455] mt-0.5">사람과 마음을 잇다</p>
             </div>
           </Link>
 
-          <nav className="flex items-center gap-1.5">
+          <nav className="flex items-center gap-2">
             {!isVendor && (
-              <Link className={buttonVariants({ variant: "ghost", size: "sm" })} href="/vendors">업체 찾기</Link>
+              <Link className={buttonVariants({ variant: "ghost", size: "sm" }) + " text-xs font-medium text-[#2c3455] hover:text-[#c4977a] hover:bg-transparent"} href="/vendors">업체 찾기</Link>
             )}
             {isLoggedIn ? (
               <>
-                <Link className={buttonVariants({ variant: "ghost", size: "sm" })} href={defaultWorkspaceHref}>
+                <Link className={buttonVariants({ variant: "ghost", size: "sm" }) + " text-xs font-medium text-[#2c3455] hover:text-[#c4977a] hover:bg-transparent"} href={defaultWorkspaceHref}>
                   {isVendor ? "업체 대시보드" : "내 플랜"}
                 </Link>
-                <Link className={buttonVariants({ variant: "ghost", size: "sm" })} href="/account">계정</Link>
-                <LogoutButton size="sm" variant="ghost">로그아웃</LogoutButton>
+                <Link className={buttonVariants({ variant: "ghost", size: "sm" }) + " text-xs font-medium text-[#2c3455] hover:text-[#c4977a] hover:bg-transparent"} href="/account">계정</Link>
+                <LogoutButton size="sm" variant="ghost" className="text-xs font-medium text-[#2c3455] hover:text-[#c4977a] hover:bg-transparent">로그아웃</LogoutButton>
               </>
             ) : (
               <>
-                <Link className={buttonVariants({ variant: "ghost", size: "sm" })} href="/login">로그인</Link>
-                <Link className={buttonVariants({ variant: "default", size: "sm" })} href="/signup">시작하기</Link>
+                <Link className={buttonVariants({ variant: "ghost", size: "sm" }) + " text-xs font-medium text-[#2c3455] hover:text-[#c4977a] hover:bg-transparent"} href="/login">로그인</Link>
+                <Link className="inline-flex h-8 items-center justify-center rounded-xl bg-[#2c3455] px-4 text-xs font-semibold text-white transition-all duration-150 hover:bg-[#1e2645] active:scale-[0.98]" href="/signup">시작하기</Link>
               </>
             )}
           </nav>
@@ -80,143 +80,115 @@ export default async function HomePage() {
       </header>
 
       <main>
-        {/* ─── Hero (100vh) ────────────────────────────────────── */}
-        <section
-          className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 text-center"
-          style={{
-            background: "radial-gradient(ellipse at 20% 20%, #F7EFE5 0%, transparent 52%), radial-gradient(ellipse at 80% 80%, #2C3455 0%, transparent 52%), linear-gradient(135deg, #F7EFE5 0%, #e8ddd0 28%, #3a4468 68%, #2C3455 100%)"
-          }}
-        >
-          {/* Soft ambient orbs behind logo */}
-          <div
-            className="pointer-events-none absolute left-1/2 top-[38%] -translate-x-1/2 -translate-y-1/2 h-[480px] w-[640px] opacity-20"
-            style={{
-              background: "radial-gradient(ellipse 60% 40% at 50% 50%, #F7EFE5 0%, rgba(196,151,122,0.4) 40%, transparent 70%)"
-            }}
-          />
-          <div
-            className="pointer-events-none absolute left-1/2 top-[38%] -translate-x-1/2 -translate-y-1/2 h-[360px] w-[500px] opacity-15"
-            style={{
-              background: "radial-gradient(ellipse 55% 35% at 50% 50%, #2C3455 0%, transparent 65%)"
-            }}
-          />
-
-          {/* ── Logo ── */}
-          <div className="relative z-10 mb-6 animate-logo-entrance">
+        {/* ─── Hero (Quiet Luxury Spacious Banner) ─────────────────── */}
+        <section className="relative flex min-h-[92vh] flex-col items-center justify-center px-6 text-center bg-[#faf9f5] border-b border-[#e5e2da]">
+          {/* Subtle geometric line art background */}
+          <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: "linear-gradient(to right, #2c3455 1px, transparent 1px), linear-gradient(to bottom, #2c3455 1px, transparent 1px)", backgroundSize: "60px 60px" }} />
+          
+          {/* Logo - Elegant & Compact */}
+          <div className="relative z-10 mb-8 transition-opacity duration-500 hover:opacity-95">
             <Image
               src="/yeon-logo.png"
               alt="YeON"
-              width={340}
-              height={207}
+              width={180}
+              height={110}
               priority
-              className="animate-logo-float animate-logo-glow w-[220px] sm:w-[290px] lg:w-[340px] h-auto"
+              className="w-[140px] sm:w-[160px] lg:w-[180px] h-auto object-contain mx-auto"
             />
           </div>
 
-          {/* Brand name */}
-          <div className="relative z-10 mb-7 animate-fade-in delay-300 flex flex-col items-center gap-1">
-            <p
-              className="text-5xl font-bold tracking-[0.06em] text-white/95 sm:text-6xl"
-              style={{ fontFamily: "var(--font-serif)", textShadow: "0 2px 24px rgba(44,52,85,0.5)" }}
-            >
+          {/* Chinese Character Emblem */}
+          <div className="relative z-10 mb-5 flex flex-col items-center gap-1">
+            <p className="text-4xl font-light tracking-[0.1em] text-[#2c3455] sm:text-5xl font-[var(--font-serif)]">
               緣
             </p>
-            <p className="font-[var(--font-display)] text-[11px] font-bold uppercase tracking-[0.5em] text-white/50">
+            <p className="text-[10px] font-bold uppercase tracking-[0.6em] text-[#8c8275] mt-1">
               YeON
             </p>
           </div>
 
-          {/* Main copy */}
+          {/* Main Copy */}
           <AnimatedHeroContent>
-            <div className="relative z-10 mb-6 max-w-xl">
-              <h1
-                className="text-3xl font-bold leading-[1.3] tracking-[-0.02em] text-white sm:text-4xl lg:text-[2.75rem]"
-                style={{ fontFamily: "var(--font-serif)", textShadow: "0 4px 24px rgba(44,52,85,0.4)" }}
-              >
-                결혼, 장례,<br />
-                모든 경조사의<br />
-                시작과 끝을 함께합니다
+            <div className="relative z-10 mb-6 max-w-2xl mx-auto">
+              <h1 className="text-3xl font-normal leading-[1.35] tracking-tight text-[#2c3455] sm:text-4xl lg:text-[2.75rem] font-[var(--font-serif)]">
+                중요한 순간을<br />
+                더 차분하고 정확하게 준비합니다
               </h1>
             </div>
 
-            {/* Sub copy */}
-            <p className="relative z-10 mb-10 max-w-sm text-sm leading-7 text-white/60 sm:text-base sm:max-w-md">
-              AI 추천부터 업체 연결·예약 확정까지,
-              하나의 플랫폼에서 경조사를 완성하세요.
+            {/* Sub Copy */}
+            <p className="relative z-10 mb-10 max-w-md mx-auto text-xs leading-relaxed text-[#8c8275] sm:text-sm">
+              yeON이 준비하신 플랜의 가장 알맞은 기본 구성을 먼저 정리해 드립니다.<br className="hidden sm:block" />
+              과밀한 조립 대신, 품격 있는 컨시어지 서비스처럼 확인만 해보세요.
             </p>
 
-            {/* CTA buttons */}
-            <div className="relative z-10 mb-16 flex flex-wrap items-center justify-center gap-3">
-            <Link
-              href={isLoggedIn ? defaultWorkspaceHref : "/signup"}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl px-7 text-sm font-semibold transition-all duration-200 hover:-translate-y-1 hover:shadow-xl active:translate-y-0"
-              style={{ background: "#C4977A", color: "#fff", boxShadow: "0 16px 40px -12px rgba(196,151,122,0.7)" }}
-            >
-              시작하기
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link
-              href={publicVendorHref}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/30 bg-white/10 px-7 text-sm font-semibold text-white backdrop-blur-sm transition-all duration-200 hover:-translate-y-1 hover:bg-white/20 active:translate-y-0"
-            >
-              더 알아보기
-            </Link>
-          </div>
+            {/* CTA Buttons */}
+            <div className="relative z-10 mb-12 flex items-center justify-center gap-3">
+              <Link
+                href={isLoggedIn ? defaultWorkspaceHref : "/signup"}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#2c3455] px-6 text-xs font-bold text-white transition-all duration-150 hover:bg-[#1e2645] active:scale-[0.98] shadow-sm"
+              >
+                컨시어지 시작하기
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+              <Link
+                href={publicVendorHref}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#e5e2da] bg-white/50 px-6 text-xs font-semibold text-[#2c3455] backdrop-blur-sm transition-all duration-150 hover:bg-white hover:border-[#8c8275] active:scale-[0.98]"
+              >
+                파트너 목록 보기
+              </Link>
+            </div>
           </AnimatedHeroContent>
 
-          {/* Scroll cue */}
-          <div className="relative z-10 animate-bounce text-white/35">
-            <ChevronDown className="h-5 w-5" />
+          {/* Minimal scroll indicator */}
+          <div className="relative z-10 text-[#8c8275]/40 animate-pulse">
+            <ChevronDown className="h-4 w-4" />
           </div>
         </section>
 
         {/* ─── Feature Cards ───────────────────────────────────── */}
-        <section className="relative bg-background py-20">
-          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-            <AnimatedSectionHeader eyebrow="Services" title="경조사의 모든 것을 한 곳에서" center />
+        <section className="relative bg-[#fcfbf9] py-24 border-b border-[#e5e2da]">
+          <div className="mx-auto max-w-5xl px-6">
+            <AnimatedSectionHeader eyebrow="Curated Services" title="소중한 순간을 위한 정밀한 설계" center />
             <AnimatedCardGrid>
               {[
-                <FeatureCard key="plan" emoji="🎊" title="행사 관리" description="결혼·장례 일정을 한 곳에서 체계적으로 관리하세요." href={isLoggedIn ? defaultWorkspaceHref : "/login?callbackUrl=/plans"} />,
-                <FeatureCard key="money" emoji="💸" title="축의금·부의금" description="투명한 금전 관리로 경조사 예산을 한눈에 파악하세요." href={isLoggedIn ? defaultWorkspaceHref : "/login?callbackUrl=/plans"} />,
-                <FeatureCard key="vendor" emoji="🏢" title="업체 연결" description="검증된 업체와 바로 연결하고 견적을 요청하세요." href={publicVendorHref} />,
+                <FeatureCard key="plan" index="01" title="맞춤 행사 관리" description="결혼·장례의 전반적인 구도를 설계하고 yeON이 준비한 엄격한 가이드라인을 따라 차분하게 진행 상황을 파악합니다." href={isLoggedIn ? defaultWorkspaceHref : "/login?callbackUrl=/plans"} />,
+                <FeatureCard key="money" index="02" title="투명한 일정 관리" description="파트너사와의 조율 일정과 최종 예약 상태를 한 번에 검토하고 복잡한 서류나 기입 절차 없이 안전하게 체크합니다." href={isLoggedIn ? defaultWorkspaceHref : "/login?callbackUrl=/plans"} />,
+                <FeatureCard key="vendor" index="03" title="엄선된 파트너십" description="yeON의 심사 기준을 거친 검증된 의전/웨딩 파트너와만 소통하여 격식 있고 무결한 서비스를 안심하고 제안받습니다." href={publicVendorHref} />,
               ]}
             </AnimatedCardGrid>
           </div>
         </section>
 
-        {/* ─── Event type selection ─────────────────────────────── */}
-        <section className="border-y border-border/40 bg-white/40 py-20">
-          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-            <div className="mb-12">
-              <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground/55">Get Started</p>
-              <h2 className="font-[var(--font-display)] text-3xl font-bold text-foreground sm:text-4xl">
-                어떤 경조사를 준비하시나요?
+        {/* ─── Event Type Selection ─────────────────────────────── */}
+        <section className="bg-[#faf9f5] py-24 border-b border-[#e5e2da]">
+          <div className="mx-auto max-w-5xl px-6">
+            <div className="mb-14">
+              <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.3em] text-[#8c8275]">Planning Route</p>
+              <h2 className="font-[var(--font-serif)] text-2xl font-normal text-[#2c3455] sm:text-3xl">
+                어떤 의례를 준비하시나요?
               </h2>
             </div>
 
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="grid gap-6 sm:grid-cols-2">
               {/* Wedding card */}
               <Link
                 href={weddingHref}
-                className="group relative overflow-hidden rounded-[2.5rem] border border-amber-200/70 shadow-sm shadow-amber-100/40 transition-all duration-500 hover:-translate-y-3 hover:shadow-2xl hover:shadow-rose-200/40"
+                className="group relative overflow-hidden rounded-2xl border border-[#ebdccf] bg-[#faf9f5] transition-all duration-300 hover:-translate-y-1 hover:border-[#c4977a] hover:shadow-[0_8px_32px_rgba(196,151,122,0.06)]"
               >
-                <div className="absolute inset-0 surface-wedding" />
-                <div className="pointer-events-none absolute -right-12 -top-12 h-44 w-44 rounded-full bg-rose-200/40 blur-3xl transition-all duration-500 group-hover:scale-150 group-hover:bg-rose-200/60" />
-                <div className="pointer-events-none absolute -bottom-6 left-8 h-28 w-28 rounded-full bg-amber-200/30 blur-2xl" />
-
+                <div className="absolute inset-x-0 bottom-0 h-1.5 bg-[#ebdccf] transition-colors group-hover:bg-[#c4977a]" />
                 <div className="relative p-8 sm:p-10">
-                  <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-600 shadow-lg shadow-rose-300/50 transition-all duration-300 group-hover:scale-110">
-                    <Heart className="h-6 w-6 text-white" />
+                  <div className="mb-6 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#fcf8f2] border border-[#ebdccf]/50 text-[#c4977a]">
+                    <Heart className="h-4 w-4" />
                   </div>
-                  <p className="mb-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.32em] text-rose-500/80">Wedding 💍</p>
-                  <h2 className="mb-3 font-[var(--font-display)] text-3xl font-bold text-foreground">결혼 준비</h2>
-                  <p className="mb-7 text-sm leading-6 text-rose-900/50">
-                    따뜻한 웨딩 컨셉부터 예식장·케이터링·촬영까지<br className="hidden sm:block" />
-                    설레는 하루를 함께 만들어 드립니다.
+                  <p className="mb-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.25em] text-[#c4977a]">Wedding Ceremony</p>
+                  <h3 className="mb-3 font-[var(--font-serif)] text-xl font-bold text-[#2c3455]">결혼 준비</h3>
+                  <p className="mb-8 text-xs leading-relaxed text-[#8c8275]">
+                    정제된 웨딩 아키텍처와 엄선된 공간 대관, 식대 패키지 구성까지 번잡한 조립 없이 아름다운 하루를 준비합니다.
                   </p>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-rose-600 transition-all duration-200 group-hover:gap-3.5">
-                    결혼 준비 시작하기
-                    <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                  <div className="flex items-center gap-2 text-xs font-semibold text-[#c4977a] transition-all duration-200 group-hover:gap-3">
+                    결혼 플래닝 시작하기
+                    <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
                   </div>
                 </div>
               </Link>
@@ -224,25 +196,21 @@ export default async function HomePage() {
               {/* Funeral card */}
               <Link
                 href={funeralHref}
-                className="group relative overflow-hidden rounded-[2.5rem] border border-indigo-200/60 shadow-sm shadow-indigo-100/30 transition-all duration-500 hover:-translate-y-3 hover:shadow-2xl hover:shadow-indigo-200/30"
+                className="group relative overflow-hidden rounded-2xl border border-[#cbd3e0] bg-[#faf9f5] transition-all duration-300 hover:-translate-y-1 hover:border-[#2c3455] hover:shadow-[0_8px_32px_rgba(44,52,85,0.04)]"
               >
-                <div className="absolute inset-0 surface-funeral" />
-                <div className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full bg-indigo-300/30 blur-3xl transition-all duration-500 group-hover:scale-150 group-hover:bg-indigo-300/50" />
-                <div className="pointer-events-none absolute -bottom-6 left-8 h-28 w-28 rounded-full bg-slate-200/40 blur-2xl" />
-
+                <div className="absolute inset-x-0 bottom-0 h-1.5 bg-[#cbd3e0] transition-colors group-hover:bg-[#2c3455]" />
                 <div className="relative p-8 sm:p-10">
-                  <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-900 shadow-lg shadow-indigo-400/30 transition-all duration-300 group-hover:scale-110">
-                    <Shield className="h-6 w-6 text-white" />
+                  <div className="mb-6 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef2f6] border border-[#cbd3e0] text-[#2c3455]">
+                    <Shield className="h-4 w-4" />
                   </div>
-                  <p className="mb-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.32em] text-indigo-400/80">Funeral 🕯️</p>
-                  <h2 className="mb-3 font-[var(--font-display)] text-3xl font-bold text-foreground">장례 준비</h2>
-                  <p className="mb-7 text-sm leading-6 text-indigo-900/50">
-                    단계별 안내와 신뢰 있는 업체 연결로<br className="hidden sm:block" />
-                    소중한 마무리를 함께 준비합니다.
+                  <p className="mb-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.25em] text-[#8c8275]">Funeral Service</p>
+                  <h3 className="mb-3 font-[var(--font-serif)] text-xl font-bold text-[#2c3455]">장례 의전</h3>
+                  <p className="mb-8 text-xs leading-relaxed text-[#8c8275]">
+                    차분하고 안정적인 준비 가이드와 엄숙한 파트너 연결을 통해 소중한 마무리를 경건하고 세심하게 안내합니다.
                   </p>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700 transition-all duration-200 group-hover:gap-3.5">
-                    장례 준비 안내받기
-                    <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                  <div className="flex items-center gap-2 text-xs font-semibold text-[#2c3455] transition-all duration-200 group-hover:gap-3">
+                    장례 의전 안내받기
+                    <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
                   </div>
                 </div>
               </Link>
@@ -251,71 +219,69 @@ export default async function HomePage() {
         </section>
 
         {/* ─── How it works ────────────────────────────────────── */}
-        <section className="bg-white/60 py-20">
-          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-            <AnimatedSectionHeader eyebrow="How it works" title="세 단계로 완성하는 준비" center className="mb-14" />
+        <section className="bg-[#fcfbf9] py-24 border-b border-[#e5e2da]">
+          <div className="mx-auto max-w-5xl px-6">
+            <AnimatedSectionHeader eyebrow="Process Flow" title="yeON의 3단계 기본 프로세스" center className="mb-16" />
             <AnimatedStepGrid>
               {[
-                <FlowStep key="01" step="01" icon={Sparkles} title="행사 정보 + AI 추천" description="행사 규모, 지역, 예산을 입력하면 AI가 최적 컨셉과 준비 타임라인을 제안합니다." accent="rose" />,
-                <FlowStep key="02" step="02" icon={HeartHandshake} title="업체에 견적 요청" description="추천 업체 목록에서 필요한 곳을 선택해 견적 요청을 한 번에 보냅니다." accent="primary" />,
-                <FlowStep key="03" step="03" icon={BadgeCheck} title="제안 비교 + 확정" description="받은 제안을 비교하고 최적의 업체를 선택해 예약을 확정합니다." accent="emerald" />,
+                <FlowStep key="01" step="01" icon={Sparkles} title="기본 구성 준비" description="규모와 예산을 기반으로 yeON이 플랜의 적합한 기본 추천 구성을 자동 설계합니다." color="#c4977a" />,
+                <FlowStep key="02" step="02" icon={HeartHandshake} title="필요 항목 확인" description="제안된 기본 항목 중 고객님께 필요한 파트너 옵션만 가볍게 검토하고 견적을 요청합니다." color="#2c3455" />,
+                <FlowStep key="03" step="03" icon={BadgeCheck} title="최종 확정 대기" description="도도하게 조율된 파트너사의 최적 금액을 확인하여 최종 예약을 안심하고 매듭짓습니다." color="#0f9652" />,
               ]}
             </AnimatedStepGrid>
           </div>
         </section>
 
         {/* ─── For whom ────────────────────────────────────────── */}
-        <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:px-8">
-          <AnimatedSectionHeader eyebrow="For whom" title="두 가지 역할, 하나의 플랫폼" />
+        <section className="mx-auto max-w-5xl px-6 py-24">
+          <AnimatedSectionHeader eyebrow="Platform Roles" title="서로 다른 여정을 위한 최적의 도구" />
 
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid gap-6 sm:grid-cols-2">
             <RoleCard
               icon={Users}
               role="일반 사용자"
-              title="경조사를 준비하는 분"
-              items={["AI 추천 컨셉 확인", "업체 견적 요청 발송", "받은 제안 비교 · 예약 확정", "비용 현황 및 일정 관리"]}
+              title="격식 있는 예식을 앞두신 분"
+              items={["yeON이 조율한 기본 추천 구성 확인", "원하는 파트너를 향한 정중한 제안 요청", "총액 및 옵션의 일관된 비교 검토", "업체 최종 승인 후 예약 완료"]}
               href={isLoggedIn ? defaultWorkspaceHref : "/login?callbackUrl=/plans"}
-              ctaText="준비 시작하기"
+              ctaText="내 플랜 준비하기"
               colorScheme="primary"
             />
             <RoleCard
               icon={Building2}
-              role="업체 사용자"
-              title="서비스를 제공하는 업체"
-              items={["들어온 요청 Inbox 확인", "견적 · 일정 응답 보내기", "확정 예약 일정 관리", "진행 중 요청 상태 관리"]}
+              role="의전/웨딩 파트너"
+              title="최고의 서비스를 선사할 업체"
+              items={["예식/의전 견적 제안 수신 및 관리", "가용 일정 및 맞춤 제안 금액 회신", "사용자 수락 시 최상단 확정 대기 큐 배치", "예약 최종 확정 및 행사 완결 관리"]}
               href={isLoggedIn ? defaultWorkspaceHref : "/signup"}
-              ctaText="업체로 가입하기"
+              ctaText="파트너 신청하기"
               colorScheme="neutral"
             />
           </div>
         </section>
 
-        {/* ─── Demo bar ────────────────────────────────────────── */}
-        <section className="border-t border-border/40 bg-gradient-to-br from-[#1a2640] to-[#2d3e5c] py-10">
-          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-            <div className="flex flex-wrap items-center gap-6 sm:gap-8">
-              <div className="shrink-0">
-                <p className="text-sm font-bold text-white/90">데모 계정으로 바로 체험</p>
-                <p className="mt-0.5 text-xs text-white/45">
-                  비밀번호:{" "}
-                  <code className="rounded-md bg-white/10 px-1.5 py-0.5 font-mono text-xs text-white/80">demo1234</code>
-                </p>
+        {/* ─── Demo accounts (Subtle and integrated) ───────────────────── */}
+        <section className="border-t border-[#e5e2da] bg-[#2c3455] py-14 text-white">
+          <div className="mx-auto max-w-5xl px-6">
+            <div className="flex flex-wrap items-center justify-between gap-8">
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-[#ebdccf] uppercase tracking-wider">Demo Sandbox</p>
+                <h4 className="text-sm font-bold text-[#faf9f5]">데모 환경 즉시 테스트</h4>
+                <p className="text-xs text-white/50">공통 패스워드: <code className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-[#faf9f5]/90">demo1234</code></p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-3">
                 <DemoChip role="일반 사용자" email="planner@yeon.local" />
-                <DemoChip role="웨딩 홀" email="venue@yeon.local" />
-                <DemoChip role="장례 의전" email="memorial@yeon.local" />
+                <DemoChip role="웨딩 파트너" email="venue@yeon.local" />
+                <DemoChip role="장례 파트너" email="memorial@yeon.local" />
               </div>
-              <div className="ml-auto flex gap-2">
+              <div className="flex items-center gap-3">
                 {isLoggedIn ? (
-                  <Link className={buttonVariants({ variant: "ghost", size: "sm" }) + " text-white/70 hover:bg-white/10 hover:text-white"} href={defaultWorkspaceHref}>
-                    {isVendor ? "업체 대시보드" : "내 플랜"}
+                  <Link className="inline-flex h-9 items-center justify-center rounded-xl bg-white/10 border border-white/20 px-4 text-xs font-semibold text-white transition-all hover:bg-white/20" href={defaultWorkspaceHref}>
+                    {isVendor ? "업체 대시보드" : "내 플랜 확인"}
                   </Link>
                 ) : (
                   <>
-                    <Link className={buttonVariants({ variant: "ghost", size: "sm" }) + " text-white/70 hover:bg-white/10 hover:text-white"} href="/login">로그인</Link>
-                    <Link href="/signup" className="inline-flex h-9 items-center justify-center rounded-2xl bg-white px-4 text-sm font-semibold text-foreground shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/90 hover:shadow-md active:translate-y-0">
-                      가입하기
+                    <Link className="text-xs font-semibold text-white/75 hover:text-white transition-colors" href="/login">로그인</Link>
+                    <Link href="/signup" className="inline-flex h-9 items-center justify-center rounded-xl bg-[#faf9f5] px-4 text-xs font-semibold text-[#2c3455] transition-all hover:bg-white active:scale-[0.98]">
+                      무료 체험
                     </Link>
                   </>
                 )}
@@ -325,19 +291,19 @@ export default async function HomePage() {
         </section>
 
         {/* ─── Footer ──────────────────────────────────────────── */}
-        <footer className="border-t border-border/30 bg-white/40 py-8">
-          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-            <div className="flex flex-wrap items-center justify-between gap-4">
+        <footer className="border-t border-[#e5e2da] bg-[#faf9f5] py-12">
+          <div className="mx-auto max-w-5xl px-6">
+            <div className="flex flex-wrap items-center justify-between gap-6">
               <div className="flex items-center gap-3">
                 <div className="relative h-7 w-[46px] overflow-hidden">
-                  <Image src="/yeon-logo.png" alt="YeON" fill sizes="46px" className="object-contain" />
+                  <Image src="/yeon-logo.png" alt="YeON" fill sizes="46px" className="object-contain opacity-75" />
                 </div>
                 <div className="leading-none">
-                  <p className="font-[var(--font-display)] text-sm font-semibold text-foreground">YeON</p>
-                  <p className="text-[10px] text-muted-foreground/70">사람과 마음을 잇다</p>
+                  <p className="font-[var(--font-serif)] text-sm font-bold text-[#2c3455]">YeON</p>
+                  <p className="text-[10px] text-[#8c8275]">사람과 마음을 잇다</p>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground/55">© 2026 YeON. All rights reserved.</p>
+              <p className="text-xs text-[#8c8275]/60">© 2026 YeON. All rights reserved.</p>
             </div>
           </div>
         </footer>
@@ -346,15 +312,15 @@ export default async function HomePage() {
   );
 }
 
-function FeatureCard({ emoji, title, description, href }: { emoji: string; title: string; description: string; href: string }) {
+function FeatureCard({ index, title, description, href }: { index: string; title: string; description: string; href: string }) {
   return (
     <Link
       href={href}
-      className="group flex flex-col rounded-3xl bg-white/80 backdrop-blur border border-border/60 p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-border"
+      className="group flex flex-col rounded-2xl bg-white border border-[#e5e2da] p-6 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#ebdccf] hover:shadow-[0_4px_16px_rgba(0,0,0,0.015)]"
     >
-      <span className="mb-4 text-3xl">{emoji}</span>
-      <h3 className="mb-2 font-[var(--font-display)] text-lg font-bold text-foreground">{title}</h3>
-      <p className="text-sm leading-6 text-muted-foreground">{description}</p>
+      <span className="font-mono text-[10px] font-bold text-[#c4977a] tracking-widest">{index}</span>
+      <h3 className="mt-4 mb-2 font-[var(--font-serif)] text-base font-bold text-[#2c3455]">{title}</h3>
+      <p className="text-xs leading-relaxed text-[#8c8275]">{description}</p>
     </Link>
   );
 }
@@ -364,28 +330,25 @@ function FlowStep({
   icon: Icon,
   title,
   description,
-  accent
+  color
 }: {
   step: string;
   icon: typeof Sparkles;
   title: string;
   description: string;
-  accent: "rose" | "primary" | "emerald";
+  color: string;
 }) {
-  const accentStyles = {
-    rose: { wrap: "bg-rose-50 border-rose-200/60", icon: "text-rose-600", num: "text-rose-300/70" },
-    primary: { wrap: "bg-primary/5 border-primary/20", icon: "text-primary", num: "text-primary/30" },
-    emerald: { wrap: "bg-emerald-50 border-emerald-200/60", icon: "text-emerald-600", num: "text-emerald-300/70" },
-  }[accent];
-
   return (
-    <div className="relative z-10 flex flex-col items-center text-center">
-      <div className={`relative mb-6 flex h-[5.5rem] w-[5.5rem] flex-col items-center justify-center gap-0.5 overflow-hidden rounded-3xl border shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md ${accentStyles.wrap}`}>
-        <span className={`font-mono text-[9px] font-black uppercase tracking-widest ${accentStyles.num}`}>{step}</span>
-        <Icon className={`h-6 w-6 ${accentStyles.icon}`} />
+    <div className="relative flex flex-col items-center text-center px-4">
+      <div 
+        className="relative mb-5 flex h-[4.5rem] w-[4.5rem] flex-col items-center justify-center gap-0.5 overflow-hidden rounded-2xl border border-[#ebdccf]/40 bg-[#fdfcf9] shadow-sm transition-transform duration-200 hover:scale-102"
+        style={{ borderColor: `${color}15` }}
+      >
+        <span className="font-mono text-[9px] font-extrabold tracking-widest text-[#8c8275]/40">{step}</span>
+        <Icon className="h-5 w-5" style={{ color }} />
       </div>
-      <h3 className="mb-2.5 font-[var(--font-display)] text-base font-bold text-foreground">{title}</h3>
-      <p className="mx-auto max-w-[18rem] text-sm leading-6 text-muted-foreground">{description}</p>
+      <h3 className="mb-2 font-[var(--font-serif)] text-sm font-bold text-[#2c3455]">{title}</h3>
+      <p className="text-xs leading-relaxed text-[#8c8275]">{description}</p>
     </div>
   );
 }
@@ -409,37 +372,39 @@ function RoleCard({
 }) {
   const scheme = {
     primary: {
-      iconWrap: "bg-primary/10 text-primary",
-      badge: "bg-primary/10 text-primary hover:bg-primary/10",
-      dot: "bg-primary/30",
-      border: "hover:border-primary/20",
+      iconWrap: "bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/60",
+      badge: "bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/40 hover:bg-[#fcf8f2]",
+      dot: "bg-[#ebdccf]",
+      border: "hover:border-[#ebdccf]/80",
+      btn: "bg-[#2c3455] text-white hover:bg-[#1e2645]"
     },
     neutral: {
-      iconWrap: "bg-slate-100 text-slate-600",
-      badge: "bg-slate-100 text-slate-600 hover:bg-slate-100",
-      dot: "bg-slate-300",
-      border: "hover:border-slate-300",
+      iconWrap: "bg-[#eef2f6] text-[#2c3455] border border-[#cbd3e0]",
+      badge: "bg-[#eef2f6] text-[#2c3455] border border-[#cbd3e0] hover:bg-[#eef2f6]",
+      dot: "bg-[#cbd3e0]",
+      border: "hover:border-[#cbd3e0]",
+      btn: "border border-[#e5e2da] bg-white text-[#2c3455] hover:bg-[#faf9f5]"
     }
   }[colorScheme];
 
   return (
-    <div className={`group flex flex-col rounded-[2rem] border border-border/60 bg-white/90 p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg sm:p-8 ${scheme.border}`}>
-      <div className={`mb-4 inline-flex w-fit rounded-xl p-3 transition-transform duration-300 group-hover:scale-110 ${scheme.iconWrap}`}>
-        <Icon className="h-5 w-5" />
+    <div className={`group flex flex-col rounded-2xl border border-[#e5e2da] bg-white p-7 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${scheme.border}`}>
+      <div className={`mb-4 inline-flex w-fit rounded-xl p-2.5 transition-transform duration-200 group-hover:scale-103 ${scheme.iconWrap}`}>
+        <Icon className="h-4 w-4" />
       </div>
-      <Badge className={`mb-3 w-fit ${scheme.badge}`}>{role}</Badge>
-      <h3 className="mb-4 font-[var(--font-display)] text-xl font-bold text-foreground">{title}</h3>
-      <ul className="mb-7 flex-1 space-y-3">
+      <Badge className={`mb-3 w-fit text-[9px] font-bold tracking-wider ${scheme.badge}`}>{role}</Badge>
+      <h3 className="mb-4 font-[var(--font-serif)] text-base font-bold text-[#2c3455]">{title}</h3>
+      <ul className="mb-8 flex-1 space-y-3">
         {items.map((item) => (
-          <li key={item} className="flex items-center gap-2.5 text-sm text-muted-foreground">
-            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${scheme.dot}`} />
+          <li key={item} className="flex items-center gap-2 text-xs text-[#8c8275]">
+            <span className={`h-1 w-1 shrink-0 rounded-full ${scheme.dot}`} />
             {item}
           </li>
         ))}
       </ul>
-      <Link href={href} className={buttonVariants({ variant: colorScheme === "primary" ? "default" : "outline", size: "sm" })}>
+      <Link href={href} className={`${buttonVariants({ size: "sm" })} ${scheme.btn} rounded-xl h-9 text-xs font-semibold`}>
         {ctaText}
-        <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+        <ArrowRight className="ml-1.5 h-3 w-3" />
       </Link>
     </div>
   );
@@ -447,9 +412,10 @@ function RoleCard({
 
 function DemoChip({ role, email }: { role: string; email: string }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/8 px-3.5 py-2.5 backdrop-blur-sm transition-all duration-200 hover:border-white/20 hover:bg-white/12">
-      <p className="text-[11px] font-semibold text-white/85">{role}</p>
-      <p className="mt-0.5 font-mono text-[10px] text-white/45">{email}</p>
+    <div className="rounded-xl border border-white/5 bg-white/5 px-4 py-3 backdrop-blur-sm transition-all duration-150 hover:border-white/12 hover:bg-white/10">
+      <p className="text-[10px] font-bold text-white/80">{role}</p>
+      <p className="mt-0.5 font-mono text-[9px] text-white/35">{email}</p>
     </div>
   );
 }
+

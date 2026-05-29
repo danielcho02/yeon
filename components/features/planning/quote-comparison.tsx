@@ -160,37 +160,37 @@ export function QuoteComparison({
 
   if (showLoading) {
     return (
-      <div className="flex min-h-48 items-center justify-center rounded-2xl border border-dashed border-gray-200">
-        <p className="text-sm text-gray-400">견적 응답을 불러오는 중...</p>
+      <div className="flex min-h-48 items-center justify-center rounded-xl border border-dashed border-[#e5e2da] bg-white">
+        <p className="text-xs text-muted-foreground/60">견적 제안을 분석하는 중...</p>
       </div>
     )
   }
 
   if (quotes.length === 0) {
     return (
-      <div className="flex min-h-48 items-center justify-center rounded-2xl border border-dashed border-gray-200">
-        <p className="text-sm text-gray-400">견적 응답을 기다리는 중입니다</p>
+      <div className="flex min-h-48 items-center justify-center rounded-xl border border-dashed border-[#e5e2da] bg-white">
+        <p className="text-xs text-muted-foreground/60">도착한 파트너 제안서가 없습니다.</p>
       </div>
     )
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-[#e5e2da]/70 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.01)]">
-      <table className="w-full min-w-[600px] border-collapse text-xs">
+    <div className="overflow-x-auto rounded-xl border border-[#e5e2da] bg-white shadow-[0_2px_12px_rgba(0,0,0,0.005)]">
+      <table className="w-full min-w-[550px] border-collapse text-[11px]">
         <thead>
-          <tr className="border-b border-[#f2ece4]">
-            <th className="sticky left-0 w-44 bg-[#faf9f5] px-4 py-3.5 text-left font-bold text-[#2c3455] border-r border-[#f2ece4]">
-              세부 서비스 항목
+          <tr className="border-b border-[#f2ece4] bg-[#faf9f5]">
+            <th className="sticky left-0 w-44 bg-[#faf9f5] px-4 py-3 text-left font-bold text-[#2c3455] border-r border-[#f2ece4]">
+              제공 품목 스펙
             </th>
             {quotes.map((q) => (
-              <th key={q.responseId} className="min-w-40 px-4 py-3.5 text-center bg-white border-r border-[#f2ece4]/60 last:border-r-0">
-                <div className="flex flex-col items-center gap-1.5">
-                  <span className="font-bold text-sm text-[#2c3455]">{q.vendorName}</span>
+              <th key={q.responseId} className="min-w-36 px-4 py-3 text-center bg-[#faf9f5] border-r border-[#f2ece4]/60 last:border-r-0">
+                <div className="flex flex-col items-center gap-1">
+                  <span className="font-bold text-xs text-[#2c3455]">{q.vendorName}</span>
                   {q.totalPrice === lowestTotal && (
                     <span
-                      className="inline-flex items-center gap-1 rounded bg-[#faf6f2] text-[#c4977a] border border-[#ebdccf]/50 px-2 py-0.5 text-[9px] font-semibold tracking-wider uppercase"
+                      className="inline-flex items-center gap-1 rounded bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/50 px-2 py-0.5 text-[8px] font-bold tracking-wider"
                     >
-                      <Award size={9} />
+                      <Award size={8} />
                       최저가 제안
                     </span>
                   )}
@@ -212,8 +212,8 @@ export function QuoteComparison({
                 <tr>
                   <td
                     colSpan={quotes.length + 1}
-                    className="px-4 py-2 text-[10px] font-bold uppercase tracking-wider border-y border-[#f2ece4]/60"
-                    style={{ backgroundColor: config.surface, color: config.primary }}
+                    className="px-4 py-1.5 text-[9px] font-bold uppercase tracking-wider border-y border-[#f2ece4]/50 bg-[#faf9f5]/70"
+                    style={{ color: config.primary }}
                   >
                     {cat.label}
                   </td>
@@ -225,15 +225,15 @@ export function QuoteComparison({
                   const highSpread = spread > (range?.min ?? 0) * 0.3
 
                   return (
-                    <tr key={key} className="hover:bg-[#faf9f5]/30">
-                      <td className="sticky left-0 bg-white px-4 py-3 text-muted-foreground font-medium border-r border-[#f2ece4]/60">
+                    <tr key={key} className="hover:bg-[#faf9f5]/20 transition-colors duration-150">
+                      <td className="sticky left-0 bg-white px-4 py-2.5 text-[#8c8275] font-semibold border-r border-[#f2ece4]/60">
                         {quotes.flatMap((q) => q.items).find((i) => i.moduleKey === key)?.moduleName ?? key}
                       </td>
                       {quotes.map((q) => {
                         const item = q.items.find((i) => i.moduleKey === key)
                         if (!item) {
                           return (
-                            <td key={q.responseId} className="px-4 py-3 text-center text-gray-300 border-r border-[#f2ece4]/40 last:border-r-0">—</td>
+                            <td key={q.responseId} className="px-4 py-2.5 text-center text-[#e5e2da] border-r border-[#f2ece4]/40 last:border-r-0">—</td>
                           )
                         }
                         const price = item.pricingType === 'PER_GUEST' ? item.price * guestCount : item.price
@@ -241,12 +241,12 @@ export function QuoteComparison({
                         const isMax = range && price === range.max && spread > 0
 
                         return (
-                          <td key={q.responseId} className="px-4 py-3 text-center border-r border-[#f2ece4]/40 last:border-r-0">
-                            <div className="flex items-center justify-center gap-1.5">
-                              {highSpread && isMin && <TrendingDown size={11} className="text-emerald-600" />}
-                              {highSpread && isMax && <TrendingUp size={11} className="text-[#c4977a]" />}
+                          <td key={q.responseId} className="px-4 py-2.5 text-center border-r border-[#f2ece4]/40 last:border-r-0">
+                            <div className="flex items-center justify-center gap-1">
+                              {highSpread && isMin && <TrendingDown size={10} className="text-emerald-600" />}
+                              {highSpread && isMax && <TrendingUp size={10} className="text-[#c4977a]" />}
                               <span
-                                className="font-semibold text-[#2c3455]"
+                                className="font-bold text-[#2c3455]"
                                 style={{
                                   color: highSpread && isMin ? '#0f9652' : highSpread && isMax ? '#c4977a' : '#2c3455',
                                 }}
@@ -255,7 +255,7 @@ export function QuoteComparison({
                               </span>
                             </div>
                             {item.pricingType === 'PER_GUEST' && (
-                              <p className="text-[10px] text-muted-foreground/60">{item.price.toLocaleString('ko-KR')}원/명</p>
+                              <p className="text-[9px] text-[#8c8275]/50 mt-0.5">{item.price.toLocaleString('ko-KR')}원/명</p>
                             )}
                           </td>
                         )
@@ -268,18 +268,18 @@ export function QuoteComparison({
           })}
 
           {/* Total row - 정보 비교에 초점 */}
-          <tr className="border-t-2 border-[#ebdccf] bg-[#faf9f5]/20">
-            <td className="sticky left-0 bg-[#faf9f5]/40 px-4 py-4 text-xs font-bold text-[#2c3455] border-r border-[#f2ece4]/60">총 견적 합계</td>
+          <tr className="border-t-2 border-[#e5e2da] bg-[#faf9f5]/20 font-bold">
+            <td className="sticky left-0 bg-[#faf9f5]/40 px-4 py-3.5 text-xs text-[#2c3455] border-r border-[#f2ece4]/60">총 제안 금액 합계</td>
             {quotes.map((q) => (
-              <td key={q.responseId} className="px-4 py-4 text-center border-r border-[#f2ece4]/40 last:border-r-0">
+              <td key={q.responseId} className="px-4 py-3.5 text-center border-r border-[#f2ece4]/40 last:border-r-0">
                 <div
-                  className="text-sm font-bold tracking-tight text-[#2c3455]"
+                  className="text-xs font-bold tracking-tight text-[#2c3455]"
                   style={{ color: q.totalPrice === lowestTotal ? config.primary : '#2c3455' }}
                 >
                   {q.totalPrice.toLocaleString('ko-KR')}원
                 </div>
                 {q.isAccepted ? (
-                  <span className="mt-2 inline-flex rounded-lg border border-violet-100 bg-violet-50/50 px-2.5 py-1 text-[10px] font-semibold text-violet-700">
+                  <span className="mt-1.5 inline-flex rounded border border-violet-100 bg-violet-50/50 px-2 py-0.5 text-[9px] font-bold text-violet-700">
                     선택 수락 완료
                   </span>
                 ) : onAccept && q.canAccept ? (
@@ -287,9 +287,9 @@ export function QuoteComparison({
                     type="button"
                     disabled={isAccepting}
                     onClick={() => onAccept(q.responseId)}
-                    className="mt-2 inline-flex text-[10px] font-semibold text-[#c4977a] hover:underline"
+                    className="mt-1.5 inline-flex text-[9px] font-semibold text-[#c4977a] hover:text-[#b08569] underline underline-offset-2 transition-colors"
                   >
-                    {isAccepting ? '수락 처리 중...' : '이 제안 수락'}
+                    {isAccepting ? '수락 중...' : '이 제안 수락'}
                   </button>
                 ) : null}
               </td>

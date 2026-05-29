@@ -97,30 +97,30 @@ function ModuleTile({
       layout
       type="button"
       onClick={onToggle}
-      className="relative flex flex-col gap-2 rounded-xl border p-3 text-left transition-all"
+      className="relative flex flex-col gap-2 rounded-xl border p-3.5 text-left transition-all duration-150"
       style={{
-        borderColor: isSelected ? config.primary : '#e5e7eb',
+        borderColor: isSelected ? config.primary : '#e5e2da',
         backgroundColor: isSelected ? config.surface : 'white',
       }}
-      whileTap={{ scale: 0.97 }}
+      whileTap={{ scale: 0.98 }}
     >
       <div className="flex items-start justify-between gap-1">
-        <span className="text-sm font-medium leading-tight" style={{ color: isSelected ? config.primaryDark : '#111827' }}>
+        <span className="text-xs font-semibold leading-tight" style={{ color: isSelected ? config.primaryDark : '#2c3455' }}>
           {module.name}
         </span>
         <div
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all"
+          className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-all duration-150"
           style={{
-            borderColor: isSelected ? config.primary : '#d1d5db',
+            borderColor: isSelected ? config.primary : '#e5e2da',
             backgroundColor: isSelected ? config.primary : 'white',
           }}
         >
-          {isSelected && <Check size={11} color="white" strokeWidth={3} />}
+          {isSelected && <Check size={9} color="white" strokeWidth={3} />}
         </div>
       </div>
       <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-400">{module.categoryLabel}</span>
-        <span className="text-xs font-semibold" style={{ color: isSelected ? config.primary : '#6b7280' }}>
+        <span className="text-[10px] text-muted-foreground/60">{module.categoryLabel}</span>
+        <span className="text-[10px] font-bold" style={{ color: isSelected ? config.primary : '#8c8275' }}>
           {priceLabel}
         </span>
       </div>
@@ -150,20 +150,20 @@ function SummaryPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <ShoppingBag size={16} style={{ color: config.primary }} />
-        <span className="text-sm font-semibold" style={{ color: config.primaryDark }}>견적 요약</span>
+      <div className="flex items-center gap-2 pb-2 border-b border-[#f2ece4]">
+        <ShoppingBag size={14} style={{ color: config.primary }} />
+        <span className="text-xs font-bold uppercase tracking-wider text-[#2c3455]">의례 구성안 요약</span>
       </div>
 
       {basePackage && (
         <div className="rounded-xl p-3" style={{ backgroundColor: config.muted }}>
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium" style={{ color: config.primaryDark }}>{basePackage.name}</span>
-            <span className="text-xs font-semibold" style={{ color: config.primary }}>
+            <span className="text-xs font-bold text-[#2c3455]">{basePackage.name}</span>
+            <span className="text-xs font-bold" style={{ color: config.primary }}>
               {basePackage.price.toLocaleString('ko-KR')}원
             </span>
           </div>
-          <p className="mt-0.5 text-xs text-gray-500">{basePackage.description}</p>
+          <p className="mt-1 text-[10px] text-[#8c8275] leading-relaxed">{basePackage.description}</p>
         </div>
       )}
 
@@ -177,19 +177,19 @@ function SummaryPanel({
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.18 }}
+                transition={{ duration: 0.15 }}
                 className="overflow-hidden"
               >
-                <div className="flex items-center justify-between py-1">
+                <div className="flex items-center justify-between py-1 border-b border-[#f2ece4]/40">
                   <button
                     type="button"
                     onClick={() => builder.toggleModule(m)}
-                    className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-red-500"
+                    className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-red-500 font-semibold"
                   >
-                    <X size={12} />
+                    <X size={11} />
                     {m.name}
                   </button>
-                  <span className="text-xs font-medium text-gray-700">
+                  <span className="text-[11px] font-bold text-[#2c3455]">
                     {price.toLocaleString('ko-KR')}원
                   </span>
                 </div>
@@ -198,34 +198,34 @@ function SummaryPanel({
           })}
         </AnimatePresence>
         {selectedModules.length === 0 && !basePackage && (
-          <p className="py-4 text-center text-xs text-gray-400">서비스를 선택하면 여기에 표시됩니다</p>
+          <p className="py-6 text-center text-xs text-muted-foreground/50 font-normal">선택하신 서비스 항목이 없습니다.</p>
         )}
       </div>
 
       {validationMessage && (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700" role="status">
+        <p className="rounded-xl border border-amber-200 bg-amber-50/50 px-3.5 py-2.5 text-[10px] font-semibold text-amber-800 leading-normal" role="status">
           {validationMessage}
         </p>
       )}
 
-      <div className="border-t border-gray-100 pt-3">
+      <div className="border-t border-[#f2ece4] pt-3">
         <div className="flex items-baseline justify-between">
-          <span className="text-sm font-medium text-gray-600">예상 총액</span>
-          <div className="text-xl font-bold" style={{ color: config.primary }}>
+          <span className="text-xs font-semibold text-muted-foreground">예상 제안 합계액</span>
+          <div className="text-lg font-bold text-[#c4977a]">
             <PriceCountUp value={totalPrice} />
           </div>
         </div>
-        <p className="mt-0.5 text-xs text-gray-400">실제 견적은 업체 확인 후 달라질 수 있습니다</p>
+        <p className="mt-1 text-[10px] text-muted-foreground/60 leading-normal">상세 조율 결과에 따라 금액이 유연하게 다듬어집니다.</p>
       </div>
 
       <button
         type="button"
         disabled={isSubmitting || (selectedModules.length === 0 && !basePackage)}
         onClick={onRequestQuote}
-        className="w-full rounded-xl py-3 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-40"
+        className="w-full rounded-xl py-2.5 text-xs font-bold text-white transition-all duration-150 hover:opacity-95 disabled:opacity-40"
         style={{ backgroundColor: config.primary }}
       >
-        {isSubmitting ? '요청 보내는 중...' : '견적 요청하기'}
+        {isSubmitting ? '전송 중...' : '이 구성으로 제안 요청하기'}
       </button>
     </div>
   )
@@ -252,36 +252,36 @@ function MobileBottomBar({
   const count = builder.selectedModules.length + (builder.basePackage ? 1 : 0)
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-100 bg-white p-4 shadow-lg lg:hidden">
+    <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#e5e2da] bg-white p-4 shadow-md lg:hidden">
       {validationMessage && (
-        <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700" role="status">
+        <p className="mb-2 rounded-xl border border-amber-200 bg-amber-50/50 px-3 py-2 text-[10px] font-semibold text-amber-800" role="status">
           {validationMessage}
         </p>
       )}
       <div className="flex items-center justify-between gap-3">
         <button type="button" onClick={onOpen} className="flex items-center gap-2">
           <div
-            className="flex h-7 w-7 items-center justify-center rounded-full text-white text-xs font-bold"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-white text-[10px] font-bold"
             style={{ backgroundColor: config.primary }}
           >
             {count}
           </div>
           <div className="text-left">
-            <p className="text-xs text-gray-500">선택한 서비스</p>
-            <p className="text-base font-bold" style={{ color: config.primary }}>
+            <p className="text-[10px] text-[#8c8275]">선택한 서비스</p>
+            <p className="text-sm font-bold" style={{ color: config.primary }}>
               <PriceCountUp value={builder.totalPrice} />
             </p>
           </div>
-          <ChevronDown size={14} className="text-gray-400" />
+          <ChevronDown size={12} className="text-[#8c8275]" />
         </button>
         <button
           type="button"
           disabled={isSubmitting || count === 0}
           onClick={onRequestQuote}
-          className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+          className="rounded-xl px-4 py-2 text-xs font-bold text-white disabled:opacity-40"
           style={{ backgroundColor: config.primary }}
         >
-          {isSubmitting ? '전송 중...' : '견적 요청'}
+          {isSubmitting ? '전송 중...' : '제안 요청'}
         </button>
       </div>
     </div>
@@ -349,7 +349,7 @@ export function ModularQuoteBuilder({
   const hasQuoteSelection = builder.selectedModules.length > 0 || Boolean(builder.basePackage)
   const selectionValidationMessage = hasQuoteSelection
     ? null
-    : '견적 요청을 보내려면 최소 1개 이상의 서비스를 선택해 주세요.'
+    : '제안을 보내려면 1개 이상의 서비스 옵션을 활성화해 주세요.'
 
   useEffect(() => {
     if (!basePackage) return
@@ -369,11 +369,13 @@ export function ModularQuoteBuilder({
   }
 
   return (
-    <div className="relative">
+    <div className="relative space-y-6">
       {/* Base Packages */}
       {basePackages.length > 0 && (
-        <div className="mb-6">
-          <p className="mb-3 text-sm font-semibold text-gray-700">베이스 패키지 (선택)</p>
+        <div className="space-y-3">
+          <p className="text-xs font-bold uppercase tracking-wider text-[#2c3455]">
+            {theme === 'wedding' ? '권장 베이스 패키지 구성 (추천)' : '기본 권장 의전 구성'}
+          </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {basePackages.map((pkg) => {
               const active = builder.basePackage?.id === pkg.id
@@ -382,20 +384,20 @@ export function ModularQuoteBuilder({
                   key={pkg.id}
                   type="button"
                   onClick={() => builder.setBasePackage(active ? null : pkg)}
-                  className="rounded-xl border p-4 text-left transition-all"
+                  className="rounded-xl border p-4 text-left transition-all duration-150"
                   style={{
-                    borderColor: active ? config.primary : '#e5e7eb',
+                    borderColor: active ? config.primary : '#e5e2da',
                     backgroundColor: active ? config.surface : 'white',
                   }}
                 >
                   <div className="flex items-start justify-between gap-1">
-                    <p className="text-sm font-semibold" style={{ color: active ? config.primaryDark : '#111827' }}>
+                    <p className="text-xs font-bold text-[#2c3455]">
                       {pkg.name}
                     </p>
-                    {active && <Check size={14} style={{ color: config.primary }} />}
+                    {active && <Check size={12} style={{ color: config.primary }} />}
                   </div>
-                  <p className="mt-1 text-xs text-gray-500">{pkg.description}</p>
-                  <p className="mt-2 text-sm font-bold" style={{ color: config.primary }}>
+                  <p className="mt-1 text-[10px] text-[#8c8275] leading-normal">{pkg.description}</p>
+                  <p className="mt-3 text-xs font-extrabold" style={{ color: config.primary }}>
                     {pkg.price.toLocaleString('ko-KR')}원~
                   </p>
                 </button>
@@ -406,27 +408,29 @@ export function ModularQuoteBuilder({
       )}
 
       {/* Category Tabs */}
-      <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
         <button
           type="button"
           onClick={() => setActiveCategory('all')}
-          className="shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-all"
+          className="shrink-0 rounded-lg px-3 py-1.5 text-[10px] font-bold transition-all duration-150"
           style={{
-            backgroundColor: activeCategory === 'all' ? config.primary : '#f3f4f6',
-            color: activeCategory === 'all' ? 'white' : '#374151',
+            backgroundColor: activeCategory === 'all' ? config.primary : '#faf9f5',
+            color: activeCategory === 'all' ? 'white' : '#2c3455',
+            border: `1px solid ${activeCategory === 'all' ? config.primary : '#e5e2da'}`
           }}
         >
-          전체
+          전체 보기
         </button>
         {categories.map((cat) => (
           <button
             key={cat.value}
             type="button"
             onClick={() => setActiveCategory(cat.value)}
-            className="shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-all"
+            className="shrink-0 rounded-lg px-3 py-1.5 text-[10px] font-bold transition-all duration-150"
             style={{
-              backgroundColor: activeCategory === cat.value ? config.primary : '#f3f4f6',
-              color: activeCategory === cat.value ? 'white' : '#374151',
+              backgroundColor: activeCategory === cat.value ? config.primary : '#faf9f5',
+              color: activeCategory === cat.value ? 'white' : '#2c3455',
+              border: `1px solid ${activeCategory === cat.value ? config.primary : '#e5e2da'}`
             }}
           >
             {cat.label}
@@ -435,19 +439,19 @@ export function ModularQuoteBuilder({
       </div>
 
       {selectionValidationMessage && (
-        <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700" role="status">
+        <p className="rounded-xl border border-amber-200 bg-amber-50/50 px-3.5 py-2.5 text-[10px] font-semibold text-amber-800" role="status">
           {selectionValidationMessage}
         </p>
       )}
 
       {/* Desktop: 2-col layout */}
-      <div className="flex gap-6">
+      <div className="flex flex-col lg:flex-row gap-6">
         {/* Module Grid */}
         <div className="flex-1">
           {allModules.length === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-400">등록된 서비스 모듈이 없습니다.</p>
+            <p className="py-8 text-center text-xs text-muted-foreground/60">등록된 서비스 모듈이 없습니다.</p>
           ) : (
-            <motion.div layout className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <motion.div layout className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
               <AnimatePresence>
                 {filtered.map((m) => (
                   <ModuleTile
@@ -466,7 +470,7 @@ export function ModularQuoteBuilder({
 
         {/* Desktop Summary Panel */}
         <div className="hidden w-72 shrink-0 lg:block">
-          <div className="sticky top-4 rounded-2xl border border-gray-100 p-4 shadow-sm">
+          <div className="sticky top-4 rounded-xl border border-[#e5e2da] p-4 bg-white">
             <SummaryPanel
               builder={builder}
               theme={theme}
@@ -509,10 +513,10 @@ export function ModularQuoteBuilder({
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
               style={{ maxHeight: '80vh', overflowY: 'auto' }}
             >
-              <div className="mb-4 flex items-center justify-between">
-                <span className="font-semibold">견적 요약</span>
+              <div className="mb-4 flex items-center justify-between border-b border-[#f2ece4] pb-2">
+                <span className="text-xs font-bold text-[#2c3455] uppercase tracking-wider">의례 구성안 요약</span>
                 <button type="button" onClick={() => setSheetOpen(false)}>
-                  <X size={20} className="text-gray-400" />
+                  <X size={18} className="text-[#8c8275]" />
                 </button>
               </div>
               <SummaryPanel
