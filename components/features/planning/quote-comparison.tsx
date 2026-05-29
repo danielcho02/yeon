@@ -185,10 +185,15 @@ export function QuoteComparison({
             {quotes.map((q) => (
               <th key={q.responseId} className="min-w-36 px-4 py-3 text-center bg-[#faf9f5] border-r border-[#f2ece4]/60 last:border-r-0">
                 <div className="flex flex-col items-center gap-1">
-                  <span className="font-bold text-xs text-[#2c3455]">{q.vendorName}</span>
+                  <span className="font-bold text-xs text-[#2c3455] whitespace-nowrap">{q.vendorName}</span>
                   {q.totalPrice === lowestTotal && (
                     <span
-                      className="inline-flex items-center gap-1 rounded bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/50 px-2 py-0.5 text-[8px] font-bold tracking-wider"
+                      className="inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[8px] font-bold tracking-wider whitespace-nowrap"
+                      style={{
+                        backgroundColor: theme === 'wedding' ? '#fcf8f2' : '#eef2f6',
+                        color: theme === 'wedding' ? '#c4977a' : '#475569',
+                        borderColor: theme === 'wedding' ? '#ebdccf' : '#cbd3e0',
+                      }}
                     >
                       <Award size={8} />
                       최저가 제안
@@ -226,14 +231,14 @@ export function QuoteComparison({
 
                   return (
                     <tr key={key} className="hover:bg-[#faf9f5]/20 transition-colors duration-150">
-                      <td className="sticky left-0 bg-white px-4 py-2.5 text-[#8c8275] font-semibold border-r border-[#f2ece4]/60">
+                      <td className="sticky left-0 bg-white px-4 py-2.5 text-[#8c8275] font-semibold border-r border-[#f2ece4]/60 whitespace-nowrap break-keep">
                         {quotes.flatMap((q) => q.items).find((i) => i.moduleKey === key)?.moduleName ?? key}
                       </td>
                       {quotes.map((q) => {
                         const item = q.items.find((i) => i.moduleKey === key)
                         if (!item) {
                           return (
-                            <td key={q.responseId} className="px-4 py-2.5 text-center text-[#e5e2da] border-r border-[#f2ece4]/40 last:border-r-0">—</td>
+                            <td key={q.responseId} className="px-4 py-2.5 text-center text-[#e5e2da] border-r border-[#f2ece4]/40 last:border-r-0 whitespace-nowrap">—</td>
                           )
                         }
                         const price = item.pricingType === 'PER_GUEST' ? item.price * guestCount : item.price
@@ -241,21 +246,21 @@ export function QuoteComparison({
                         const isMax = range && price === range.max && spread > 0
 
                         return (
-                          <td key={q.responseId} className="px-4 py-2.5 text-center border-r border-[#f2ece4]/40 last:border-r-0">
+                          <td key={q.responseId} className="px-4 py-2.5 text-center border-r border-[#f2ece4]/40 last:border-r-0 whitespace-nowrap">
                             <div className="flex items-center justify-center gap-1">
                               {highSpread && isMin && <TrendingDown size={10} className="text-emerald-600" />}
-                              {highSpread && isMax && <TrendingUp size={10} className="text-[#c4977a]" />}
+                              {highSpread && isMax && <TrendingUp size={10} style={{ color: config.primary }} />}
                               <span
-                                className="font-bold text-[#2c3455]"
+                                className="font-bold text-[#2c3455] font-mono"
                                 style={{
-                                  color: highSpread && isMin ? '#0f9652' : highSpread && isMax ? '#c4977a' : '#2c3455',
+                                  color: highSpread && isMin ? '#0f9652' : highSpread && isMax ? config.primary : '#2c3455',
                                 }}
                               >
                                 {price.toLocaleString('ko-KR')}원
                               </span>
                             </div>
                             {item.pricingType === 'PER_GUEST' && (
-                              <p className="text-[9px] text-[#8c8275]/50 mt-0.5">{item.price.toLocaleString('ko-KR')}원/명</p>
+                              <p className="text-[9px] text-[#8c8275]/50 mt-0.5 font-mono">{item.price.toLocaleString('ko-KR')}원/명</p>
                             )}
                           </td>
                         )
@@ -267,19 +272,18 @@ export function QuoteComparison({
             )
           })}
 
-          {/* Total row - 정보 비교에 초점 */}
           <tr className="border-t-2 border-[#e5e2da] bg-[#faf9f5]/20 font-bold">
-            <td className="sticky left-0 bg-[#faf9f5]/40 px-4 py-3.5 text-xs text-[#2c3455] border-r border-[#f2ece4]/60">총 제안 금액 합계</td>
+            <td className="sticky left-0 bg-[#faf9f5]/40 px-4 py-3.5 text-xs text-[#2c3455] border-r border-[#f2ece4]/60 whitespace-nowrap break-keep">총 제안 금액 합계</td>
             {quotes.map((q) => (
-              <td key={q.responseId} className="px-4 py-3.5 text-center border-r border-[#f2ece4]/40 last:border-r-0">
+              <td key={q.responseId} className="px-4 py-3.5 text-center border-r border-[#f2ece4]/40 last:border-r-0 whitespace-nowrap">
                 <div
-                  className="text-xs font-bold tracking-tight text-[#2c3455]"
+                  className="text-xs font-bold tracking-tight text-[#2c3455] font-mono"
                   style={{ color: q.totalPrice === lowestTotal ? config.primary : '#2c3455' }}
                 >
                   {q.totalPrice.toLocaleString('ko-KR')}원
                 </div>
                 {q.isAccepted ? (
-                  <span className="mt-1.5 inline-flex rounded border border-violet-100 bg-violet-50/50 px-2 py-0.5 text-[9px] font-bold text-violet-700">
+                  <span className="mt-1.5 inline-flex rounded border border-violet-100 bg-violet-50/50 px-2 py-0.5 text-[9px] font-bold text-violet-700 whitespace-nowrap">
                     선택 수락 완료
                   </span>
                 ) : onAccept && q.canAccept ? (
@@ -287,7 +291,8 @@ export function QuoteComparison({
                     type="button"
                     disabled={isAccepting}
                     onClick={() => onAccept(q.responseId)}
-                    className="mt-1.5 inline-flex text-[9px] font-semibold text-[#c4977a] hover:text-[#b08569] underline underline-offset-2 transition-colors"
+                    className="mt-1.5 inline-flex text-[9px] font-semibold underline underline-offset-2 transition-opacity hover:opacity-85 whitespace-nowrap"
+                    style={{ color: config.primary }}
                   >
                     {isAccepting ? '수락 중...' : '이 제안 수락'}
                   </button>

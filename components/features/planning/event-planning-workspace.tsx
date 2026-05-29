@@ -89,7 +89,7 @@ const THEMES = {
     createSub: "기본 정보를 기입하시면 AI가 최적의 공간 컨셉과 타임라인을 구성해 드립니다.",
     aiEmptyTitle: "AI 스페이스 컨셉 추천",
     aiEmptySub: "하객 규모와 예산을 토대로 럭셔리 웨딩 스타일, 추천 서비스 구성 및 타임라인을 생성합니다.",
-    vendorTitle: "파트너 제안 요청하기",
+    vendorTitle: "품격을 함께할 추천 파트너사 선택",
     progressBg: "bg-[#c4977a]",
   },
   FUNERAL: {
@@ -122,7 +122,7 @@ const THEMES = {
     createSub: "기본 정보를 기입하시면 AI가 정중한 의전 양식과 가이드를 마련해 드립니다.",
     aiEmptyTitle: "AI 추모 가이드 추천",
     aiEmptySub: "행사 규모와 일정을 바탕으로 준비 순서와 서비스 구성 가이드를 제안합니다.",
-    vendorTitle: "견적을 요청할 업체를 선택하세요",
+    vendorTitle: "기본 준비 및 상담을 요청할 파트너사를 확인해 주세요",
     progressBg: "bg-indigo-700",
   }
 } as const;
@@ -1161,23 +1161,23 @@ export function EventPlanningWorkspace({
           <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
             <div className="space-y-4">
               <div>
-                <h2 className="font-[var(--font-display)] text-base font-bold text-foreground">{theme.vendorTitle}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">카드를 클릭해 선택한 후 요청 내용을 입력하세요.</p>
+                <h2 className="font-[var(--font-serif)] text-base font-bold text-[#2c3455] tracking-tight">{theme.vendorTitle}</h2>
+                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed break-keep">
+                  {eventType === "WEDDING"
+                    ? "yeON이 추천 구성을 준비했습니다. 파트너사를 선택하고 필요한 패키지를 확인해보세요."
+                    : "yeON이 기본적인 의례 절차를 정리했습니다. 배웅을 신뢰하고 맡길 파트너사를 확인해 주세요."}
+                </p>
               </div>
 
               {vendors.length > 0 ? (
-                <div className="grid gap-2.5 sm:grid-cols-2">
+                <div className="flex flex-col border border-[#ebdccf]/40 bg-white rounded-2xl p-4 divide-y divide-[#f2ece4]/40">
                   {vendors.map((vendor) => {
                     const isSelected = selectedVendorId === vendor.id;
                     const VIcon = vendorIcon(vendor.companyName, vendor.name);
                     return (
                       <button
                         key={vendor.id}
-                        className={`rounded-[1.75rem] border p-4 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                          isSelected
-                            ? theme.vendorSelected
-                            : "border-border/60 bg-white/90 hover:-translate-y-0.5 hover:border-border hover:shadow-md"
-                        }`}
+                        className="w-full text-left py-4.5 transition-all duration-150 flex items-center justify-between gap-4 px-2 hover:bg-[#faf9f5]/50 group"
                         onClick={() => {
                           setSelectedVendorId(vendor.id);
                           setCheckedServiceIds(new Set());
@@ -1189,36 +1189,44 @@ export function EventPlanningWorkspace({
                         }}
                         type="button"
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-start gap-3">
-                            <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${theme.iconBg}`}>
-                              <VIcon className="h-4 w-4" />
-                            </div>
-                            <div>
-                              <p className="font-semibold text-foreground">{vendor.companyName ?? vendor.name}</p>
-                              <p className="mt-0.5 text-xs text-muted-foreground">{vendor.location ?? "위치 정보 없음"}</p>
-                              {(() => {
-                                const vendorSvcs = (vendor.services ?? []).filter(
-                                  (s) => s.eventType === eventType && s.isActive
-                                );
-                                if (vendorSvcs.length === 0) return null;
-                                const minPrice = Math.min(...vendorSvcs.map((s) => s.basePrice));
-                                return (
-                                  <p className={`mt-1 text-xs font-semibold ${theme.accentText}`}>
-                                    {minPrice.toLocaleString()}원~
-                                  </p>
-                                );
-                              })()}
-                            </div>
+                        <div className="flex items-center gap-4 min-w-0 pr-2">
+                          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors ${
+                            isSelected ? theme.iconSolid : "bg-[#faf8f4] text-[#8c8275] border border-[#e5e2da]/60"
+                          }`}>
+                            <VIcon className="h-4.5 w-4.5" />
                           </div>
+                          <div className="min-w-0">
+                            <p 
+                              className="font-semibold text-xs text-[#2c3455] group-hover:text-foreground truncate break-keep"
+                              style={{ color: isSelected ? theme.accentText : "#2c3455" }}
+                            >
+                              {vendor.companyName ?? vendor.name}
+                            </p>
+                            <p className="mt-1 text-[10px] text-muted-foreground/60 font-normal truncate">{vendor.location ?? "위치 정보 없음"}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3.5 shrink-0 ml-auto">
+                          {(() => {
+                            const vendorSvcs = (vendor.services ?? []).filter(
+                              (s) => s.eventType === eventType && s.isActive
+                            );
+                            if (vendorSvcs.length === 0) return null;
+                            const minPrice = Math.min(...vendorSvcs.map((s) => s.basePrice));
+                            return (
+                              <span className="text-xs font-bold font-mono tracking-tight" style={{ color: isSelected ? theme.accentText : "#8c8275" }}>
+                                {minPrice.toLocaleString()}원~
+                              </span>
+                            );
+                          })()}
                           <div className="flex shrink-0 items-center gap-1.5">
                             {requestedVendorIds.has(vendor.id) && (
-                              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                              <span className="rounded bg-amber-50 text-amber-700 px-2 py-0.5 text-[9px] font-bold border border-amber-100 whitespace-nowrap">
                                 요청됨
                               </span>
                             )}
                             {isSelected && (
-                              <div className={`rounded-full p-1.5 ${theme.tag}`}>
+                              <div className={`rounded-full p-1 ${theme.tag}`}>
                                 <Check className="h-3 w-3" />
                               </div>
                             )}

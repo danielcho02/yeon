@@ -1,49 +1,53 @@
 # yeON Premium Product UI Redesign Status (Antigravity)
 
-이 문서는 yeON 프로젝트의 Senior Brand Product Designer 겸 Frontend Motion Engineer인 Antigravity가 진행한 **Premium Product UI Redesign & Concierge-First Polish**의 디자인 시스템 원칙, 구현 디테일, 검증 결과 및 마감 상태를 기록한 공식 상태 문서입니다.
+이 문서는 yeON 프로젝트의 Senior UX Recovery Designer 겸 Frontend Engineer인 Antigravity가 진행한 **Premium Product UI Redesign, Corrective Polish & UX Recovery**의 디자인 시스템 원칙, 구현 디테일, 검증 결과 및 마감 상태를 기록한 공식 상태 문서입니다.
 
 ---
 
-## 1. Brand UI Direction & Philosophy (Quiet Luxury)
-yeON은 일생의 가장 정중하고 중요한 행사(Wedding, Funeral)를 차분하고 정밀하게 설계할 수 있도록 돕는 서비스입니다. 과시적인 사치나 화려한 그라데이션, 그리고 투박한 SaaS 대시보드 템플릿의 느낌을 완전히 배제하고 **절제된 타이포그래피, 깊은 여백, 신뢰도 높은 모노톤 중심의 컬러 시스템**을 설계했습니다.
+## 1. PM 검수 실패 원인 분석 & 복구 방향
+1차 frontend polish 적용 이후 진행된 PM 검수에서 드러난 치명적인 사용성 및 비주얼 결함을 다음과 같이 복구 설계했습니다.
 
-*   **Neutral Palette & Accents**: 
-    *   **Base**: 퓨어 화이트의 자극적인 반사를 피하고 차분한 아이보리 계열(`#faf9f5`), 깊고 부드러운 스톤 그레이 계열, 그리고 신뢰감을 주는 딥 네이비 슬레이트(`#2c3455`)를 테마 베이스로 활용.
-    *   **Wedding**: 여백이 강조된 에디토리얼 스타일 위에, yeON 로고 핵심 색상과 정렬되는 부드럽고 차분한 로즈골드/샴페인 골드(`#c4977a`, `#ebdccf`) 톤을 미묘한 테두리 및 인디케이터 라인으로만 제한적으로 매핑.
-    *   **Funeral**: 조용하고 장엄하며 신뢰감 있는 스톤 그레이 및 뮤티드 블루 계열(`#cbd3e0`, `#cbd3e0`/40)을 엄격하게 적용하여 모션의 반응 속도와 감도를 극도로 가라앉혀 절제미를 형성.
-*   **Typography & Borders**:
-    *   SaaS에서 흔히 쓰이는 둥그스름한 삼각형이나 무분별한 섀도우 블록을 제거하고, 에디토리얼 북 레이아웃 스타일의 얇은 실선 테두리(`border-[#ebdccf]/40`, `border-[#e5e2da]`)와 클래식 Serif 폰트(`font-[var(--font-serif)]`) 위계 위주로 구분.
-*   **Interaction & Motion (Quiet & Elegant)**:
-    *   사용자의 정신을 흩트리는 화려한 애니메이션을 전부 걷어내고, 150ms~250ms 사이의 억제된 트랜지션(opacity fade, micro border hover feedback, loading opacity delay)을 구현하여 차분한 컨시어지 서비스의 우아함을 재현.
+1.  **서비스 카드 한글 세로 찢어짐 현상**:
+    *   *원인*: 좁은 격자 그리드 구조(`sm:grid-cols-3`) 속에서 카드 너비가 너무 협소하여 한글 텍스트("빈소 기본 3일", "문상객 식사" 등)가 세로로 찢어져 표시됨.
+    *   *복구*: 기존의 좁은 격자형 카드 타일 배치를 전면 배제하고, 에디토리얼 북 명세서 스타일의 **세련된 가로형 리스트 로우 (`ModuleRow`) 레이아웃**으로 재구축했습니다. 셀들에 `whitespace-nowrap`, `break-keep` 을 적용하여 찢어짐을 원천적으로 봉쇄했습니다.
+2.  **Wedding / Funeral 분리 미흡 및 SaaS 느낌 제거**:
+    *   *원인*: 단순히 컬러 테마만 다르게 입히고 구조가 동일하여 AI-generated 템플릿 같은 임시 느낌이 유지됨.
+    *   *복구*: Wedding과 Funeral의 기획적 의도에 맞춰 copy 및 UX 흐름을 확실히 분기시켰습니다.
+3.  **Summary Panel의 피드백 부재**:
+    *   *원인*: 비어 있을 때 사용자가 느끼는 다음 행동 가이드가 없고, 단순히 "선택하신 서비스 항목이 없습니다"로 차갑게 방치됨.
+    *   *복구*: Wedding과 Funeral 각각의 비어 있는 상태에 맞는 우아하고 친절한 안내 가이드라인을 제공하고 왜 CTA 버튼이 비활성화되는지 배려했습니다.
 
 ---
 
-## 2. 주요 개선 내용 & 피처 튜닝 (Launch-Ready Polish)
+## 2. 주요 개선 내용 & 피처 튜닝 (UX Recovery & Corrective Polish)
 
-### A. Progressive Disclosure (점진적 노출 및 인지 부하 감소)
-*   **견적 요청 상세 폼 슬라이드 다운 토글 (`isDetailOpen` state)**:
-    *   사용자가 업체를 선택했을 때 마주하는 폼(희망 날짜, 인원수, 메모)이 기본적으로 펼쳐져 있으면 입력 스트레스를 느낄 수 있습니다. 이를 해결하기 위해 **"일정 및 상세 조건 설정 (선택)"** 버튼을 적용하고 progressive disclosure를 도입하여 기본 구성을 우선시했습니다.
-    *   버튼 클릭 시에만 입력 필드가 우아하게 펼쳐지도록 인터랙션을 강화하여, "알아서 준비해 주는 컨시어지 서비스"로서의 가치를 구현했습니다.
+### A. Step 3 Modular Quote Builder 재설계
+*   **Module Row List Layout (가로형 리스트 전면 전환)**:
+    *   한국어 텍스트의 극단적 가독성을 확보하고 명품 대행 리포트의 고급 명세서 질감을 위해 가로형 한 줄 리스트 구조로 전면 전환했습니다.
+    *   좌측에는 서비스명과 세부 카테고리 라벨을 깔끔하게 배치하고, 우측에 예상 금액과 세련된 체크박스 컨트롤러를 우정렬하여 디자이너 Spec Sheet의 우아함을 부여했습니다.
+*   **Wedding Step 3 전용 UX**:
+    *   **카피 및 제목**: "추천 견적 구성 및 패키지", "yeON이 엄선한 추천 웨딩 구성을 정돈했습니다. 추가 옵션을 검토하신 뒤 견적을 요청해보세요."
+    *   **우측 Summary Panel**: 비어 있는 상태일 때 *"아름다운 웨딩 패키지 또는 추가 옵션을 선택해 보세요."* 안내 제공.
+    *   **CTA 문구**: "이 구성으로 견적 요청"
+    *   **Validation**: *"견적을 요청하려면 1개 이상의 구성 항목을 선택해 주세요."* 안내.
+*   **Funeral Step 3 전용 UX**:
+    *   **카피 및 제목**: "기본 준비 및 상담을 요청할 파트너사를 확인해 주세요", "yeON이 기본적인 의례 절차를 정리했습니다. 배웅을 신뢰하고 맡길 파트너사를 확인해 주세요."
+    *   **우측 Summary Panel**: 비어 있는 상태일 때 *"품격 있는 배웅을 위해 위 준비 항목 중 필요한 서비스를 확인하여 포함해 주세요."* 안내 제공.
+    *   **CTA 문구**: "이 구성으로 상담 요청" (강요나 쇼핑 조립 느낌 없이 상담 및 안내 요청 중심형으로 톤다운)
+    *   **Validation**: *"상담을 진행하려면 1개 이상의 준비 항목을 선택해 주세요."* 안내.
+    *   **비주얼**: 엄숙하고 정숙한 스톤 슬레이트 톤을 적용하고 모션을 극도로 억제.
 
-### B. Wedding / Funeral 톤앤매너 완벽 분리
-*   **축하성 모션의 엄격한 제한**:
-    *   견적을 수락할 때 가동되는 `Confetti` 파티클 모션을 오직 결혼 플로우(`eventType === "WEDDING"`)에서만 작동되도록 한정하고, 장례 플로우(`eventType === "FUNERAL"`)에서는 차분하게 페이지가 갱신되도록 제어하여 행사 성격에 맞게 연출을 차별화했습니다.
-*   **상태 미니맵 및 안내 보드 테마화**:
-    *   Step 4 예약 관리 상단의 **"예약 안전 가이드"** Callout 및 하단의 `WorkflowStep` 미니맵이 기존에는 Wedding 샴페인 골드 톤으로 하드코딩되어 있던 것을 테마 변수(`theme.accentBorder`, `theme.cardHighlight`, `isWedding`)에 연동하여 장례 화면에서는 진중하고 정숙한 스톤 차콜 톤으로 표시되도록 개편했습니다.
-
-### C. No-Emoji & High-End Iconography (이모지 정화 및 고급화)
-*   **SaaS 템플릿 느낌의 이모지 남발 척결**:
-    *   폼 라벨(`💒`, `🌹`, `📍`, `📅`, `🗓️`, `👥`, `💰`, `📝`) 및 UI 요소 곳곳에 배치되어 있던 이모지들을 전면 제거하고 명료하고 차분한 텍스트로 대체하여 전문적인 프리미엄 인상을 배가했습니다.
+### B. High-End Iconography (이모지 전면 정화 및 아이콘 매핑)
+*   **이모지 전면 제거**:
+    *   기존 UI에 흩어져 있던 💒, 🌹, 📍, 📅, 🗓️, 👥, 💰, 📝 등 SaaS 템플릿 느낌을 주는 이모지들을 전면 제거하고 단정하고 신뢰감 높은 텍스트 본문 위주로 개편했습니다.
 *   **Refined EmptyState**:
-    *   텅 빈 상태에서 렌더링되던 투박한 이모지(`🏢`, `📬`, `📩`, `✨`)를 깔끔하고 우아한 Lucide 아이콘(`Building2`, `ClipboardList`, `Clock`, `Sparkles`)으로 전환하고 배경 및 보더의 패딩 위계를 은은하게 다듬어 럭셔리 대시보드 질감을 훌륭하게 부여했습니다.
+    *   안내 상태가 비어 있을 때 렌더링되던 🏢, 📬, 📩, ✨ 등 투박한 이모지를 깔끔하고 우아한 Lucide 아이콘(`Building2`, `ClipboardList`, `Clock`, `Sparkles`)으로 전환하고 배경 패딩 및 보더 음영을 은은하게 다듬어 럭셔리 대시보드 질감을 훌륭하게 표현했습니다.
 
-### D. Partner Operations Dashboard & Plans (대시보드 뷰 완성)
-*   **업무 Queue & Priority Task Lineup**:
-    *   사용자가 수락한 상태인 `quoteRequestStatus === "ACCEPTED"` 예약 건들을 단순 카드 그리드가 아닌 최상단의 독립적인 **"오늘 처리할 일: 예약 최종 확정"** 업무 Queue 리스트로 우선 정렬.
-    *   **SLA 기한 명시**: `vendorConfirmationDueAt` 기한(수락 후 3일)을 우아한 시계 아이콘 및 보라색 문구와 결합하여 대시보드 및 리스트 최상단에 은은하고 명확하게 표시.
-*   ** metrics & Cards**:
-    *   SaaS 카드의 투박함을 지우기 위해 파트너 대시보드 헤더의 통계 수치를 세련된 디자이너 스펙 보드(아이보리 음영 보더, 샴페인 라인 탭) 형태로 개편.
-    *   기존의 두껍고 큰 탭 바를 얇고 고급스러운 실선 언더라인 인디케이터 스타일로 바꾸고 hover 시 미세한 텍스트 컬러 피드백만 제공하여 조용한 luxury 구현.
+### C. Step 4 Quote Comparison & Callout Board (견적 비교 리디자인)
+*   **테이블 셀 찢어짐 방지**:
+    *   종횡 세부 스펙 분석 표(`QuoteComparison`) 안의 모든 `td` 및 `th` 에 `whitespace-nowrap break-keep` 을 적용하여 한글 단어 깨짐 및 찢어짐을 원천 봉쇄했습니다.
+*   **테마 연동 고도화**:
+    *   기존에 웨딩 골드 톤으로 하드코딩되어 있던 최저가 제안 배지 및 수락 버튼 등을 `theme === 'wedding'` 인가 `theme === 'funeral'` 인가에 따라 웨딩 샴페인 및 장례 스톤 차콜 테마에 완벽히 동기화되도록 연동했습니다.
 
 ---
 
