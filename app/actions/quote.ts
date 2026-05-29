@@ -40,7 +40,9 @@ import type {
   QuoteRequestWithResponses,
   QuoteResponseData,
   QuoteResponseModules,
-  SubmitQuoteResponsePayload
+  SubmitQuoteResponsePayload,
+  Step3PreparationGroupDTO,
+  Step4CategoryStatusDTO
 } from "@/types/quote";
 import type { VendorServiceModuleData } from "@/types/vendor-module";
 
@@ -1173,3 +1175,272 @@ export async function getVendorQuoteRequests(): Promise<
 > {
   return getQuoteRequestsForVendor();
 }
+
+function resolveVendorRoleAndGroup(
+  vendorName: string,
+  eventType: "WEDDING" | "FUNERAL"
+): { role: "PRIMARY" | "INCLUDED" | "ADDON" | "OPTIONAL" | "BUNDLE"; comparableGroupKey: string } {
+  const name = vendorName.toLowerCase();
+  if (eventType === "WEDDING") {
+    if (name.includes("가든") || name.includes("모먼트") || name.includes("웨딩") || name.includes("홀")) {
+      return { role: "PRIMARY", comparableGroupKey: "wedding_venue_package" };
+    }
+    if (name.includes("플로") || name.includes("오르세") || name.includes("꽃") || name.includes("데코")) {
+      return { role: "ADDON", comparableGroupKey: "wedding_floral_upgrade" };
+    }
+    return { role: "OPTIONAL", comparableGroupKey: `wedding_generic_${vendorName}` };
+  } else {
+    if (name.includes("의전") || name.includes("한결") || name.includes("장례")) {
+      return { role: "BUNDLE", comparableGroupKey: "funeral_basic_service" };
+    }
+    return { role: "OPTIONAL", comparableGroupKey: `funeral_generic_${vendorName}` };
+  }
+}
+
+const WEDDING_CATEGORIES = [
+  { key: "venue", name: "예식장/공간", dbCategory: ["VENUE"] },
+  { key: "catering", name: "식음료", dbCategory: ["CATERING"] },
+  { key: "floral", name: "플라워/장식", dbCategory: ["DECORATION"] },
+  { key: "invitation", name: "초대장", dbCategory: ["INVITATION"] },
+  { key: "etc", name: "기타 옵션", dbCategory: ["PHOTO", "DRESS", "MAKEUP", "CEREMONY"] },
+];
+
+const FUNERAL_CATEGORIES = [
+  { key: "funeralHall", name: "장례식장", dbCategory: ["FUNERAL_HALL"] },
+  { key: "meal", name: "문상객 식사", dbCategory: ["MEAL"] },
+  { key: "obituary", name: "부고 안내", dbCategory: ["OBITUARY"] },
+  { key: "hearse", name: "운구", dbCategory: ["TRANSPORT", "CEREMONY"] },
+  { key: "altarFloral", name: "제단꽃/화환", dbCategory: ["WREATH"] },
+];
+
+export async function getStep3PreparationGroups(
+  planId: string,
+  vendorId: string
+): Promise<ActionResult<Step3PreparationGroupDTO[]>> {
+  try {
+    await requireSessionUser();
+
+    const plan = await prisma.eventPlan.findUnique({
+      where: { id: planId },
+      select: { type: true }
+    });
+    if (!plan) return actionError("플랜을 찾을 수 없습니다.", "NOT_FOUND");
+
+    const vendor = await prisma.user.findFirst({
+      where: { id: vendorId, role: UserRole.VENDOR },
+      select: { id: true, name: true, companyName: true }
+    });
+    if (!vendor) return actionError("업체를 찾을 수 없습니다.", "VENDOR_NOT_FOUND");
+
+    const modules = await prisma.vendorServiceModule.findMany({
+      where: { vendorId: vendor.id, isActive: true },
+      orderBy: { sortOrder: "asc" }
+    });
+
+    const eventType = plan.type === "WEDDING" ? "WEDDING" : "FUNERAL";
+    const { role, comparableGroupKey } = resolveVendorRoleAndGroup(vendor.companyName ?? vendor.name, eventType);
+
+    const categories = eventType === "WEDDING" ? WEDDING_CATEGORIES : FUNERAL_CATEGORIES;
+    const groups: Step3PreparationGroupDTO[] = [];
+
+    for (const cat of categories) {
+      const catModules = modules.filter(m => cat.dbCategory.includes(m.category));
+      if (catModules.length === 0) continue;
+
+      const includedModuleIds = catModules.filter(m => m.isBaseIncluded).map(m => m.id);
+      const optionalModuleIds = catModules.filter(m => !m.isBaseIncluded).map(m => m.id);
+
+      groups.push({
+        key: cat.key,
+        label: cat.name,
+        eventType,
+        mode: role === "PRIMARY" || role === "BUNDLE" ? "PACKAGE" : "ADDON",
+        vendorId: vendor.id,
+        vendorName: vendor.companyName ?? vendor.name,
+        vendorRole: role,
+        comparableGroupKey,
+        includedModuleIds,
+        optionalModuleIds,
+        defaultSelectedModuleIds: includedModuleIds.length > 0 ? includedModuleIds : [catModules[0].id]
+      });
+    }
+
+    return actionSuccess(groups);
+  } catch (error) {
+    return actionError(getActionError(error), "GET_STEP3_PREPARATION_GROUPS_FAILED");
+  }
+}
+
+export async function getStep4DashboardData(
+  planId: string
+): Promise<ActionResult<Step4CategoryStatusDTO[]>> {
+  try {
+    const user = await requireGeneralUser();
+
+    const plan = await prisma.eventPlan.findFirst({
+      where: { id: planId, ownerId: user.id },
+      select: { id: true, type: true }
+    });
+    if (!plan) return actionError("플랜을 찾을 수 없습니다.", "NOT_FOUND");
+
+    const eventType = plan.type === "WEDDING" ? "WEDDING" : "FUNERAL";
+
+    const requests = await prisma.quoteRequest.findMany({
+      where: { planId: plan.id },
+      include: {
+        vendor: true,
+        responses: {
+          include: { vendor: true }
+        },
+        reservation: true
+      }
+    });
+
+    const reservations = await prisma.reservation.findMany({
+      where: { eventPlanId: plan.id },
+      include: { vendor: true, quoteRequest: true }
+    });
+
+    const allSelectedModuleIds = Array.from(
+      new Set(
+        requests.flatMap(req => {
+          if (Array.isArray(req.selectedModules)) {
+            return req.selectedModules.filter((id): id is string => typeof id === "string");
+          }
+          return [];
+        })
+      )
+    );
+
+    const modules = allSelectedModuleIds.length > 0
+      ? await prisma.vendorServiceModule.findMany({
+          where: { id: { in: allSelectedModuleIds } }
+        })
+      : [];
+    const moduleCategoryMap = new Map(modules.map(m => [m.id, m.category]));
+
+    const categories = eventType === "WEDDING" ? WEDDING_CATEGORIES : FUNERAL_CATEGORIES;
+    const dashboard: Step4CategoryStatusDTO[] = [];
+
+    for (const cat of categories) {
+      const matchedRequests = requests.filter(req => {
+        const reqModuleIds = Array.isArray(req.selectedModules)
+          ? req.selectedModules.filter((id): id is string => typeof id === "string")
+          : [];
+        const hasMatchingModule = reqModuleIds.some(id => {
+          const mCat = moduleCategoryMap.get(id);
+          return mCat && cat.dbCategory.includes(mCat);
+        });
+
+        if (hasMatchingModule) return true;
+
+        const { role } = resolveVendorRoleAndGroup(req.vendor.companyName ?? req.vendor.name, eventType);
+        if (role === "PRIMARY" || role === "BUNDLE") {
+          return cat.key === (eventType === "WEDDING" ? "venue" : "funeralHall");
+        }
+        return false;
+      });
+
+      const matchedReservations = reservations.filter(res => {
+        if (res.serviceCategory && cat.dbCategory.includes(res.serviceCategory)) return true;
+        
+        if (res.quoteRequestId) {
+          return matchedRequests.some(req => req.id === res.quoteRequestId);
+        }
+
+        const { role } = resolveVendorRoleAndGroup(res.vendor.companyName ?? res.vendor.name, eventType);
+        if (role === "PRIMARY" || role === "BUNDLE") {
+          return cat.key === (eventType === "WEDDING" ? "venue" : "funeralHall");
+        }
+        return false;
+      });
+
+      let status: Step4CategoryStatusDTO["status"] = "NOT_REQUESTED";
+      const hasConfirmed = matchedReservations.some(r => r.status === "CONFIRMED" || r.status === "COMPLETED");
+      const hasAccepted = matchedRequests.some(req => req.status === "ACCEPTED") || 
+                          matchedReservations.some(r => r.status === "PENDING" && r.quoteRequest?.status === "ACCEPTED");
+      const hasResponded = matchedRequests.some(req => req.status === "RESPONDED");
+      const hasPending = matchedRequests.some(req => req.status === "PENDING");
+
+      if (hasConfirmed) {
+        status = "CONFIRMED";
+      } else if (hasAccepted) {
+        status = "ACCEPTED_WAITING_VENDOR";
+      } else if (hasResponded) {
+        status = "RESPONDED";
+      } else if (hasPending) {
+        status = "REQUESTED";
+      }
+
+      const vendorSummariesMap = new Map<string, Step4CategoryStatusDTO["vendorSummaries"][number]>();
+
+      for (const req of matchedRequests) {
+        const { role } = resolveVendorRoleAndGroup(req.vendor.companyName ?? req.vendor.name, eventType);
+        const resp = req.responses[0];
+        const res = matchedReservations.find(r => r.quoteRequestId === req.id || r.vendorId === req.vendorId);
+        
+        vendorSummariesMap.set(req.vendorId, {
+          vendorId: req.vendorId,
+          vendorName: req.vendor.companyName ?? req.vendor.name,
+          vendorRole: role,
+          quoteRequestId: req.id,
+          quoteResponseId: resp?.id,
+          reservationId: res?.id,
+          totalPrice: resp?.totalPrice ?? res?.quotedAmount ?? undefined,
+          status: req.status
+        });
+      }
+
+      for (const res of matchedReservations) {
+        if (!vendorSummariesMap.has(res.vendorId)) {
+          const { role } = resolveVendorRoleAndGroup(res.vendor.companyName ?? res.vendor.name, eventType);
+          vendorSummariesMap.set(res.vendorId, {
+            vendorId: res.vendorId,
+            vendorName: res.vendor.companyName ?? res.vendor.name,
+            vendorRole: role,
+            reservationId: res.id,
+            totalPrice: res.quotedAmount ?? undefined,
+            status: res.status
+          });
+        }
+      }
+
+      const vendorSummaries = Array.from(vendorSummariesMap.values());
+
+      const primarySummary = vendorSummaries.find(v => v.vendorRole === "PRIMARY" || v.vendorRole === "BUNDLE") ?? vendorSummaries[0];
+      const comparableGroupKey = primarySummary 
+        ? resolveVendorRoleAndGroup(primarySummary.vendorName, eventType).comparableGroupKey
+        : `${eventType.toLowerCase()}_generic`;
+
+      const respondedSameGroup = vendorSummaries.filter(v => 
+        v.status === "RESPONDED" && 
+        resolveVendorRoleAndGroup(v.vendorName, eventType).comparableGroupKey === comparableGroupKey
+      );
+      const canCompare = respondedSameGroup.length >= 2;
+      const canAccept = status === "RESPONDED";
+
+      let nextActionLabel = "견적 요청하기";
+      if (status === "REQUESTED") nextActionLabel = "응답 대기 중";
+      else if (status === "RESPONDED") nextActionLabel = "제안서 검토 및 수락";
+      else if (status === "ACCEPTED_WAITING_VENDOR") nextActionLabel = "업체 확정 대기 중";
+      else if (status === "CONFIRMED") nextActionLabel = "예약 확정 완료";
+
+      dashboard.push({
+        key: cat.key,
+        label: cat.name,
+        eventType,
+        comparableGroupKey,
+        status,
+        vendorSummaries,
+        canCompare,
+        canAccept,
+        nextActionLabel
+      });
+    }
+
+    return actionSuccess(dashboard);
+  } catch (error) {
+    return actionError(getActionError(error), "GET_STEP4_DASHBOARD_DATA_FAILED");
+  }
+}
+

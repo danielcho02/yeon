@@ -37,12 +37,13 @@ import {
   createQuoteRequest as createQuoteRequestAction,
   getQuotesByPlan,
   getVendorServiceModules,
+  getStep4DashboardData,
 } from "@/app/actions/quote";
 import { ModularQuoteBuilder } from "./modular-quote-builder";
 import { Step4BookingDashboard } from "./step4-booking-dashboard";
 import { mapQuoteRequestsToVendorQuotes } from "./quote-comparison";
 import type { VendorServiceModuleData } from "@/types/vendor-module";
-import type { QuoteRequestWithResponses } from "@/types/quote";
+import type { QuoteRequestWithResponses, Step4CategoryStatusDTO } from "@/types/quote";
 import type { BasePackage, QuoteModule } from "@/hooks/use-quote-builder";
 import { formatCurrency, formatDate } from "@/lib/format";
 import {
@@ -282,6 +283,7 @@ export function EventPlanningWorkspace({
   const [quoteRequestsData, setQuoteRequestsData] = useState<QuoteRequestWithResponses[] | null>(
     () => (plan?.id ? initialQuoteRequestsByPlanId?.[plan.id] ?? null : null)
   );
+  const [step4DashboardData, setStep4DashboardData] = useState<Step4CategoryStatusDTO[] | null>(null);
   const [isQuoteActionPending, setIsQuoteActionPending] = useState(false);
   const quoteActionLockedRef = useRef(false);
   const [confettiActive, setConfettiActive] = useState(false);
@@ -326,24 +328,33 @@ export function EventPlanningWorkspace({
       setQuoteRequestsData(result.data);
       setQuoteRequestsCache((current) => ({ ...current, [planId]: result.data }));
     }
+    const dashboardResult = await getStep4DashboardData(planId);
+    if (dashboardResult.success) {
+      setStep4DashboardData(dashboardResult.data);
+    }
     return result;
   }
 
   // Load quote request/response data for the current plan (used in Step 4)
   useEffect(() => {
-    if (!plan?.id) { setQuoteRequestsData(null); return; }
+    if (!plan?.id) { setQuoteRequestsData(null); setStep4DashboardData(null); return; }
     const cachedRequests = quoteRequestsCache[plan.id];
     if (cachedRequests) {
       setQuoteRequestsData(cachedRequests);
-      return;
+    } else {
+      getQuotesByPlan(plan.id).then((result) => {
+        if (result.success) {
+          setQuoteRequestsData(result.data);
+          setQuoteRequestsCache((current) => ({ ...current, [plan.id]: result.data }));
+        }
+      });
     }
 
     let cancelled = false;
-    getQuotesByPlan(plan.id).then((result) => {
+    getStep4DashboardData(plan.id).then((result) => {
       if (cancelled) return;
       if (result.success) {
-        setQuoteRequestsData(result.data);
-        setQuoteRequestsCache((current) => ({ ...current, [plan.id]: result.data }));
+        setStep4DashboardData(result.data);
       }
     });
     return () => { cancelled = true; };
@@ -1522,6 +1533,7 @@ export function EventPlanningWorkspace({
             handleAcceptQuote={handleAcceptQuote}
             requestForm={requestForm}
             theme={theme}
+            step4DashboardData={step4DashboardData}
           />
         )}
       </SwipeTransition>

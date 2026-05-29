@@ -104,3 +104,44 @@ export type CreateQuoteRequestInput = CreateQuoteRequestPayload;
 export type SubmitQuoteResponseInput = SubmitQuoteResponsePayload;
 export type AcceptQuoteResponseInput = AcceptQuoteResponsePayload;
 export type QuoteRequestForVendorDTO = QuoteRequestWithResponses;
+
+export interface Step4CategoryStatusDTO {
+  key: string;
+  label: string;
+  eventType: "WEDDING" | "FUNERAL";
+  comparableGroupKey: string;
+  status:
+    | "NOT_REQUESTED"
+    | "REQUESTED"
+    | "RESPONDED"
+    | "ACCEPTED_WAITING_VENDOR"
+    | "CONFIRMED";
+  vendorSummaries: Array<{
+    vendorId: string;
+    vendorName: string;
+    vendorRole: "PRIMARY" | "INCLUDED" | "ADDON" | "OPTIONAL" | "BUNDLE";
+    quoteRequestId?: string;
+    quoteResponseId?: string;
+    reservationId?: string;
+    totalPrice?: number;
+    status: string;
+  }>;
+  canCompare: boolean;
+  canAccept: boolean;
+  nextActionLabel: string;
+}
+
+export interface Step3PreparationGroupDTO {
+  key: string;
+  label: string;
+  eventType: "WEDDING" | "FUNERAL";
+  mode: "PACKAGE" | "ADDON" | "CONSULTATION";
+  vendorId: string;
+  vendorName: string;
+  vendorRole: "PRIMARY" | "INCLUDED" | "ADDON" | "OPTIONAL" | "BUNDLE";
+  comparableGroupKey: string;
+  includedModuleIds: string[];
+  optionalModuleIds: string[];
+  defaultSelectedModuleIds: string[];
+}
+

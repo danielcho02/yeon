@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { QuoteComparison, mapQuoteRequestsToVendorQuotes } from "./quote-comparison";
-import type { QuoteRequestWithResponses } from "@/types/quote";
+import type { QuoteRequestWithResponses, Step4CategoryStatusDTO } from "@/types/quote";
 import { formatCurrency, formatDate } from "@/lib/format";
 
 interface Step4BookingDashboardProps {
@@ -30,6 +30,7 @@ interface Step4BookingDashboardProps {
   requestForm: { guestCount: string };
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
   theme: any;
+  step4DashboardData?: Step4CategoryStatusDTO[] | null;
 }
 
 export function Step4BookingDashboard({
@@ -41,7 +42,8 @@ export function Step4BookingDashboard({
   isQuoteActionPending,
   handleAcceptQuote,
   requestForm,
-  theme
+  theme,
+  step4DashboardData
 }: Step4BookingDashboardProps) {
   const isWedding = eventType === "WEDDING";
 
@@ -107,31 +109,54 @@ export function Step4BookingDashboard({
   };
 
   const categoryGroups = categories.map(catItem => {
-    const matchedRequests = (quoteRequestsData ?? []).filter(req => {
+    const dto = step4DashboardData?.find(d => d.key === catItem.key);
+
+    let matchedRequests = (quoteRequestsData ?? []).filter(req => {
       const cat = getCategoryKeyOfRequest(req);
       return catItem.dbCategory.map(c => c.toLowerCase()).includes(cat) || cat === catItem.key.toLowerCase();
     });
 
-    const matchedReservations = planReservations.filter(res => {
+    let matchedReservations = planReservations.filter(res => {
       const cat = getCategoryKeyOfReservation(res);
       return catItem.dbCategory.map(c => c.toLowerCase()).includes(cat) || cat === catItem.key.toLowerCase();
     });
 
     let status: "요청 전" | "응답 대기" | "견적 도착" | "수락 가능" | "업체 최종 확정 대기" | "예약 확정 완료" = "요청 전";
-    
-    const hasConfirmed = matchedReservations.some(r => r.status === "CONFIRMED" || r.status === "COMPLETED");
-    const hasAccepted = matchedRequests.some(req => req.status === "ACCEPTED") || matchedReservations.some(r => r.status === "PENDING" && r.quoteRequestStatus === "ACCEPTED");
-    const hasResponded = matchedRequests.some(req => req.status === "RESPONDED");
-    const hasPending = matchedRequests.some(req => req.status === "PENDING");
+    let canCompare = false;
 
-    if (hasConfirmed) {
-      status = "예약 확정 완료";
-    } else if (hasAccepted) {
-      status = "업체 최종 확정 대기";
-    } else if (hasResponded) {
-      status = "수락 가능";
-    } else if (hasPending) {
-      status = "응답 대기";
+    if (dto) {
+      matchedRequests = (quoteRequestsData ?? []).filter(req => 
+        dto.vendorSummaries.some(v => v.quoteRequestId === req.id)
+      );
+      matchedReservations = planReservations.filter(res => 
+        dto.vendorSummaries.some(v => v.reservationId === res.id)
+      );
+      
+      if (dto.status === "CONFIRMED") status = "예약 확정 완료";
+      else if (dto.status === "ACCEPTED_WAITING_VENDOR") status = "업체 최종 확정 대기";
+      else if (dto.status === "RESPONDED") status = "수락 가능";
+      else if (dto.status === "REQUESTED") status = "응답 대기";
+      else status = "요청 전";
+
+      canCompare = dto.canCompare;
+    } else {
+      const hasConfirmed = matchedReservations.some(r => r.status === "CONFIRMED" || r.status === "COMPLETED");
+      const hasAccepted = matchedRequests.some(req => req.status === "ACCEPTED") || matchedReservations.some(r => r.status === "PENDING" && r.quoteRequestStatus === "ACCEPTED");
+      const hasResponded = matchedRequests.some(req => req.status === "RESPONDED");
+      const hasPending = matchedRequests.some(req => req.status === "PENDING");
+
+      if (hasConfirmed) {
+        status = "예약 확정 완료";
+      } else if (hasAccepted) {
+        status = "업체 최종 확정 대기";
+      } else if (hasResponded) {
+        status = "수락 가능";
+      } else if (hasPending) {
+        status = "응답 대기";
+      }
+
+      const responded = matchedRequests.filter(req => req.status === "RESPONDED");
+      canCompare = responded.length > 1;
     }
 
     return {
@@ -139,7 +164,8 @@ export function Step4BookingDashboard({
       categoryName: catItem.name,
       requests: matchedRequests,
       reservations: matchedReservations,
-      status
+      status,
+      canCompare
     };
   });
 
@@ -221,8 +247,8 @@ export function Step4BookingDashboard({
                   // Filter responded requests in this category
                   const responded = group.requests.filter(req => req.status === "RESPONDED");
                   
-                  // Check if we have multiple responses in this specific category
-                  const hasMultiple = responded.length > 1;
+                  // Check if we have multiple responses in this specific category based on DTO canCompare
+                  const hasMultiple = group.canCompare;
 
                   if (hasMultiple) {
                     // Render a localized QuoteComparison for this category
