@@ -217,6 +217,7 @@ export default async function PlansPage() {
                       {/* Desktop CTA */}
                       <Link
                         href={plannerLink}
+                        prefetch={false}
                         className={`hidden shrink-0 items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition-all hover:-translate-y-0.5 sm:inline-flex ${ctaStyles[meta.ctaVariant]}`}
                       >
                         {meta.cta}
@@ -268,6 +269,7 @@ export default async function PlansPage() {
                     <div className="mt-4 sm:hidden">
                       <Link
                         href={plannerLink}
+                        prefetch={false}
                         className={`flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${ctaStyles[meta.ctaVariant]}`}
                       >
                         {meta.cta}

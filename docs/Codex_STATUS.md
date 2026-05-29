@@ -1276,3 +1276,42 @@ Chrome MCP 재QA 시나리오:
 
 - 이번 변경은 routing/auth/server-action stability만 다뤘다.
 - Wedding/Funeral 레이아웃 톤 분리, vendor dashboard 업무 queue형 UI, Step 4 lane UI, notification UI, image warning 정리는 Claude UI 작업으로 남긴다.
+
+## 29. BUG-CR-01 Funeral planner RSC navigation stability - 2026-05-29
+
+범위:
+
+- BUG-CR-01만 조사/수정했다.
+- UI redesign, Wedding/Funeral domain mapping, seed, QuoteRequest/QuoteResponse/Reservation 핵심 로직, README, `docs/Claude_STATUS.md`는 수정하지 않았다.
+
+원인:
+
+- `/plans`의 Wedding/Funeral CTA href 생성은 동일한 `getPlannerLink()`와 `URLSearchParams`를 사용하며, Funeral href는 `/planner/funeral?planId=cmpq7awy6000u12vdhqarb1ji&step=4`로 정확했다.
+- `/planner/funeral/page.tsx`와 `/planner/wedding/page.tsx`의 RSC read path는 동일 구조이며, bootstrap DB read와 initial quote/module read에는 기존 `withPrismaRetry()` 경로가 적용되어 있었다.
+- `EventPlanningWorkspace`는 initial quote/module cache가 있으면 mount 직후 추가 Server Action read를 건너뛴다.
+- 남은 차이는 Next `Link` 자동 prefetch가 `/plans` 체류 중 planner RSC GET을 먼저 만들고, CTA click navigation이 별도 RSC GET을 다시 만드는 중복 GET 경로였다. QA의 `...&_rsc=e111h` 503, `...&_rsc=15m0i` 200 패턴은 이 prefetch/click 중복과 일치한다.
+
+수정:
+
+- `app/plans/page.tsx`: desktop/mobile planner status CTA Link에 `prefetch={false}`를 추가했다. href와 client-side navigation은 유지한다.
+- `scripts/server-action-read-concurrency-smoke.ts`: `/plans` planner status CTA가 `prefetch={false}`를 유지하는지 확인하는 guard를 추가했다. 기존 concurrent read smoke도 계속 실행한다.
+- Funeral page DTO, Wedding/Funeral mapping, seed, quote/reservation 핵심 로직은 변경하지 않았다.
+
+RSC 503 재QA:
+
+- `npm run dev`를 `localhost:3001`에서 실행해 `planner@yeon.local / demo1234`로 인증했다.
+- `/plans` HTML에서 planner CTA href 확인:
+  - Funeral: `/planner/funeral?planId=cmpq7awy6000u12vdhqarb1ji&step=4`
+  - Wedding: `/planner/wedding?planId=cmpq7awy3000t12vd6icnz7ij&step=4`
+- 인증된 RSC GET 반복 확인:
+  - Funeral `/planner/funeral?planId=cmpq7awy6000u12vdhqarb1ji&step=4&_rsc=...`: 12/12건 200
+  - Wedding `/planner/wedding?planId=cmpq7awy3000t12vd6icnz7ij&step=4&_rsc=...`: 12/12건 200
+- 직접 URL 접근/refresh에 해당하는 normal GET은 기존 조사와 동일하게 200 경로다.
+
+남은 Claude UI 작업:
+
+- Wedding/Funeral 레이아웃 톤 분리.
+- vendor dashboard 업무 queue형 UI.
+- Step 4 lane UI.
+- notification UI.
+- image warning 정리.
