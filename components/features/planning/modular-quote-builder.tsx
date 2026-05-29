@@ -244,14 +244,14 @@ function SummaryPanel({
         type="button"
         disabled={isSubmitting || (selectedModules.length === 0 && !basePackage)}
         onClick={onRequestQuote}
-        className="w-full rounded-xl py-2.5 text-xs font-bold text-white transition-all duration-150 hover:opacity-95 disabled:opacity-40 whitespace-nowrap"
+        className="w-full rounded-xl py-2.5 text-xs font-bold text-white transition-all duration-150 hover:opacity-95 disabled:opacity-40 whitespace-nowrap shadow-sm hover:shadow"
         style={{ backgroundColor: config.primary }}
       >
         {isSubmitting 
           ? '전송 중...' 
           : isWedding 
             ? '이 구성으로 견적 요청' 
-            : '이 구성으로 상담 요청'}
+            : '의전 맞춤 상담 요청하기'}
       </button>
     </div>
   )
@@ -305,14 +305,14 @@ function MobileBottomBar({
           type="button"
           disabled={isSubmitting || count === 0}
           onClick={onRequestQuote}
-          className="rounded-xl px-4 py-2 text-xs font-bold text-white disabled:opacity-40 shrink-0 whitespace-nowrap"
+          className="rounded-xl px-4 py-2 text-xs font-bold text-white disabled:opacity-40 shrink-0 whitespace-nowrap shadow-sm hover:shadow"
           style={{ backgroundColor: config.primary }}
         >
           {isSubmitting 
             ? '전송 중...' 
             : isWedding 
               ? '견적 요청' 
-              : '상담 요청'}
+              : '상담 요청하기'}
         </button>
       </div>
     </div>
@@ -426,12 +426,12 @@ export function ModularQuoteBuilder({
         <div className="space-y-3.5">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e5e2da] pb-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[#2c3455]">
-              {isWedding ? 'yeON 엄선 웨딩 권장 패키지' : 'yeON 정밀 의전 권장 기본 구성'}
+              {isWedding ? 'yeON 엄선 웨딩 권장 패키지' : 'yeON 정립 정중 의전 상담 패키지'}
             </h3>
             <span className="text-[10px] text-muted-foreground/60 leading-normal">
               {isWedding 
                 ? '번거로운 구성 조립 없이, 검증된 세트로 아름답고 확실하게 준비합니다.' 
-                : '당황스러운 순간, 가장 격식 있고 차분하게 모실 필수 절차 패키지입니다.'}
+                : '갑작스러운 슬픔 속에서, 경건하고 품격 있게 배웅을 보좌할 필수 구성 절차안입니다.'}
             </span>
           </div>
 
@@ -443,7 +443,7 @@ export function ModularQuoteBuilder({
                   key={pkg.id}
                   type="button"
                   onClick={() => builder.setBasePackage(active ? null : pkg)}
-                  className="rounded-xl border p-4 text-left transition-all duration-150 hover:bg-[#faf9f5]/30 group relative overflow-hidden"
+                  className="rounded-xl border p-4 text-left transition-all duration-150 hover:bg-[#faf9f5]/30 group relative overflow-hidden animate-fade-in"
                   style={{
                     borderColor: active ? config.primary : '#ebdccf/40',
                     backgroundColor: active ? config.surface : 'white',
@@ -454,7 +454,7 @@ export function ModularQuoteBuilder({
                       className="absolute right-0 top-0 rounded-bl-lg px-2 py-0.5 text-[8px] font-bold text-white whitespace-nowrap"
                       style={{ backgroundColor: config.primary }}
                     >
-                      기본 선택됨
+                      {isWedding ? '기본 선택됨' : '상담 기준'}
                     </div>
                   )}
                   <div className="flex items-start justify-between gap-2 pr-4">

@@ -14,7 +14,6 @@ import {
 import { buildVendorDashboardReservationContract } from "@/lib/vendor-dashboard-contract";
 import type { VendorDashboardReservationDTO } from "@/types/reservation";
 import { VendorOnboardingForm } from "./onboarding-form";
-import { ServiceManager } from "./service-manager";
 
 export default async function VendorDashboardPage() {
   const session = await getServerAuthSession();
@@ -170,20 +169,9 @@ export default async function VendorDashboardPage() {
           reservations={reservationContract.reservations}
           pendingConfirmations={reservationContract.pendingConfirmations}
           supportedEventTypes={supportedEventTypes}
+          supportedServiceModules={supportedServiceModules}
+          vendorServices={vendorServices}
         />
-
-        <section className="mt-16">
-          <h2 className="mb-6 font-[var(--font-serif)] text-lg font-bold text-[#2c3455]">
-            내 서비스 관리
-          </h2>
-          <div className="rounded-2xl border border-[#e5e2da] bg-white p-6 shadow-[0_2px_12px_rgba(0,0,0,0.01)]">
-            <ServiceManager
-              supportedEventTypes={supportedEventTypes}
-              supportedModules={supportedServiceModules}
-              existingServices={vendorServices}
-            />
-          </div>
-        </section>
 
       </main>
     </div>

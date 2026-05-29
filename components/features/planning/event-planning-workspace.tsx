@@ -1207,14 +1207,32 @@ export function EventPlanningWorkspace({
                           }`}>
                             <VIcon className="h-4.5 w-4.5" />
                           </div>
-                          <div className="min-w-0">
-                            <p 
-                              className="font-semibold text-xs text-[#2c3455] group-hover:text-foreground truncate break-keep"
-                              style={{ color: isSelected ? theme.accentText : "#2c3455" }}
-                            >
-                              {vendor.companyName ?? vendor.name}
-                            </p>
-                            <p className="mt-1 text-[10px] text-muted-foreground/60 font-normal truncate">{vendor.location ?? "위치 정보 없음"}</p>
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span 
+                                className="font-semibold text-xs text-[#2c3455] group-hover:text-foreground break-keep"
+                                style={{ color: isSelected ? theme.accentText : "#2c3455" }}
+                              >
+                                {vendor.companyName ?? vendor.name}
+                              </span>
+                              {(() => {
+                                const name = (vendor.companyName ?? vendor.name).toLowerCase();
+                                if (eventType === "WEDDING") {
+                                  if (name.includes("모먼트") || name.includes("가든") || name.includes("웨딩") || name.includes("홀")) {
+                                    return <Badge className="bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/50 hover:bg-[#fcf8f2] text-[8px] px-1.5 py-0.5 rounded font-bold shrink-0 shadow-none">공간 패키지 벤더</Badge>;
+                                  }
+                                  if (name.includes("오르세") || name.includes("플로") || name.includes("꽃") || name.includes("데코")) {
+                                    return <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-50 text-[8px] px-1.5 py-0.5 rounded font-bold shrink-0 shadow-none">플라워 업그레이드</Badge>;
+                                  }
+                                } else {
+                                  if (name.includes("의전") || name.includes("한결") || name.includes("장례")) {
+                                    return <Badge className="bg-slate-100 text-[#2c3455] border border-slate-200/50 hover:bg-slate-100 text-[8px] px-1.5 py-0.5 rounded font-bold shrink-0 shadow-none">통합 의전 상담 파트너</Badge>;
+                                  }
+                                }
+                                return null;
+                              })()}
+                            </div>
+                            <p className="text-[10px] text-muted-foreground/60 font-normal truncate">{vendor.location ?? "위치 정보 없음"}</p>
                           </div>
                         </div>
 
