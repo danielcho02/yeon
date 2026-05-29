@@ -215,14 +215,13 @@ export default async function PlansPage() {
                       </div>
 
                       {/* Desktop CTA */}
-                      <Link
+                      <a
                         href={plannerLink}
-                        prefetch={false}
                         className={`hidden shrink-0 items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition-all hover:-translate-y-0.5 sm:inline-flex ${ctaStyles[meta.ctaVariant]}`}
                       >
                         {meta.cta}
                         <ArrowRight className="h-3.5 w-3.5" />
-                      </Link>
+                      </a>
                     </div>
 
                     {/* Activity badges */}
@@ -267,14 +266,13 @@ export default async function PlansPage() {
 
                     {/* Mobile CTA */}
                     <div className="mt-4 sm:hidden">
-                      <Link
+                      <a
                         href={plannerLink}
-                        prefetch={false}
                         className={`flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${ctaStyles[meta.ctaVariant]}`}
                       >
                         {meta.cta}
                         <ArrowRight className="h-3.5 w-3.5" />
-                      </Link>
+                      </a>
                     </div>
                   </div>
                 </div>

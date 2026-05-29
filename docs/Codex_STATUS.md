@@ -1315,3 +1315,38 @@ RSC 503 재QA:
 - Step 4 lane UI.
 - notification UI.
 - image warning 정리.
+
+## 30. BUG-CR-01 hard navigation follow-up - 2026-05-29
+
+범위:
+
+- Focused Chrome QA에서 남은 BUG-CR-01만 수정했다.
+- UI redesign, seed, Wedding/Funeral domain mapping, QuoteRequest/QuoteResponse/Reservation 핵심 로직, README, `docs/Claude_STATUS.md`는 수정하지 않았다.
+
+원인 후보:
+
+- `/planner/funeral?planId=...&step=4` 직접 접근과 새로고침은 200이므로 funeral planner document render/read path 자체는 안정적이다.
+- `/plans` CTA click에서만 `_rsc=e111h` 503이 재현됐고 같은 URL의 다른 `_rsc` 요청은 200이었다. 이는 Next client-side route transition 중 생성되는 RSC fetch 한 건이 실패하고 캐시/후속 fetch로 화면은 정상 렌더되는 패턴이다.
+- 이전 조치의 `prefetch={false}`는 hover/viewport prefetch만 막고, click 시 Next `<Link>`의 client navigation과 RSC fetch는 그대로 남긴다. 따라서 click-time `_rsc=...` 요청 제거에는 충분하지 않았다.
+
+수정:
+
+- `app/plans/page.tsx`의 planner 상세 CTA를 Next `<Link>`에서 일반 `<a href={plannerLink}>`로 전환했다.
+- desktop/mobile 카드 CTA 모두 hard navigation으로 정렬했다.
+- href 생성은 기존 `getPlannerLink()`를 그대로 사용하므로 `planId`와 `step` query는 변경하지 않았다.
+- 스타일 class는 그대로 유지했다.
+
+재QA 항목:
+
+- `/plans`에서 Funeral "받은 견적 확인" 클릭 시 `/planner/funeral?planId=...&step=4`로 document navigation 되는지 확인한다.
+- 같은 Funeral CTA 클릭 테스트를 2회 이상 반복하고 Network에 `_rsc=...` 503이 없는지 확인한다.
+- Wedding planner CTA도 `/planner/wedding?planId=...&step=4`로 정상 document navigation 되는지 확인한다.
+- direct URL 접근과 새로고침은 계속 200인지 확인한다.
+
+남은 Claude UI 작업:
+
+- Wedding/Funeral 레이아웃 톤 분리.
+- vendor dashboard 업무 queue형 UI.
+- Step 4 lane UI.
+- notification UI.
+- image warning 정리.

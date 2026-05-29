@@ -12,20 +12,20 @@ import { demoAccountCredentials } from "../lib/demo/ensure-demo-data";
 import { buildVendorDashboardReservationContract } from "../lib/vendor-dashboard-contract";
 import type { VendorDashboardReservationDTO } from "../types/reservation";
 
-async function assertPlansPlannerCtasDisablePrefetch() {
+async function assertPlansPlannerCtasUseHardNavigation() {
   const source = await readFile("app/plans/page.tsx", "utf8");
-  const plannerLinkCtaCount = source.match(/href=\{plannerLink\}/g)?.length ?? 0;
-  const prefetchDisabledCount = source.match(/prefetch=\{false\}/g)?.length ?? 0;
+  const nextLinkPlannerCtaCount = source.match(/<Link\s+href=\{plannerLink\}/g)?.length ?? 0;
+  const hardNavPlannerCtaCount = source.match(/<a\s+href=\{plannerLink\}/g)?.length ?? 0;
 
   assert.equal(
-    plannerLinkCtaCount,
-    2,
-    "plans page should keep exactly the desktop and mobile planner status CTAs guarded by this smoke"
+    nextLinkPlannerCtaCount,
+    0,
+    "planner status CTAs must not use Next Link because click-time RSC navigation can emit duplicate _rsc requests"
   );
   assert.equal(
-    prefetchDisabledCount,
-    plannerLinkCtaCount,
-    "planner status CTAs must disable Next Link prefetch to avoid duplicate RSC GETs during client navigation"
+    hardNavPlannerCtaCount,
+    2,
+    "plans page should keep exactly the desktop and mobile planner status CTAs as hard-navigation anchors"
   );
 }
 
@@ -180,7 +180,7 @@ async function readVendorContract(client: PrismaClient, vendorId: string) {
 }
 
 async function main() {
-  await assertPlansPlannerCtasDisablePrefetch();
+  await assertPlansPlannerCtasUseHardNavigation();
 
   const clients = Array.from({ length: 4 }, createClient);
   const primary = clients[0];
