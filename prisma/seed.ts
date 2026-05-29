@@ -407,6 +407,7 @@ async function seedModularQuoteData() {
       guestCount: null,
       quotedAmount: 1_180_000,
       confirmedAmount: null,
+      vendorConfirmationDueAt: plusDays(2),
       status: ReservationStatus.PENDING,
       notes: "견적 수락 완료, 업체 최종 확정 대기"
     }

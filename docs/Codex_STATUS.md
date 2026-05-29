@@ -1316,6 +1316,61 @@ RSC 503 재QA:
 - notification UI.
 - image warning 정리.
 
+## 31. BUG-DB01 demo data reservation integrity - 2026-05-29
+
+범위:
+
+- demo login 중 호출되는 `ensureDemoData()`의 DB 오염만 수정했다.
+- UI, `docs/Claude_STATUS.md`, README, Wedding/Funeral domain mapping, QuoteRequest/QuoteResponse/Reservation action contract는 수정하지 않았다.
+
+원인:
+
+- `npm run db:seed`는 `ensureDemoData()` 실행 후 `seedModularQuoteData()`에서 legacy reservations를 삭제하고 modular quote workflow fixture 3건을 생성한다.
+- 그러나 demo login 경로의 `authorize()`는 demo 계정 로그인 시 `ensureDemoData(prisma)`를 다시 호출한다.
+- 기존 `ensureDemoData()`는 legacy `Reservation` 4건을 직접 생성했다.
+- 그 결과 seed 직후 `reservations=3`이던 DB가 demo login 이후 `reservations=7`로 증가했고, `/plans`는 `QuoteRequest` 중심으로, Step 4는 all reservations 중심으로 상태를 읽어 화면 상태 불일치 가능성이 생겼다.
+
+수정:
+
+- `lib/demo/ensure-demo-data.ts`에서 legacy reservation, reservation-bound transaction, reservation-bound review 생성 경로를 제거했다.
+- `ensureDemoData()`는 demo users/vendors, vendor legacy catalog services, event plans, posts, invitations 같은 bootstrap 데이터만 보강한다.
+- modular quote workflow fixture는 `prisma/seed.ts`의 `seedModularQuoteData()`가 source-of-truth다.
+- `prisma/seed.ts`의 accepted quote pending reservation에 `vendorConfirmationDueAt`을 채워 runtime `acceptQuoteResponse()` contract와 맞췄다.
+- `lib/vendor-dashboard-contract.ts`는 `newQuoteRequests`와 `pendingConfirmations`가 `quoteRequestId != null`인 quote workflow reservations만 포함하도록 보강했다.
+
+검증 기준:
+
+- seed baseline: `reservations=3`, `quoteRequests=4`, `quoteResponses=2`.
+- `ensureDemoData(prisma)` 1회 호출 후 count 유지.
+- `ensureDemoData(prisma)` 2회 호출 후 count 유지.
+- `Reservation(PENDING, quoteRequestId=null)`은 vendor new request/pending confirmation contract에 포함되지 않는다.
+- `/plans` quote workflow와 Step 4 reservations가 같은 demo scenario를 가리키도록 non-workflow reservations가 없어야 한다.
+
+새 검증:
+
+- `scripts/verify-demo-data-integrity.ts`를 추가했다.
+- 이 스크립트는 seed baseline count, repeated `ensureDemoData()` idempotency, vendor dashboard contract, Step 4 non-workflow reservation 부재, accepted pending reservation due date를 확인한다.
+
+최종 workflow contract:
+
+- `createQuoteRequest()`: `QuoteRequest(PENDING)` + `Reservation(PENDING)` placeholder 생성.
+- `submitQuoteResponse()`: `QuoteResponse` 생성, `QuoteRequest(RESPONDED)`, reservation `quoteResponseId`/`quotedAmount` 동기화, `confirmedAmount=null`.
+- `acceptQuoteResponse()`: `QuoteRequest(ACCEPTED)`, `Reservation(PENDING)`, `vendorConfirmationDueAt` 설정.
+- `confirmReservation()`: vendor-only, `Reservation(CONFIRMED)`, `confirmedAmount` 설정.
+
+Antigravity/Claude 프론트 상태 contract:
+
+- Step 3 source-of-truth는 `VendorServiceModule`이다. legacy `VendorService`는 vendor service manager/catalog bootstrap용이며 planner Step 3 상태 계산에 섞으면 안 된다.
+- `/plans` CTA 상태는 `QuoteRequest` workflow summary 기준이다.
+- Step 4는 quote workflow에 연결된 reservations 기준으로 해석해야 한다.
+- vendor pending confirmation은 `Reservation(PENDING) + QuoteRequest(ACCEPTED) + quoteRequestId != null`만 의미한다.
+
+UI polish 전 확인 완료:
+
+- demo login 후 reservation count가 seed baseline에서 증가하지 않는지 검증하는 스크립트가 추가됐다.
+- legacy reservation이 vendor dashboard pending/new buckets를 오염시키지 않도록 contract가 보강됐다.
+- accepted pending seed fixture는 due date를 가진다.
+
 ## 30. BUG-CR-01 hard navigation follow-up - 2026-05-29
 
 범위:

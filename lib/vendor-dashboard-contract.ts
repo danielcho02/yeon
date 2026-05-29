@@ -4,11 +4,19 @@ import type {
 } from "../types/reservation";
 
 function isNewQuoteRequest(reservation: VendorDashboardReservationDTO) {
-  return reservation.status === "PENDING" && reservation.quoteResponseId === null;
+  return (
+    reservation.status === "PENDING" &&
+    reservation.quoteRequestId !== null &&
+    reservation.quoteResponseId === null
+  );
 }
 
 function isPendingConfirmation(reservation: VendorDashboardReservationDTO) {
-  return reservation.status === "PENDING" && reservation.quoteRequestStatus === "ACCEPTED";
+  return (
+    reservation.status === "PENDING" &&
+    reservation.quoteRequestId !== null &&
+    reservation.quoteRequestStatus === "ACCEPTED"
+  );
 }
 
 function isWaitingForUserAcceptance(reservation: VendorDashboardReservationDTO) {
