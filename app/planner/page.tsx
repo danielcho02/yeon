@@ -10,7 +10,7 @@ import {
   ensureDemoData,
   isDemoCredentialEmail
 } from "@/lib/demo/ensure-demo-data";
-import { prisma } from "@/lib/prisma";
+import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { mvpEventTypes } from "@/lib/step3.server";
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
@@ -30,11 +30,13 @@ export default async function PlannerPage() {
     await ensureDemoData(prisma);
   }
 
-  const existingTypes = await prisma.eventPlan.findMany({
-    where: { ownerId: session.user.id, type: { in: mvpEventTypes } },
-    select: { type: true },
-    distinct: ["type"]
-  });
+  const existingTypes = await withPrismaRetry(() =>
+    prisma.eventPlan.findMany({
+      where: { ownerId: session.user.id, type: { in: mvpEventTypes } },
+      select: { type: true },
+      distinct: ["type"]
+    })
+  );
 
   const hasWedding = existingTypes.some((p) => p.type === "WEDDING");
   const hasFuneral = existingTypes.some((p) => p.type === "FUNERAL");

@@ -1,11 +1,13 @@
 import { redirect } from "next/navigation";
 
+import { getQuotesByPlan, getVendorServiceModules } from "@/app/actions/quote";
 import { EventPlanningWorkspace } from "@/components/features/planning/event-planning-workspace";
 import type { ReservationItem } from "@/components/features/planning/workspace-types";
 import { UserRole } from "@/generated/prisma/client";
 import { getServerAuthSession } from "@/lib/auth/session";
 import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { vendorSupportsAnyServiceModule } from "@/lib/step3.shared";
+import { buildLoginCallbackHref, buildPlannerCallbackPath } from "../auth-redirect";
 
 type Recommendation = {
   conceptTitle: string;
@@ -28,21 +30,28 @@ function isRecommendationShape(value: unknown): value is Recommendation {
   );
 }
 
-function parseInitialStep(value: string | undefined) {
-  const step = Number.parseInt(value ?? "", 10);
+type PlannerSearchParams = Record<string, string | string[] | undefined>;
+
+function readSearchParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function parseInitialStep(value: string | string[] | undefined) {
+  const normalizedValue = readSearchParam(value);
+  const step = Number.parseInt(normalizedValue ?? "", 10);
   return step >= 1 && step <= 4 ? step : null;
 }
 
 export default async function FuneralPlannerPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ planId?: string; step?: string }>;
+  searchParams?: Promise<PlannerSearchParams>;
 }) {
   const session = await getServerAuthSession();
   const params = await searchParams;
 
   if (!session?.user?.id) {
-    redirect("/login?callbackUrl=/planner/funeral");
+    redirect(buildLoginCallbackHref(buildPlannerCallbackPath("/planner/funeral", params)));
   }
 
   if (session.user.role === UserRole.VENDOR) {
@@ -50,8 +59,10 @@ export default async function FuneralPlannerPage({
   }
 
   // Cross-type guard: if planId belongs to a WEDDING plan, redirect before heavy queries
-  if (params?.planId) {
-    const planIdValue = params.planId;
+  const requestedPlanId = readSearchParam(params?.planId);
+
+  if (requestedPlanId) {
+    const planIdValue = requestedPlanId;
     const typeCheck = await withPrismaRetry(() =>
       prisma.eventPlan.findFirst({
         where: { id: planIdValue, ownerId: session.user.id },
@@ -59,8 +70,7 @@ export default async function FuneralPlannerPage({
       })
     );
     if (typeCheck?.type === "WEDDING") {
-      const step = parseInitialStep(params.step);
-      redirect(`/planner/wedding?planId=${typeCheck.id}${step ? `&step=${step}` : ""}`);
+      redirect(buildPlannerCallbackPath("/planner/wedding", { ...params, planId: typeCheck.id }));
     }
   }
 
@@ -146,12 +156,28 @@ export default async function FuneralPlannerPage({
   const filteredVendors = vendors.filter((vendor) =>
     vendorSupportsAnyServiceModule(vendor, "FUNERAL")
   );
+  const initialPlan =
+    (requestedPlanId ? plans.find((item) => item.id === requestedPlanId) : null) ??
+    (plans.length === 1 ? plans[0] : null);
+  const initialVendor = filteredVendors[0] ?? null;
+  const [initialVendorModulesResult, initialQuoteRequestsResult] = await Promise.all([
+    initialVendor ? getVendorServiceModules(initialVendor.id, "FUNERAL") : null,
+    initialPlan ? getQuotesByPlan(initialPlan.id) : null
+  ]);
+  const initialVendorModulesByVendorId =
+    initialVendor && initialVendorModulesResult?.success
+      ? { [initialVendor.id]: initialVendorModulesResult.data }
+      : undefined;
+  const initialQuoteRequestsByPlanId =
+    initialPlan && initialQuoteRequestsResult?.success
+      ? { [initialPlan.id]: initialQuoteRequestsResult.data }
+      : undefined;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
       <EventPlanningWorkspace
         eventType="FUNERAL"
-        initialPlanId={params?.planId ?? null}
+        initialPlanId={requestedPlanId ?? null}
         initialStep={parseInitialStep(params?.step)}
         viewerEmail={session.user.email ?? ""}
         viewerName={session.user.name ?? "사용자"}
@@ -206,6 +232,8 @@ export default async function FuneralPlannerPage({
             location: r.vendor.location
           }
         }))}
+        initialVendorModulesByVendorId={initialVendorModulesByVendorId}
+        initialQuoteRequestsByPlanId={initialQuoteRequestsByPlanId}
       />
     </main>
   );

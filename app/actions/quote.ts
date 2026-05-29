@@ -16,7 +16,7 @@ import {
   getActionError,
   isPrismaUniqueConstraintError
 } from "@/lib/errors";
-import { prisma } from "@/lib/prisma";
+import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { assertQuoteTransition } from "@/lib/state-machine";
 import {
   createWorkflowActivity,
@@ -964,10 +964,12 @@ export async function calculateQuoteTotal(
       return actionError("모듈 ID가 필요합니다.", "VALIDATION_ERROR");
     }
 
-    const modules = await prisma.vendorServiceModule.findMany({
-      where: { id: { in: parsed.data }, isActive: true },
-      select: { price: true }
-    });
+    const modules = await withPrismaRetry(() =>
+      prisma.vendorServiceModule.findMany({
+        where: { id: { in: parsed.data }, isActive: true },
+        select: { price: true }
+      })
+    );
 
     if (modules.length !== parsed.data.length) {
       return actionError("유효하지 않은 모듈이 포함되어 있습니다.", "INVALID_MODULES");
@@ -991,56 +993,61 @@ export async function getQuotesByPlan(
       return actionError("플랜 ID가 필요합니다.", "VALIDATION_ERROR");
     }
 
-    const plan = await prisma.eventPlan.findFirst({
-      where: { id: planId, ownerId: user.id },
-      select: { id: true }
-    });
+    const requestsWithModules = await withPrismaRetry(async () => {
+      const plan = await prisma.eventPlan.findFirst({
+        where: { id: planId, ownerId: user.id },
+        select: { id: true }
+      });
 
-    if (!plan) {
-      return actionError("플랜을 찾을 수 없습니다.", "NOT_FOUND");
-    }
+      if (!plan) return null;
 
-    const requests = await prisma.quoteRequest.findMany({
-      where: { planId: plan.id },
-      include: {
-        vendor: true,
-        plan: {
-          select: {
-            id: true,
-            title: true,
-            type: true,
-            scheduledAt: true,
-            region: true,
-            guestTarget: true,
-            budget: true
-          }
-        },
-        reservation: {
-          include: {
-            vendor: true,
-            quoteResponse: {
-              include: { vendor: true }
+      const requests = await prisma.quoteRequest.findMany({
+        where: { planId: plan.id },
+        include: {
+          vendor: true,
+          plan: {
+            select: {
+              id: true,
+              title: true,
+              type: true,
+              scheduledAt: true,
+              region: true,
+              guestTarget: true,
+              budget: true
             }
-          }
-        },
-        responses: {
-          include: {
-            vendor: true,
-            reservation: {
-              include: {
-                vendor: true,
-                quoteResponse: {
-                  include: { vendor: true }
-                }
+          },
+          reservation: {
+            include: {
+              vendor: true,
+              quoteResponse: {
+                include: { vendor: true }
               }
             }
           },
-          orderBy: { createdAt: "desc" }
-        }
-      },
-      orderBy: { createdAt: "desc" }
+          responses: {
+            include: {
+              vendor: true,
+              reservation: {
+                include: {
+                  vendor: true,
+                  quoteResponse: {
+                    include: { vendor: true }
+                  }
+                }
+              }
+            },
+            orderBy: { createdAt: "desc" }
+          }
+        },
+        orderBy: { createdAt: "desc" }
+      });
+
+      return attachSelectedModuleDetails(requests);
     });
-    const requestsWithModules = await attachSelectedModuleDetails(requests);
+
+    if (!requestsWithModules) {
+      return actionError("플랜을 찾을 수 없습니다.", "NOT_FOUND");
+    }
 
     return actionSuccess(requestsWithModules.map(mapQuoteRequestWithResponses));
   } catch (error) {
@@ -1069,31 +1076,34 @@ export async function getVendorServiceModules(
       return actionError("행사 유형을 확인해 주세요.", "VALIDATION_ERROR");
     }
 
-    if (eventType) {
-      const vendor = await prisma.user.findFirst({
-        where: {
-          id: vendorId,
-          role: UserRole.VENDOR,
-          vendorApprovalStatus: VendorApprovalStatus.APPROVED,
-          isActive: true
-        },
-        select: { id: true, supportedEventTypes: true }
+    const filteredModules = await withPrismaRetry(async () => {
+      if (eventType) {
+        const vendor = await prisma.user.findFirst({
+          where: {
+            id: vendorId,
+            role: UserRole.VENDOR,
+            vendorApprovalStatus: VendorApprovalStatus.APPROVED,
+            isActive: true
+          },
+          select: { id: true, supportedEventTypes: true }
+        });
+
+        if (!vendor || !vendorSupportsEventType(vendor, eventType)) {
+          return [];
+        }
+      }
+
+      const modules = await prisma.vendorServiceModule.findMany({
+        where: { vendorId, isActive: true },
+        orderBy: [{ category: "asc" }, { sortOrder: "asc" }]
       });
 
-      if (!vendor || !vendorSupportsEventType(vendor, eventType)) {
-        return actionSuccess([]);
-      }
-    }
-
-    const modules = await prisma.vendorServiceModule.findMany({
-      where: { vendorId, isActive: true },
-      orderBy: [{ category: "asc" }, { sortOrder: "asc" }]
+      return eventType
+        ? modules.filter((module) =>
+            vendorServiceModuleCategoryMatchesEventType(eventType, module.category)
+          )
+        : modules;
     });
-    const filteredModules = eventType
-      ? modules.filter((module) =>
-          vendorServiceModuleCategoryMatchesEventType(eventType, module.category)
-        )
-      : modules;
 
     return actionSuccess(filteredModules.map(mapVendorServiceModuleData));
   } catch (error) {
@@ -1107,47 +1117,50 @@ export async function getQuoteRequestsForVendor(): Promise<
   try {
     const vendor = await requireVendorUser();
 
-    const requests = await prisma.quoteRequest.findMany({
-      where: { vendorId: vendor.id },
-      include: {
-        vendor: true,
-        plan: {
-          select: {
-            id: true,
-            title: true,
-            type: true,
-            scheduledAt: true,
-            region: true,
-            guestTarget: true,
-            budget: true
-          }
-        },
-        reservation: {
-          include: {
-            vendor: true,
-            quoteResponse: {
-              include: { vendor: true }
+    const requestsWithModules = await withPrismaRetry(async () => {
+      const requests = await prisma.quoteRequest.findMany({
+        where: { vendorId: vendor.id },
+        include: {
+          vendor: true,
+          plan: {
+            select: {
+              id: true,
+              title: true,
+              type: true,
+              scheduledAt: true,
+              region: true,
+              guestTarget: true,
+              budget: true
             }
-          }
-        },
-        responses: {
-          include: {
-            vendor: true,
-            reservation: {
-              include: {
-                vendor: true,
-                quoteResponse: {
-                  include: { vendor: true }
-                }
+          },
+          reservation: {
+            include: {
+              vendor: true,
+              quoteResponse: {
+                include: { vendor: true }
               }
             }
           },
-          orderBy: { createdAt: "desc" }
-        }
-      },
-      orderBy: { createdAt: "desc" }
+          responses: {
+            include: {
+              vendor: true,
+              reservation: {
+                include: {
+                  vendor: true,
+                  quoteResponse: {
+                    include: { vendor: true }
+                  }
+                }
+              }
+            },
+            orderBy: { createdAt: "desc" }
+          }
+        },
+        orderBy: { createdAt: "desc" }
+      });
+
+      return attachSelectedModuleDetails(requests);
     });
-    const requestsWithModules = await attachSelectedModuleDetails(requests);
 
     return actionSuccess(requestsWithModules.map(mapQuoteRequestWithResponses));
   } catch (error) {

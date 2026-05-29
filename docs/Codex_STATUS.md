@@ -1214,3 +1214,65 @@ Chrome MCP 재확인 항목:
 - `/planner/wedding?planId=...&step=3`에서 Funeral module/label 금지 키워드가 노출되지 않는지 확인한다.
 - `/planner/funeral?step=4`에서 reservation/quote response의 vendor/service/module label이 Funeral domain에 맞는지 확인한다.
 - `/vendor/dashboard`에서 `오르세 플로럴`과 `한결 의전`의 업무 queue가 서로 다른 event/service mapping을 유지하는지 확인한다.
+
+## 28. Critical planner routing/auth stability fix - 2026-05-29
+
+범위:
+
+- main merge blocker로 분류된 UX-01, UX-02, UX-03만 수정했다.
+- UI redesign, README, `docs/Claude_STATUS.md`, vendor-service-event mapping 변경은 하지 않았다.
+- QuoteRequest → QuoteResponse → Accept → Reservation(PENDING) → Confirm(CONFIRMED) 표준 흐름은 유지했다.
+
+UX-01 원인과 수정:
+
+- 원인: `/planner/funeral` 서버 페이지의 비로그인 guard가 `/login?callbackUrl=/planner/funeral` 고정값만 사용했다. QA에서 step=4 deep link가 login이 아닌 home으로 보인 것은 callback context가 손실된 상태에서 login/default routing과 결합된 증상으로 판단한다.
+- 수정: `buildPlannerCallbackPath()`와 `buildLoginCallbackHref()`를 추가해 funeral/wedding 모두 현재 pathname + search 전체를 callbackUrl에 encode한다.
+- 예: `/planner/funeral?planId=abc&step=4` → `/login?callbackUrl=%2Fplanner%2Ffuneral%3FplanId%3Dabc%26step%3D4`.
+
+UX-03 callbackUrl query 보존:
+
+- 원인: wedding/funeral auth guard가 planId/step query를 읽지 않고 route path만 callbackUrl로 넘겼다.
+- 수정: `searchParams`의 모든 key/value를 `URLSearchParams`로 재구성해 callbackUrl에 포함한다. 배열 query는 append하고 undefined는 제외한다.
+- cross-type guard도 path만 바꾸고 query를 보존한다. Wedding planId로 funeral에 들어오면 `/planner/wedding?...`으로, Funeral planId로 wedding에 들어오면 `/planner/funeral?...`으로 이동한다.
+
+UX-02 Server Action POST 503 완화:
+
+- 원인 후보: `EventPlanningWorkspace` mount 직후 `getVendorServiceModules()`와 `getQuotesByPlan()`을 클라이언트에서 호출했고, React dev strict mode 또는 빠른 route refresh와 겹치면 동일 read Server Action POST가 반복될 수 있다. SQLite busy/locked류 transient read 실패가 503으로 노출됐을 가능성이 있다. 현재 증상만으로 DB lock 단일 원인이라고 단정하지 않는다.
+- 완화: wedding/funeral 서버 페이지에서 초기 selected vendor modules와 selected plan quote requests를 서버에서 먼저 읽어 client props로 전달한다.
+- 완화: client workspace는 initial cache가 있으면 mount-time Server Action POST를 건너뛰고, vendor/plan 변경 또는 quote write 이후 refresh에서만 read action을 호출한다.
+- 완화: `getPlanById()`, `getPlansWithQuoteStatus()`, `getUserPlans()`, `getQuotesByPlan()`, `getVendorServiceModules()`, `getQuoteRequestsForVendor()`, `calculateQuoteTotal()` read path에 `withPrismaRetry()`를 적용했다. write action에는 중복 생성 위험 때문에 retry를 추가하지 않았다.
+- 목표: Network 기준 planner step=1~4 초기 로드에서 불필요한 Server Action POST와 POST 503을 0건으로 낮춘다.
+
+새/보강 smoke:
+
+- `scripts/verify-planner-auth-redirect.ts`: callbackUrl helper가 pathname + search를 보존하는지 검증한다.
+- `scripts/server-action-read-concurrency-smoke.ts`: planner bootstrap read를 Wedding/Funeral 양쪽, vendor modules, quote requests까지 반복 병렬 실행한다.
+
+검증 결과:
+
+- `npx prisma generate`: 통과.
+- `npm run db:seed`: 통과.
+- `npx tsx scripts/verify-planner-auth-redirect.ts`: 통과.
+- `npx tsx scripts/verify-quote-flow.ts`: 통과.
+- `npx tsx scripts/launch-readiness-smoke.ts`: 통과.
+- `npx tsx scripts/server-action-read-concurrency-smoke.ts`: 통과.
+- `npx tsc --noEmit`: 통과.
+- `npm run lint`: 통과.
+- `npm run build`: 통과.
+- `npx prisma migrate status`: 통과, database schema up to date.
+- built Next server에서 비로그인 HTTP redirect 확인:
+  - `/planner/funeral?planId=funeral-id&step=4` → `Location: /login?callbackUrl=%2Fplanner%2Ffuneral%3FplanId%3Dfuneral-id%26step%3D4`.
+  - `/planner/wedding?planId=wedding-id&step=3` → `Location: /login?callbackUrl=%2Fplanner%2Fwedding%3FplanId%3Dwedding-id%26step%3D3`.
+
+Chrome MCP 재QA 시나리오:
+
+- 비로그인 상태에서 `/planner/funeral?planId=FUNERAL_ID&step=4` 접근 시 `/login`으로 이동하고 callbackUrl에 `planId`와 `step=4`가 포함되는지 확인한다.
+- 로그인 완료 후 funeral planner의 동일 planId와 step=4로 복귀하는지 확인한다.
+- 비로그인 상태에서 `/planner/wedding?planId=WEDDING_ID&step=3` 접근 시 `/login` callbackUrl에 `planId`와 `step=3`이 포함되는지 확인한다.
+- 로그인 완료 후 wedding planner의 동일 planId와 step=3으로 복귀하는지 확인한다.
+- `/planner/wedding` 및 `/planner/funeral` step=1~4 초기 로드에서 Network POST 503이 재발하지 않는지 확인한다.
+
+남은 Claude UI 작업:
+
+- 이번 변경은 routing/auth/server-action stability만 다뤘다.
+- Wedding/Funeral 레이아웃 톤 분리, vendor dashboard 업무 queue형 UI, Step 4 lane UI, notification UI, image warning 정리는 Claude UI 작업으로 남긴다.

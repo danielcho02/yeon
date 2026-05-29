@@ -107,10 +107,14 @@ async function readVendorReservations(client: PrismaClient, vendorId: string) {
   });
 }
 
-async function readPlannerBootstrap(client: PrismaClient, ownerId: string) {
-  return Promise.all([
+async function readPlannerBootstrap(
+  client: PrismaClient,
+  ownerId: string,
+  eventType: "WEDDING" | "FUNERAL"
+) {
+  const [plans, vendors, reservations] = await Promise.all([
     client.eventPlan.findMany({
-      where: { ownerId, type: "WEDDING" },
+      where: { ownerId, type: eventType },
       select: { id: true, title: true, type: true, scheduledAt: true },
       orderBy: { scheduledAt: "asc" }
     }),
@@ -124,11 +128,32 @@ async function readPlannerBootstrap(client: PrismaClient, ownerId: string) {
       orderBy: { createdAt: "asc" }
     }),
     client.reservation.findMany({
-      where: { eventPlan: { ownerId, type: "WEDDING" } },
+      where: { eventPlan: { ownerId, type: eventType } },
       select: { id: true, status: true, quoteRequestId: true, quoteResponseId: true },
       orderBy: { createdAt: "desc" }
     })
   ]);
+
+  const selectedPlan = plans[0] ?? null;
+  const selectedVendor = vendors[0] ?? null;
+  const [vendorModules, quoteRequests] = await Promise.all([
+    selectedVendor
+      ? client.vendorServiceModule.findMany({
+          where: { vendorId: selectedVendor.id, isActive: true },
+          select: { id: true, category: true, price: true, pricingType: true },
+          orderBy: [{ category: "asc" }, { sortOrder: "asc" }]
+        })
+      : Promise.resolve([]),
+    selectedPlan
+      ? client.quoteRequest.findMany({
+          where: { planId: selectedPlan.id },
+          select: { id: true, status: true, vendorId: true },
+          orderBy: { createdAt: "desc" }
+        })
+      : Promise.resolve([])
+  ]);
+
+  return { plans, vendors, reservations, vendorModules, quoteRequests };
 }
 
 async function readVendorContract(client: PrismaClient, vendorId: string) {
@@ -156,13 +181,20 @@ async function main() {
     const tasks = Array.from({ length: 24 }, (_item, index) => {
       const client = clients[index % clients.length];
       return Promise.all([
-        readPlannerBootstrap(client, planner.id),
+        readPlannerBootstrap(client, planner.id, "WEDDING"),
+        readPlannerBootstrap(client, planner.id, "FUNERAL"),
         readVendorContract(client, venue.id)
       ]);
     });
 
     const results = await Promise.all(tasks);
-    for (const [_plannerReads, vendorContract] of results) {
+    for (const [weddingBootstrap, funeralBootstrap, vendorContract] of results) {
+      assert.ok(weddingBootstrap.plans.length >= 0);
+      assert.ok(weddingBootstrap.vendorModules.length >= 0);
+      assert.ok(weddingBootstrap.quoteRequests.length >= 0);
+      assert.ok(funeralBootstrap.plans.length >= 0);
+      assert.ok(funeralBootstrap.vendorModules.length >= 0);
+      assert.ok(funeralBootstrap.quoteRequests.length >= 0);
       assert.ok(vendorContract.counts.newRequestsCount >= 0);
       assert.ok(vendorContract.counts.pendingConfirmationsCount >= 0);
       assert.ok(vendorContract.counts.confirmedReservationsCount >= 0);

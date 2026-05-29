@@ -174,6 +174,8 @@ type Props = {
   plans: PlanOption[];
   vendors: VendorOption[];
   reservations: ReservationItem[];
+  initialVendorModulesByVendorId?: Record<string, VendorServiceModuleData[]>;
+  initialQuoteRequestsByPlanId?: Record<string, QuoteRequestWithResponses[]>;
 };
 
 function stepKeyFromNumber(step: number | null | undefined): StepKey | null {
@@ -192,6 +194,8 @@ export function EventPlanningWorkspace({
   plans,
   vendors,
   reservations,
+  initialVendorModulesByVendorId,
+  initialQuoteRequestsByPlanId,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -263,9 +267,22 @@ export function EventPlanningWorkspace({
   const [activeStep, setActiveStep] = useState<StepKey>(resolvedInitialStep);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
   const [isEditingPlan, setIsEditingPlan] = useState(!Boolean(initialPlan) && plans.length === 0);
-  const [vendorModules, setVendorModules] = useState<VendorServiceModuleData[] | null>(null);
+  const [selectedVendorId, setSelectedVendorId] = useState<string>(vendors[0]?.id ?? "");
+  const selectedVendor = vendors.find((vendor) => vendor.id === selectedVendorId) ?? null;
+  const [checkedServiceIds, setCheckedServiceIds] = useState<Set<string>>(new Set());
+  const [vendorModuleCache, setVendorModuleCache] = useState<Record<string, VendorServiceModuleData[]>>(
+    () => initialVendorModulesByVendorId ?? {}
+  );
+  const [quoteRequestsCache, setQuoteRequestsCache] = useState<Record<string, QuoteRequestWithResponses[]>>(
+    () => initialQuoteRequestsByPlanId ?? {}
+  );
+  const [vendorModules, setVendorModules] = useState<VendorServiceModuleData[] | null>(
+    () => (selectedVendorId ? initialVendorModulesByVendorId?.[selectedVendorId] ?? null : null)
+  );
   const [vendorModuleError, setVendorModuleError] = useState(false);
-  const [quoteRequestsData, setQuoteRequestsData] = useState<QuoteRequestWithResponses[] | null>(null);
+  const [quoteRequestsData, setQuoteRequestsData] = useState<QuoteRequestWithResponses[] | null>(
+    () => (plan?.id ? initialQuoteRequestsByPlanId?.[plan.id] ?? null : null)
+  );
   const [isQuoteActionPending, setIsQuoteActionPending] = useState(false);
   const quoteActionLockedRef = useRef(false);
   const [confettiActive, setConfettiActive] = useState(false);
@@ -276,13 +293,16 @@ export function EventPlanningWorkspace({
     setDirection(nextIdx >= currentIdx ? 'forward' : 'back');
     setActiveStep(next);
   }
-  const [selectedVendorId, setSelectedVendorId] = useState<string>(vendors[0]?.id ?? "");
-  const selectedVendor = vendors.find((vendor) => vendor.id === selectedVendorId) ?? null;
-  const [checkedServiceIds, setCheckedServiceIds] = useState<Set<string>>(new Set());
-
   // Load real VendorServiceModule records for the selected vendor
   useEffect(() => {
     if (!selectedVendorId) { setVendorModules(null); setVendorModuleError(false); return; }
+    const cachedModules = vendorModuleCache[selectedVendorId];
+    if (cachedModules) {
+      setVendorModules(cachedModules);
+      setVendorModuleError(false);
+      return;
+    }
+
     let cancelled = false;
     setVendorModules(null);
     setVendorModuleError(false);
@@ -290,6 +310,7 @@ export function EventPlanningWorkspace({
       if (cancelled) return;
       if (result.success) {
         setVendorModules(result.data);
+        setVendorModuleCache((current) => ({ ...current, [selectedVendorId]: result.data }));
         setVendorModuleError(false);
       } else {
         setVendorModules([]);
@@ -297,12 +318,13 @@ export function EventPlanningWorkspace({
       }
     });
     return () => { cancelled = true; };
-  }, [selectedVendorId, eventType]);
+  }, [selectedVendorId, eventType, vendorModuleCache]);
 
   async function refreshQuoteRequests(planId: string) {
     const result = await getQuotesByPlan(planId);
     if (result.success) {
       setQuoteRequestsData(result.data);
+      setQuoteRequestsCache((current) => ({ ...current, [planId]: result.data }));
     }
     return result;
   }
@@ -310,13 +332,22 @@ export function EventPlanningWorkspace({
   // Load quote request/response data for the current plan (used in Step 4)
   useEffect(() => {
     if (!plan?.id) { setQuoteRequestsData(null); return; }
+    const cachedRequests = quoteRequestsCache[plan.id];
+    if (cachedRequests) {
+      setQuoteRequestsData(cachedRequests);
+      return;
+    }
+
     let cancelled = false;
     getQuotesByPlan(plan.id).then((result) => {
       if (cancelled) return;
-      if (result.success) setQuoteRequestsData(result.data);
+      if (result.success) {
+        setQuoteRequestsData(result.data);
+        setQuoteRequestsCache((current) => ({ ...current, [plan.id]: result.data }));
+      }
     });
     return () => { cancelled = true; };
-  }, [plan?.id]);
+  }, [plan?.id, quoteRequestsCache]);
 
   const requestedVendorIds = useMemo(
     () =>
@@ -1257,6 +1288,7 @@ export function EventPlanningWorkspace({
                           getVendorServiceModules(selectedVendorId, eventType).then((result) => {
                             if (result.success) {
                               setVendorModules(result.data);
+                              setVendorModuleCache((current) => ({ ...current, [selectedVendorId]: result.data }));
                             } else {
                               setVendorModules([]);
                               setVendorModuleError(true);
