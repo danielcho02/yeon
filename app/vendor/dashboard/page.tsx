@@ -153,12 +153,12 @@ export default async function VendorDashboardPage() {
   return (
     <div className="min-h-screen">
       <Nav />
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-        <div className="mb-8">
-          <p className="mb-1 text-xs font-bold uppercase tracking-[0.24em] text-muted-foreground/55">
-            Vendor Dashboard
+      <main className="mx-auto max-w-5xl px-4 py-10 sm:px-8 sm:py-16">
+        <div className="mb-10">
+          <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/60">
+            Partner Operations
           </p>
-          <h1 className="font-[var(--font-display)] text-2xl font-bold text-foreground sm:text-3xl">
+          <h1 className="font-[var(--font-serif)] text-2xl font-bold tracking-tight text-[#2c3455] sm:text-3xl">
             {companyName}
           </h1>
         </div>
@@ -172,11 +172,11 @@ export default async function VendorDashboardPage() {
           supportedEventTypes={supportedEventTypes}
         />
 
-        <section className="mt-10">
-          <h2 className="mb-5 font-[var(--font-display)] text-base font-semibold text-foreground">
+        <section className="mt-16">
+          <h2 className="mb-6 font-[var(--font-serif)] text-lg font-bold text-[#2c3455]">
             내 서비스 관리
           </h2>
-          <div className="rounded-[1.5rem] border border-border/60 bg-white/90 p-6 shadow-sm">
+          <div className="rounded-2xl border border-[#e5e2da] bg-white p-6 shadow-[0_2px_12px_rgba(0,0,0,0.01)]">
             <ServiceManager
               supportedEventTypes={supportedEventTypes}
               supportedModules={supportedServiceModules}

@@ -55,73 +55,72 @@ import type { PlanOption, ReservationItem, VendorOption, VendorServiceOption } f
 export type EventType = "WEDDING" | "FUNERAL";
 type StepKey = "setup" | "ai" | "vendors" | "booking";
 
-// ─── Theme ────────────────────────────────────────────────────────────────────
+// ─── Theme (Refined Luxury System) ─────────────────────────────────────────────
 
 const THEMES = {
   WEDDING: {
-    // Champagne / warm rose
-    heroBg: "from-[#fdf8f0] via-[#fdf1e6] to-[#fce3d0] border-amber-200/60",
-    heroOrb: "bg-[radial-gradient(ellipse_at_75%_10%,rgba(210,148,90,0.13),transparent_55%)]",
-    heroPattern: "radial-gradient(circle, #c47b45 1px, transparent 1px)",
-    heroPatternSize: "24px 24px",
-    heroPatternOpacity: "opacity-[0.04]",
-    badge: "bg-rose-100 text-rose-700 hover:bg-rose-100",
-    stepActive: "bg-rose-600 text-white shadow-[0_4px_14px_-2px_rgba(225,29,72,0.55)]",
-    stepDone: "bg-rose-100 text-rose-600",
-    stepIdle: "bg-muted/70 text-muted-foreground",
-    connectorDone: "bg-rose-200",
-    connectorIdle: "bg-border/30",
-    cardHighlight: "border-amber-200/60 bg-gradient-to-br from-amber-50/50 to-rose-50/20",
-    accentText: "text-rose-700",
-    accentBg: "bg-amber-50/60",
-    accentBorder: "border-amber-200/50",
-    tag: "bg-rose-100 text-rose-700",
-    vendorSelected: "border-rose-300 bg-rose-50/60 ring-1 ring-rose-200",
-    btnAccent: "bg-rose-600 hover:bg-rose-700 text-white shadow-[0_8px_24px_-8px_rgba(225,29,72,0.5)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200",
-    iconBg: "bg-rose-100 text-rose-600",
-    iconSolid: "bg-rose-600 text-white shadow-[0_4px_12px_-2px_rgba(225,29,72,0.5)]",
-    label: "결혼 준비",
+    // Warm Ivory / Soft Champagne Gold
+    heroBg: "border-[#ebdccf] bg-[#faf9f5]",
+    heroOrb: "bg-transparent",
+    heroPattern: "none",
+    heroPatternSize: "0",
+    heroPatternOpacity: "opacity-0",
+    badge: "bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/50 hover:bg-[#fcf8f2]",
+    stepActive: "bg-[#c4977a] text-white shadow-[0_4px_12px_rgba(196,151,122,0.3)]",
+    stepDone: "bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/40",
+    stepIdle: "bg-[#f7f5f0]/80 text-muted-foreground/60 border border-transparent",
+    connectorDone: "bg-[#c4977a]",
+    connectorIdle: "bg-[#e5e2da]",
+    cardHighlight: "border-[#ebdccf]/60 bg-[#fdfcf9]",
+    accentText: "text-[#c4977a]",
+    accentBg: "bg-[#faf8f4]",
+    accentBorder: "border-[#ebdccf]/40",
+    tag: "bg-[#fcf8f2] text-[#c4977a]",
+    vendorSelected: "border-[#c4977a] bg-[#faf8f4]/60 ring-1 ring-[#c4977a]/30",
+    btnAccent: "bg-[#c4977a] hover:bg-[#b08569] text-white tracking-wide transition-all duration-200 rounded-xl",
+    iconBg: "bg-[#fcf8f2] text-[#c4977a]",
+    iconSolid: "bg-[#c4977a] text-white shadow-[0_4px_10px_rgba(196,151,122,0.25)]",
+    label: "결혼 플래닝",
     Icon: Heart,
-    planTitle: (name: string) => `${name}의 결혼 준비`,
+    planTitle: (name: string) => `${name}의 결혼 플랜`,
     guestLabel: "하객",
-    servicePlaceholder: "예: 예식장 대관",
-    createTitle: "결혼 준비를 시작해 보세요",
-    createSub: "예식 정보를 입력하면 AI가 최적 컨셉과 준비 타임라인을 제안합니다.",
-    aiEmptyTitle: "AI 웨딩 컨셉 추천",
-    aiEmptySub: "행사 규모와 예산을 바탕으로 웨딩 컨셉, 서비스 구성, 준비 타임라인을 생성합니다.",
-    vendorTitle: "견적을 요청할 업체를 선택하세요",
-    progressBg: "bg-rose-500",
+    servicePlaceholder: "예식장 대관 등",
+    createTitle: "결혼 플랜 작성",
+    createSub: "기본 정보를 기입하시면 AI가 최적의 공간 컨셉과 타임라인을 구성해 드립니다.",
+    aiEmptyTitle: "AI 스페이스 컨셉 추천",
+    aiEmptySub: "하객 규모와 예산을 토대로 럭셔리 웨딩 스타일, 추천 서비스 구성 및 타임라인을 생성합니다.",
+    vendorTitle: "파트너 제안 요청하기",
+    progressBg: "bg-[#c4977a]",
   },
   FUNERAL: {
-    // Deep navy / indigo
-    heroBg: "from-[#f0f4fa] via-[#e8edf8] to-[#d8e3f2] border-indigo-200/50",
-    heroOrb: "bg-[radial-gradient(ellipse_at_75%_10%,rgba(45,62,112,0.12),transparent_55%)]",
-    heroPattern: "linear-gradient(rgba(45,62,112,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(45,62,112,0.5) 1px, transparent 1px)",
-    heroPatternSize: "28px 28px",
-    heroPatternOpacity: "opacity-[0.05]",
-    badge: "bg-indigo-100 text-indigo-800 hover:bg-indigo-100",
-    stepActive: "bg-indigo-900 text-white shadow-[0_4px_14px_-2px_rgba(45,62,112,0.55)]",
-    stepDone: "bg-indigo-100 text-indigo-700",
-    stepIdle: "bg-muted/70 text-muted-foreground",
-    connectorDone: "bg-indigo-200",
-    connectorIdle: "bg-border/30",
-    cardHighlight: "border-indigo-200/60 bg-gradient-to-br from-indigo-50/50 to-slate-50/20",
-    accentText: "text-indigo-800",
-    accentBg: "bg-indigo-50/60",
-    accentBorder: "border-indigo-200/50",
-    tag: "bg-indigo-100 text-indigo-800",
-    vendorSelected: "border-indigo-300 bg-indigo-50/60 ring-1 ring-indigo-200",
-    btnAccent: "bg-indigo-900 hover:bg-indigo-950 text-white shadow-[0_8px_24px_-8px_rgba(45,62,112,0.5)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200",
-    iconBg: "bg-indigo-100 text-indigo-700",
-    iconSolid: "bg-indigo-900 text-white shadow-[0_4px_12px_-2px_rgba(45,62,112,0.5)]",
-    label: "장례 준비",
+    // Elegant Muted Slate / Warm Stone Charcoal
+    heroBg: "border-[#cbd3e0] bg-[#f4f5f8]",
+    heroOrb: "bg-transparent",
+    heroPattern: "none",
+    heroPatternSize: "0",
+    heroPatternOpacity: "opacity-0",
+    badge: "bg-[#eef2f6] text-[#475569] border border-[#cbd3e0] hover:bg-[#eef2f6]",
+    stepActive: "bg-[#2c3455] text-white shadow-[0_4px_12px_rgba(44,52,85,0.3)]",
+    stepDone: "bg-[#eef2f6] text-[#2c3455] border border-[#cbd3e0]/60",
+    stepIdle: "bg-[#eceef2] text-muted-foreground/60 border border-transparent",
+    connectorDone: "bg-[#2c3455]",
+    connectorIdle: "bg-[#d9dee6]",
+    cardHighlight: "border-[#cbd3e0]/60 bg-[#fafafc]",
+    accentText: "text-[#2c3455]",
+    accentBg: "bg-[#f7f8fa]",
+    accentBorder: "border-[#cbd3e0]/40",
+    tag: "bg-[#eef2f6] text-[#2c3455]",
+    vendorSelected: "border-[#2c3455] bg-[#f4f5f8] ring-1 ring-[#2c3455]/20",
+    btnAccent: "bg-[#2c3455] hover:bg-[#1e2645] text-white tracking-wide transition-all duration-200 rounded-xl",
+    iconBg: "bg-[#eef2f6] text-[#2c3455]",
+    iconSolid: "bg-[#2c3455] text-white shadow-[0_4px_10px_rgba(44,52,85,0.25)]",
+    label: "장례 의전 플래닝",
     Icon: Shield,
-    planTitle: (name: string) => `${name}의 장례 준비`,
+    planTitle: (name: string) => `${name}의 추모 플랜`,
     guestLabel: "조문객",
-    servicePlaceholder: "예: 장례식장 대관",
-    createTitle: "장례 준비를 시작해 보세요",
-    createSub: "장례 정보를 입력하면 단계별 준비 가이드와 업체 안내를 제공합니다.",
-    aiEmptyTitle: "장례 준비 가이드 생성",
+    createTitle: "추모 플랜 작성",
+    createSub: "기본 정보를 기입하시면 AI가 정중한 의전 양식과 가이드를 마련해 드립니다.",
+    aiEmptyTitle: "AI 추모 가이드 추천",
     aiEmptySub: "행사 규모와 일정을 바탕으로 준비 순서와 서비스 구성 가이드를 제안합니다.",
     vendorTitle: "견적을 요청할 업체를 선택하세요",
     progressBg: "bg-indigo-700",
@@ -1494,202 +1493,225 @@ export function EventPlanningWorkspace({
           );
 
           return (
-            <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+            <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
               {/* Left column: comparison + acceptance */}
-              <div className="space-y-4">
-                <h2 className="font-[var(--font-display)] text-base font-bold text-foreground">견적 비교 및 수락</h2>
+              <div className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-[var(--font-serif)] text-base font-bold text-[#2c3455]">제안서 비교 및 예약 관리</h2>
+                </div>
 
-                <div className="rounded-[1.75rem] border border-border/60 bg-white/90 p-4 shadow-sm">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge className={theme.badge}>다음 단계 안내</Badge>
-                    <span className="text-xs font-medium text-muted-foreground">
-                      견적 수락과 예약 확정은 다른 단계입니다.
+                {/* Quiet Luxury Info Callout Board */}
+                <div className="rounded-2xl border border-[#ebdccf] bg-[#fdfcf9] p-5 shadow-[0_4px_16px_rgba(196,151,122,0.02)]">
+                  <div className="flex flex-wrap items-center gap-2 border-b border-[#f2ece4]/50 pb-2.5 mb-3.5">
+                    <Badge className="bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/50 text-[10px]">예약 안전 가이드</Badge>
+                    <span className="text-xs font-semibold text-[#8c8275]">
+                      견적 수락과 예약 확정은 분리된 단계입니다.
                     </span>
                   </div>
-                  <div className="mt-3 grid gap-2 sm:grid-cols-4">
+                  <p className="text-xs leading-relaxed text-muted-foreground mb-4">
+                    원하시는 제안을 선택해 <strong className="text-[#2c3455] font-semibold">“견적 수락”</strong> 하시면 해당 파트너사에게 알림이 전송됩니다. 
+                    이후 파트너사에서 최종 일정 확인 후 <strong className="text-[#2c3455] font-semibold">최종 예약을 확정</strong>하게 되며, 이 시점에 완결된 예약 명세서가 생성됩니다.
+                  </p>
+                  
+                  {/* Slim luxury workflow minimap */}
+                  <div className="grid gap-2 sm:grid-cols-4">
                     <WorkflowStep
                       active={pendingQuoteRequests.length > 0}
                       count={pendingQuoteRequests.length}
-                      label="업체 응답 대기"
-                      description="요청 전송 완료"
+                      label="파트너 응답 대기"
+                      description="제안 요청서 수신 대기"
                     />
                     <WorkflowStep
                       active={respondedRequests.length > 0}
                       count={respondedRequests.length}
-                      label="견적 비교"
-                      description="금액·포함 항목 확인"
+                      label="도착한 견적 비교"
+                      description="총액 및 포함 항목 검토"
                     />
                     <WorkflowStep
                       active={acceptedRequests.length > 0}
                       count={acceptedRequests.length}
-                      label="업체 확정 대기"
-                      description="사용자가 수락한 상태"
+                      label="파트너 최종 승인 대기"
+                      description="고객 수락 완료 단계"
                     />
                     <WorkflowStep
                       active={confirmedRes.length > 0}
                       count={confirmedRes.length}
                       label="예약 확정 완료"
-                      description="업체 최종 확정"
+                      description="계약 및 최종 스케줄 확정"
                     />
                   </div>
                 </div>
 
-                {/* Comparison table */}
+                {/* Comparison table - 정보 비교 중심 */}
                 {plan && (
-                  <QuoteComparison
-                    quotes={comparisonQuotes}
-                    theme={eventType === "WEDDING" ? "wedding" : "funeral"}
-                    guestCount={Math.max(1, Number.parseInt(requestForm.guestCount, 10) || 100)}
-                    isLoading={quoteRequestsData === null}
-                    isAccepting={isQuoteActionPending}
-                    onAccept={handleAcceptQuote}
-                  />
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">제안서 종횡 세부 스펙 분석</p>
+                    <QuoteComparison
+                      quotes={comparisonQuotes}
+                      theme={eventType === "WEDDING" ? "wedding" : "funeral"}
+                      guestCount={Math.max(1, Number.parseInt(requestForm.guestCount, 10) || 100)}
+                      isLoading={quoteRequestsData === null}
+                      isAccepting={isQuoteActionPending}
+                      onAccept={handleAcceptQuote}
+                    />
+                  </div>
                 )}
 
-                {/* Acceptance cards for RESPONDED quotes */}
+                {/* Acceptance cards for RESPONDED quotes - 실질적인 수락 Action Lane */}
                 {respondedRequests.length > 0 ? (
-                  <div className="space-y-3">
-                    <p className="text-xs font-semibold text-muted-foreground">수락 가능한 견적</p>
-                    {respondedRequests.map((req) => {
-                      const resp = req.responses[0];
-                      if (!resp) return null;
-                      const vendorName = resp.vendor?.companyName ?? "업체";
-                      return (
-                        <div
-                          key={req.id}
-                          className={`rounded-[2rem] border p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${theme.cardHighlight}`}
-                        >
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="space-y-1">
-                              <Badge className={theme.badge}>견적 도착</Badge>
-                              <p className="text-lg font-bold text-foreground">{vendorName}</p>
-                              {req.requirements && (
-                                <p className="text-xs text-muted-foreground line-clamp-1">{req.requirements}</p>
-                              )}
-                            </div>
-                            <div className="rounded-2xl bg-white/90 px-4 py-3 text-right shadow-sm ring-1 ring-border/30">
-                              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/55">견적 금액</p>
-                              <p className="mt-1 font-[var(--font-display)] text-2xl font-bold text-foreground">
+                  <div className="space-y-3 pt-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">결정 대기 중인 프리미엄 견적</p>
+                    <div className="grid gap-4">
+                      {respondedRequests.map((req) => {
+                        const resp = req.responses[0];
+                        if (!resp) return null;
+                        const vendorName = resp.vendor?.companyName ?? "업체";
+                        return (
+                          <div
+                            key={req.id}
+                            className={`rounded-2xl border p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${theme.cardHighlight}`}
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#f2ece4]/50 pb-4 mb-4">
+                              <div className="space-y-1">
+                                <Badge className="bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/50 text-[10px]">파트너 견적 도착</Badge>
+                                <p className="font-[var(--font-serif)] text-lg font-bold text-[#2c3455]">
+                                  {vendorName}
+                                </p>
+                                <p className="text-xs text-muted-foreground leading-relaxed">
+                                  {resp.note || "제안 및 포함 범위 안내에 따라 예약을 결정하실 수 있습니다."}
+                                </p>
+                              </div>
+                              <p className="font-[var(--font-serif)] text-xl font-bold text-[#c4977a]">
                                 {formatCurrency(resp.totalPrice)}
                               </p>
                             </div>
-                          </div>
-
-                          {/* Module summary */}
-                          {resp.modules?.includedModules && resp.modules.includedModules.length > 0 && (
-                            <div className="mt-4 flex flex-wrap gap-1.5">
-                              {resp.modules.includedModules.slice(0, 4).map((m) => (
-                                <span key={m.id} className="rounded-full border border-border/40 bg-white/80 px-2.5 py-0.5 text-xs text-muted-foreground">
-                                  {m.name}
-                                </span>
-                              ))}
-                              {resp.modules.includedModules.length > 4 && (
-                                <span className="rounded-full border border-border/40 bg-white/80 px-2.5 py-0.5 text-xs text-muted-foreground">
-                                  +{resp.modules.includedModules.length - 4}
-                                </span>
-                              )}
+                            
+                            <div className="space-y-2">
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">제공 포함 서비스 목록</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {resp.modules.includedModules?.map((m) => (
+                                  <span
+                                    key={m.id}
+                                    className="rounded-lg border border-[#e5e2da]/70 bg-white px-2.5 py-1 text-xs text-[#2c3455] font-medium"
+                                  >
+                                    {m.name}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
-                          )}
-
-                          {resp.note && (
-                            <p className="mt-3 rounded-xl border border-border/40 bg-white/80 px-3.5 py-2.5 text-sm leading-6 text-muted-foreground">
-                              {resp.note}
-                            </p>
-                          )}
-
-                          <div className="mt-5">
-                            <button
-                              className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold ${theme.btnAccent}`}
-                              disabled={isQuoteActionPending || isPending}
-                              onClick={() => handleAcceptQuote(resp.id)}
-                              type="button"
-                            >
-                              <CheckCheck className="h-4 w-4" />
-                              {isQuoteActionPending ? "수락 처리 중..." : "이 견적 수락하기"}
-                            </button>
+                            
+                            <div className="mt-5 flex justify-end">
+                              <button
+                                disabled={isQuoteActionPending}
+                                className={`flex items-center gap-1.5 px-6 py-3 text-xs font-semibold tracking-wide ${theme.btnAccent}`}
+                                onClick={() => handleAcceptQuote(resp.id)}
+                                type="button"
+                              >
+                                <CheckCheck className="h-3.5 w-3.5" />
+                                {isQuoteActionPending ? "수락 처리 중..." : "이 제안서 수락하기"}
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 ) : acceptedRequests.length === 0 && quoteRequestsData !== null ? (
                   <EmptyState
                     emoji="📩"
-                    title="아직 받은 견적이 없습니다."
-                    description="업체가 견적을 보내면 이곳에서 비교하고 수락할 수 있습니다."
+                    title="수신 대기 중인 견적이 없습니다."
+                    description="선택한 파트너사에서 견적서를 작성하는 대로 즉시 리포트가 수집됩니다."
                   />
                 ) : null}
 
-                {/* ACCEPTED requests → waiting for vendor confirmation */}
+                {/* ACCEPTED requests → waiting for vendor confirmation (Waiting Lane) */}
                 {acceptedRequests.length > 0 && (
-                  <div className="space-y-3">
-                    <p className="text-xs font-semibold text-muted-foreground">업체 최종 확정 대기 중</p>
-                    {acceptedRequests.map((req) => {
-                      const resp = req.responses[0];
-                      const vendorName = resp?.vendor?.companyName ?? "업체";
-                      return (
-                        <div key={req.id} className="rounded-[1.75rem] border border-violet-200/60 bg-violet-50/30 p-4 shadow-sm">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <Badge className="bg-violet-100 text-violet-700">확정 대기</Badge>
-                              <p className="mt-1.5 text-sm font-semibold text-foreground">{vendorName}</p>
-                              <p className="mt-0.5 text-xs text-muted-foreground">
-                                업체가 예약을 최종 확정하면 완료됩니다
+                  <div className="space-y-3 pt-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">파트너 최종 스케줄 승인 대기</p>
+                    <div className="grid gap-3">
+                      {acceptedRequests.map((req) => {
+                        const resp = req.responses[0];
+                        const vendorName = resp?.vendor?.companyName ?? "업체";
+                        return (
+                          <div key={req.id} className="rounded-2xl border border-[#ebdccf] bg-[#fdfcf9] p-5 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4 relative overflow-hidden">
+                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#c4977a]" />
+                            <div className="space-y-1.5 pl-2">
+                              <div className="flex items-center gap-2">
+                                <Badge className="bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/40 text-[10px]">수락 완료</Badge>
+                                <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-100">
+                                  <Clock className="h-3 w-3" /> 파트너 최종 조율 중
+                                </span>
+                              </div>
+                              <p className="text-sm font-bold text-[#2c3455]">{vendorName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                고객님께서 견적을 승인하셨습니다. 파트너사에서 최종 스케줄 및 동선을 최종 확정하는 중입니다.
                               </p>
                               {req.reservation?.vendorConfirmationDueAt && (
-                                <p className="mt-1 text-xs font-semibold text-violet-700">
+                                <p className="text-xs text-violet-700 font-semibold mt-1">
                                   확정 요청 기한: {formatDate(req.reservation.vendorConfirmationDueAt)}
                                 </p>
                               )}
                             </div>
                             {resp && (
-                              <p className="text-sm font-bold text-violet-700">{formatCurrency(resp.totalPrice)}</p>
+                              <div className="text-right sm:shrink-0 pl-2">
+                                <span className="text-[9px] text-muted-foreground block">총 견적 금액</span>
+                                <span className="text-base font-bold text-[#2c3455]">{formatCurrency(resp.totalPrice)}</span>
+                              </div>
                             )}
                           </div>
-                        </div>
-                      );
+                        );
                     })}
                   </div>
-                )}
+                </div>
+              )}
 
                 {pendingQuoteRequests.length > 0 && (
-                  <div className="flex items-center gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3.5 text-sm text-amber-700">
-                    <Clock className="h-4 w-4 shrink-0" />
-                    <span>{pendingQuoteRequests.length}건의 요청이 업체 응답을 기다리고 있습니다.</span>
+                  <div className="flex items-center gap-2.5 rounded-xl border border-[#e5e2da] bg-[#faf9f5] px-4 py-3 text-xs text-[#8c8275] font-medium">
+                    <Clock className="h-4 w-4 shrink-0 text-[#c4977a]" />
+                    <span>전송된 제안 요청서 {pendingQuoteRequests.length}건이 파트너사의 상세 견적 회신을 대기하고 있습니다.</span>
                   </div>
                 )}
               </div>
 
-              {/* Confirmed + cost sidebar */}
-              <div className="space-y-3">
-                <h3 className="font-[var(--font-display)] text-sm font-bold text-foreground">확정된 예약</h3>
+              {/* Confirmed + cost sidebar (Completed Lane) */}
+              <div className="space-y-4">
+                <h3 className="font-[var(--font-serif)] text-sm font-bold text-[#2c3455]">확정 완료된 명세서</h3>
+                
                 {confirmedRes.length > 0 ? (
-                  <>
+                  <div className="space-y-3">
                     {confirmedRes.map((r) => (
-                      <div key={r.id} className="rounded-[1.75rem] border border-emerald-200/70 bg-white/90 p-4 shadow-sm ring-1 ring-emerald-100/60 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
+                      <div key={r.id} className="rounded-2xl border border-emerald-200/60 bg-[#eafaf1]/30 p-5 shadow-sm transition-all duration-200 relative overflow-hidden">
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500" />
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="space-y-2 pl-1">
                             <div className="flex items-center gap-1.5">
-                              <Badge className="bg-emerald-100 text-emerald-700">예약 확정</Badge>
-                              <Check className="h-3.5 w-3.5 text-emerald-500" />
+                              <Badge className="bg-[#eafaf1] text-[#0f9652] border border-emerald-100 hover:bg-[#eafaf1] text-[10px]">최종 예약 확정</Badge>
+                              <Check className="h-3.5 w-3.5 text-[#0f9652]" />
                             </div>
-                            <p className="mt-2 text-sm font-semibold text-foreground">
+                            <p className="text-sm font-bold text-[#2c3455]">
                               {r.vendor.companyName ?? r.vendor.name}
                             </p>
-                            <p className="text-xs text-muted-foreground">{formatDate(r.serviceDate)}</p>
+                            <div className="grid gap-1 text-[11px] text-muted-foreground">
+                              <span>예식일: {formatDate(r.serviceDate)}</span>
+                              {r.eventPlan.region && <span>지역: {r.eventPlan.region}</span>}
+                            </div>
                           </div>
-                          <p className="text-sm font-bold text-emerald-700">{formatCurrency(r.confirmedAmount ?? r.quotedAmount)}</p>
+                          <div className="text-right">
+                            <span className="text-[9px] text-muted-foreground block">최종 합의 금액</span>
+                            <span className="text-sm font-bold text-emerald-700">{formatCurrency(r.confirmedAmount ?? r.quotedAmount)}</span>
+                          </div>
                         </div>
                       </div>
                     ))}
-                    <div className={`rounded-[1.75rem] border p-5 ${theme.cardHighlight}`}>
-                      <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">총 확정 비용</p>
-                      <p className="font-[var(--font-display)] text-3xl font-bold text-foreground">{formatCurrency(totalCost)}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">{confirmedRes.length}건 합계</p>
+                    
+                    <div className={`rounded-2xl border p-5 ${theme.cardHighlight}`}>
+                      <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">총 예약 확정 예산</p>
+                      <p className="font-[var(--font-serif)] text-2xl font-bold text-[#2c3455]">{formatCurrency(totalCost)}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{confirmedRes.length}개 예식 서비스 합계</p>
                     </div>
-                  </>
+                  </div>
                 ) : (
-                  <EmptyState emoji="✨" title="확정된 예약이 없습니다." description="견적을 수락하면 업체가 최종 확정 후 이곳에 나타납니다." />
+                  <EmptyState emoji="✨" title="확정된 예약 내역이 없습니다." description="견적을 승인하신 후 파트너사의 승인이 완료되면 최종 확정서가 자동 발행됩니다." />
                 )}
               </div>
             </div>

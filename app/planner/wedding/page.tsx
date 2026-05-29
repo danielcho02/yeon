@@ -174,7 +174,7 @@ export default async function WeddingPlannerPage({
       : undefined;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
+    <main className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 py-10 sm:px-8 sm:py-16">
       <EventPlanningWorkspace
         eventType="WEDDING"
         initialPlanId={requestedPlanId ?? null}
