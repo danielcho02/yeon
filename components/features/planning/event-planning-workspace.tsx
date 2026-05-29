@@ -426,7 +426,7 @@ export function EventPlanningWorkspace({
               serviceLabel,
               statusLabel: "견적 도착",
               statusTone: "bg-sky-100 text-sky-700",
-              helperText: "견적 비교 화면에서 금액과 포함 항목을 확인하세요.",
+              helperText: "제안서 확인 화면에서 금액과 포함 항목을 확인하세요.",
               amount: latestResponse?.totalPrice ?? request.reservation?.totalAmount ?? request.budget,
               canReview: true
             };
@@ -438,7 +438,7 @@ export function EventPlanningWorkspace({
             serviceLabel,
             statusLabel: "업체 응답 대기",
             statusTone: "bg-amber-100 text-amber-700",
-            helperText: "업체가 견적을 보내면 비교 화면에서 확인할 수 있습니다.",
+            helperText: "업체가 견적을 보내면 제안서 확인 화면에서 확인할 수 있습니다.",
             amount: request.budget ?? request.reservation?.totalAmount ?? null,
             canReview: false
           };
@@ -475,8 +475,8 @@ export function EventPlanningWorkspace({
               ? `견적은 수락됐고, 업체가 ${formatDate(dueAt)}까지 예약을 확정해야 완료됩니다.`
               : "견적은 수락됐고, 업체가 예약을 확정해야 완료됩니다."
             : reservation.quoteResponseId != null
-              ? "견적 비교 화면에서 금액과 포함 항목을 확인하세요."
-              : "업체가 견적을 보내면 비교 화면에서 확인할 수 있습니다.",
+              ? "제안서 확인 화면에서 금액과 포함 항목을 확인하세요."
+              : "업체가 견적을 보내면 제안서 확인 화면에서 확인할 수 있습니다.",
         amount: reservation.confirmedAmount ?? reservation.quotedAmount,
         canReview: reservation.quoteResponseId != null || isAccepted || isConfirmed,
         vendorConfirmationDueAt: dueAt
@@ -595,7 +595,7 @@ export function EventPlanningWorkspace({
     try {
       const result = await createQuoteRequestLegacy(formData);
       if (result?.error) { showNotice("error", result.error); return; }
-      showNotice("success", "견적 요청을 보냈습니다. 업체 응답이 오면 비교 화면에서 확인할 수 있습니다.");
+      showNotice("success", "견적 요청을 보냈습니다. 업체 응답이 오면 제안서 확인 화면에서 확인할 수 있습니다.");
       setCheckedServiceIds(new Set());
       setRequestForm((c) => ({ ...c, notes: "" }));
       if (plan?.id) await refreshQuoteRequests(plan.id);
@@ -637,7 +637,7 @@ export function EventPlanningWorkspace({
         budget: plan.budget || undefined,
       });
       if (!result.success) { showNotice("error", result.error); return; }
-      showNotice("success", "견적 요청을 보냈습니다. 업체 응답이 오면 비교 화면에서 확인할 수 있습니다.");
+      showNotice("success", "견적 요청을 보냈습니다. 업체 응답이 오면 제안서 확인 화면에서 확인할 수 있습니다.");
       await refreshQuoteRequests(plan.id);
       startTransition(() => router.refresh());
     } finally {
@@ -1516,7 +1516,7 @@ export function EventPlanningWorkspace({
                           onClick={() => navigateStep("booking")}
                           type="button"
                         >
-                          {item.canReview ? "진행 상태 확인 →" : "비교 화면 →"}
+                          {item.canReview ? "진행 상태 확인 →" : "제안서 확인 →"}
                         </button>
                       </div>
                     )}
@@ -1532,7 +1532,7 @@ export function EventPlanningWorkspace({
                   onClick={() => navigateStep("booking")}
                   type="button"
                 >
-                  견적 비교 및 상태 확인 ({comparisonQuotes.length}건)
+                  제안서 확인 및 상태 확인 ({comparisonQuotes.length}건)
                   <ArrowRight className="h-4 w-4" />
                 </button>
               )}
@@ -1540,7 +1540,7 @@ export function EventPlanningWorkspace({
           </div>
         )}
 
-        {/* ══ STEP 4: 견적 비교 및 수락 ══════════════════════════════════ */}
+        {/* ══ STEP 4: 제안서 확인 및 수락 ══════════════════════════════════ */}
         {activeStep === "booking" && (
           <Step4BookingDashboard
             eventType={eventType}

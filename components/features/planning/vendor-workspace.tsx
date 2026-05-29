@@ -322,7 +322,7 @@ export function VendorWorkspace({
         <div className="relative overflow-hidden rounded-2xl border border-violet-200 bg-violet-50/50 p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-fade-in">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-violet-100 text-violet-700">
-              <Clock className="h-5 w-5 text-violet-700 animate-pulse" />
+              <Clock className="h-5 w-5 text-violet-700" />
             </div>
             <div>
               <p className="text-xs font-bold text-violet-800">예약 최종 확정 필요 (우선 작업 권장)</p>
@@ -365,7 +365,7 @@ export function VendorWorkspace({
           </div>
           <div className={`flex items-center gap-1.5 border px-3 py-1.5 rounded-lg shadow-sm transition-all ${
             pendingConfirmationReservations.length > 0
-              ? "bg-violet-50 border-violet-200 text-violet-700 animate-pulse font-bold"
+              ? "bg-violet-50 border-violet-200 text-violet-700 font-bold"
               : "bg-white border-[#ebdccf]/40 text-[#2c3455]"
           }`}>
             <span className="text-[10px]">최종 확정 필요</span>
@@ -404,7 +404,7 @@ export function VendorWorkspace({
           <div className="mb-5 flex items-center justify-between border-b border-[#f2ece4] pb-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-violet-500 animate-pulse" />
+                <span className="h-2 w-2 rounded-full bg-violet-500" />
                 <h2 className="font-[var(--font-serif)] text-base font-bold text-[#2c3455]">오늘 처리할 일: 예약 최종 확정</h2>
                 <Badge className="bg-violet-50 text-violet-700 border border-violet-100 hover:bg-violet-50 text-[10px]">
                   {pendingConfirmationReservations.length}건 대기
@@ -530,7 +530,7 @@ export function VendorWorkspace({
           <div className="rounded-2xl border border-violet-100 bg-[#fbfaff]/60 p-6 shadow-sm">
             <div className="mb-4 flex items-center justify-between border-b border-violet-100 pb-3">
               <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-violet-500 animate-ping shrink-0" />
+                <span className="h-2 w-2 rounded-full bg-violet-500 shrink-0" />
                 <h3 className="font-[var(--font-serif)] text-sm font-bold text-violet-950">최종 확정 대기 목록 (우선 조치 필요)</h3>
               </div>
               <Badge className="bg-violet-50 text-violet-700 border border-violet-100 text-[10px] rounded-full shadow-none font-bold">
@@ -800,7 +800,7 @@ export function VendorWorkspace({
                     </p>
                   )}
                   <Button
-                    className="mt-2 bg-violet-600 text-white hover:bg-violet-700 transition-all rounded-xl text-xs h-9 font-semibold animate-pulse"
+                    className="mt-2 bg-violet-600 text-white hover:bg-violet-700 transition-all rounded-xl text-xs h-9 font-semibold"
                     disabled={busyReservationId === selectedProposalReservation.id}
                     onClick={() => confirmAcceptedReservation(selectedProposalReservation.id)}
                     size="sm"
@@ -954,7 +954,7 @@ export function VendorWorkspace({
                     <div className="space-y-3 flex-1">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <span className="inline-flex items-center gap-1 rounded bg-violet-50 text-violet-700 px-2 py-0.5 text-[9px] font-bold border border-violet-100 animate-pulse">
+                          <span className="inline-flex items-center gap-1 rounded bg-violet-50 text-violet-700 px-2 py-0.5 text-[9px] font-bold border border-violet-100">
                             최종 확정 승인 대기
                           </span>
                           <p className="font-[var(--font-serif)] text-sm font-bold text-[#2c3455]">{r.eventPlan.title}</p>
@@ -998,7 +998,7 @@ export function VendorWorkspace({
                         size="sm"
                         className="bg-violet-600 hover:bg-violet-700 text-white rounded-xl h-9 text-xs font-semibold px-4 transition-all"
                       >
-                        <BadgeCheck className="mr-1 h-3.5 w-3.5 animate-pulse" />
+                        <BadgeCheck className="mr-1 h-3.5 w-3.5" />
                         {busyReservationId === r.id ? "승인 중..." : "최종 예약 승인"}
                       </Button>
                     </div>

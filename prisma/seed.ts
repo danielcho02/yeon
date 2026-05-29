@@ -106,7 +106,7 @@ async function seedModularQuoteData() {
       role: UserRole.VENDOR,
       vendorApprovalStatus: VendorApprovalStatus.APPROVED,
       supportedEventTypes: [EventType.WEDDING],
-      supportedServiceModules: ["venue"],
+      supportedServiceModules: ["venue", "floral"],
       bio: "가든 웨딩과 프라이빗 예식을 운영하는 예식장입니다.",
       location: "서울 강남구"
     }
@@ -122,7 +122,8 @@ async function seedModularQuoteData() {
       supportedEventTypes: [EventType.WEDDING],
       supportedServiceModules: ["floral"],
       bio: "웨딩 부케·예식장 꽃장식 전문, 화이트·보타니컬 스타일 시그니처",
-      location: "서울 성동구"
+      location: "서울 성동구",
+      isActive: false
     }
   });
 

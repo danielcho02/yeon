@@ -1004,7 +1004,7 @@ export async function getQuotesByPlan(
       if (!plan) return null;
 
       const requests = await prisma.quoteRequest.findMany({
-        where: { planId: plan.id },
+        where: { planId: plan.id, vendor: { isActive: true } },
         include: {
           vendor: true,
           plan: {
@@ -1285,7 +1285,7 @@ export async function getStep4DashboardData(
       if (!plan) return { plan: null, requests: [], reservations: [], modules: [] };
 
       const requests = await prisma.quoteRequest.findMany({
-        where: { planId: plan.id },
+        where: { planId: plan.id, vendor: { isActive: true } },
         include: {
           vendor: true,
           responses: {
@@ -1296,7 +1296,7 @@ export async function getStep4DashboardData(
       });
 
       const reservations = await prisma.reservation.findMany({
-        where: { eventPlanId: plan.id },
+        where: { eventPlanId: plan.id, vendor: { isActive: true } },
         include: { vendor: true, quoteRequest: true }
       });
 

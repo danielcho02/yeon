@@ -70,6 +70,35 @@ async function main() {
   );
   console.log("-> PASS: Moment Garden and Orsay Floral are successfully isolated.");
 
+  // 1.5. 3-role Active Vendor Model Verification
+  console.log("Verifying 3-role model active vendor constraints...");
+  const activeVendors = await prisma.user.findMany({
+    where: { role: "VENDOR", isActive: true, vendorApprovalStatus: "APPROVED" }
+  });
+
+  // Assert exactly 2 active approved vendors (Moment Garden and Hankyul Memorial)
+  assert.equal(activeVendors.length, 2, "There must be exactly 2 active approved vendors in the core 3-role model");
+
+  const momentGarden = activeVendors.find(v => v.email === "venue@yeon.local");
+  const hankyul = activeVendors.find(v => v.email === "memorial@yeon.local");
+  const orsay = await prisma.user.findFirst({ where: { email: "catering@yeon.local" } });
+
+  assert.ok(momentGarden, "Moment Garden (venue@yeon.local) must be an active vendor");
+  assert.ok(hankyul, "Hankyul Memorial (memorial@yeon.local) must be an active vendor");
+  assert.ok(orsay && !orsay.isActive, "Orsay Floral (catering@yeon.local) must be marked as inactive in core active flow");
+
+  // Verify service modules
+  const momentGardenModules = Array.isArray(momentGarden.supportedServiceModules) ? momentGarden.supportedServiceModules : [];
+  assert.ok(momentGardenModules.includes("venue"), "Moment Garden must support venue module");
+  assert.ok(momentGardenModules.includes("floral"), "Moment Garden must support floral module");
+
+  const hankyulModules = Array.isArray(hankyul.supportedServiceModules) ? hankyul.supportedServiceModules : [];
+  assert.ok(hankyulModules.includes("funeralHall"), "Hankyul Memorial must support funeralHall module");
+  assert.ok(hankyulModules.includes("altarFloral"), "Hankyul Memorial must support altarFloral module");
+  assert.ok(hankyulModules.includes("hearse"), "Hankyul Memorial must support hearse module");
+
+  console.log("-> PASS: 3-role model active vendor constraints verified.");
+
   // 2. Database Quote & Response Category Match Integrity
   console.log("Verifying quote category matches and duplicate response containment...");
   

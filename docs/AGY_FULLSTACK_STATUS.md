@@ -127,3 +127,29 @@ npx prisma migrate status -> PASS (Database schema is up to date!)
 ## 6. 남은 Codex 후속 작업 & 인계 사항
 *   **추천 차기 스텝**: 본 도메인 및 DTO 구조는 더 이상 건드릴 곳이 없이 극도로 정밀하고 견고하게 설계되었습니다.
 *   **추가 완결 사항 (2026-05-29)**: 남아 있던 4대 Workflow QA Regression 이슈(WF-QA-01 ~ WF-QA-04)를 완벽하게 정복하고 최종 승인을 획득했습니다. 이로써 yeON 프로젝트는 상용 수준의 무결점 릴리즈 준비를 끝마쳤습니다.
+
+---
+
+## 7. Ship Coherent yeON Product Flow (3-Role Core Model) - 2026-05-29
+
+Product Owner + Full-stack Lead Engineer로서 yeON의 데모 및 도메인 정합성을 긴급 교정했습니다. 복잡한 다중 전문 벤더(specialist vendors) 비교/선택 마켓플레이스 모델을 배제하고, 행사 유형별 단일 핵심 벤더가 전체 준비 과정을 커버하는 **3-role 코어 모델(Planner, Wedding Vendor, Funeral Vendor)**로 완성했습니다.
+
+### 1. 변경된 제품 도메인 & Seed 모델
+- **Orsay Floral 비활성화**:
+  - `catering@yeon.local` (Orsay Floral) 사용자의 `isActive` 속성을 `false`로 격리 세팅하여, 로그인 화면 데모 선택기, 플래너 Step 3/4 화면, 비즈니스 흐름 등 모든 visual layer에서 깨끗이 차단했습니다.
+  - 전문 벤더 분리(Specialist isolation) 구조는 **Future Expansion** 설계로만 보존했습니다.
+- **Moment Garden 웨딩 모듈 통합**:
+  - Wedding Vendor인 `venueVendor` (`venue@yeon.local`, 모먼트 가든)의 지원 모듈(`supportedServiceModules`)에 `"floral"`을 추가하여, 단일 결혼 종합 벤더가 대관 공간부터 피로연 식사, 생화 장식까지 토탈 패키지로 제공하는 직관적인 흐름으로 도메인 정합성을 재정립했습니다.
+
+### 2. DTO & Server Action Filter 보강
+- SQLite의 `(planId, vendorId)` unique index 제약을 준수하기 위해 백엔드 Server Action Level에서 해결책을 보강했습니다:
+  - `getQuotesByPlan` 및 `getStep4DashboardData` API 조회 쿼리에 `{ vendor: { isActive: true } }` 필터링을 명시적으로 내장했습니다.
+  - 이를 통해 비활성 처리된 Orsay Floral의 레거시 견적/예약 데이터를 DB 정합성 훼손 없이 플래너 UI에서 투명하게 격리했습니다.
+
+### 3. 용어 및 비주얼 안정성 확보
+- **용어 정비**: 플래너 Step 3 및 Step 4 상의 모든 "비교(Comparison)" 표현을 "제안서 확인"으로 통일하여 단일 벤더 제안서 수락 흐름에 걸맞게 UX 용어를 정화했습니다.
+- **애니메이션 제거**: `vendor-workspace.tsx` 내의 예약 승인 및 확정 탭의 `animate-pulse`, `animate-ping`과 같은 조잡한 애니메이션을 전면 삭제하고 정적인 프리미엄 럭셔리 톤으로 고정했습니다.
+
+### 4. 추가된 Verification 통과 결과
+- `verify-service-category-contract.ts` 검증 항목에 **3-role model active vendor constraints** 규칙을 신설하여, 활성 APPROVED 벤더의 수가 정확히 2개(모먼트 가든, 한결 의전)이며 Orsay Floral은 비활성 상태임을 매 build 단계마다 강제 보장하게 함으로써, 전수 감사 baseline의 무결성을 철저히 완성했습니다.
+

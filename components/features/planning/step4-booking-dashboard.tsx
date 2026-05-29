@@ -191,7 +191,7 @@ export function Step4BookingDashboard({
                     return (
                       <div className="space-y-3 pt-1">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                          {group.categoryName} 복수 견적 비교
+                          {group.categoryName} 복수 제안서 확인
                         </p>
                         <QuoteComparison
                           quotes={localQuotes}

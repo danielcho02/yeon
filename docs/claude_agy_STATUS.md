@@ -106,5 +106,30 @@ PM 검수 및 최종 릴리즈를 위해, Claude QA에서 지적된 4대 Workflo
     - *해결*: `selectedReservation.eventPlan?.type`이 존재하고 `eventTypeOptions`에 사상된 유효한 한국어 라벨("웨딩", "장례" 등)이 존재하는 정상적 렌더링 상황에서만 라벨과 값을 렌더링하고, 빈 값이나 fallback 상황에서는 라벨 행 자체를 숨기는 가드 조건을 입혀 원시 enum 노출을 완전 격파했습니다.
 
 ### 2. 최종 CI/CD 검증 파이프라인
-- Prisma Generate, DB Seed, custom verify 스크립트 6종, TSC, Lint, Production Build 등 12종의 전체 validation pipeline을 100% 무결점으로 통과 완료하여 merge-ready 완결 상태를 달성했습니다.
+- Prisma Generate, DB Seed, custom verify 스크립트 6종, TSC, Lint, Production Build 등 12종의 전체 validation pipeline을 100% 무결점으로 통과 완료했습니다.
+
+---
+
+## 6. Frontend Handoff State (3-Role Active Core Model) - 2026-05-29
+
+최종 프론트엔드 Handoff 시점 기준, yeON의 UI/UX와 백엔드 상태는 **Planner + Wedding Vendor + Funeral Vendor**의 3-role 모델을 기준으로 온전하고 완벽하게 구축되었습니다.
+
+### 1. 3-role 액티브 코어 흐름 완비
+- **Planner (플래너)**:
+  - Wedding flow에서 기존의 "여러 전문 업체 비교/조립" 구조를 탈피하고, 단일 결혼 종합 업체인 모먼트 가든(`venue@yeon.local`)이 제공하는 전체 패키지/애드온 서비스 구성(공간 대관 + 식사 + 꽃장식)을 한눈에 보고 직관적으로 견적을 의뢰하는 구조를 완성했습니다.
+  - Funeral flow에서 "장바구니식 선택" 대신 정중한 의전 구성(장례식장, 식사, 부고, 운구, 제단꽃, 지도사)을 확인하고 원스톱 상담을 요청하는 경건한 flow를 정립했습니다.
+- **Wedding Vendor (모먼트 가든)**:
+  - 공간 대관(`venue`)과 꽃장식 애드온(`floral`) 등 다중 서비스 모듈을 단일 벤더의 포트폴리오로 안전하게 포괄하여 응답/관리하는 대시보드를 유지합니다.
+- **Funeral Vendor (한결 의전)**:
+  - 장례에 필요한 모든 의전 모듈을 수용하며, 차분하게 상담 요청을 검토하여 맞춤 견적서를 회신하는 전용 워크스페이스를 제공합니다.
+
+### 2. UI/UX 용어 및 Visual Polish 완료
+- **비교(Comparison) 단어 퇴출**: 플래너 Step 3/4 화면에서 단일 벤더 의사결정에 부합하지 않는 "비교"라는 모든 텍스트 단어를 "제안서 확인" 및 "업체 확정 대기"로 깨끗하게 정화했습니다.
+- **Blink/Pulse 애니메이션 박멸**: 벤더 대시보드 내 최상단 배너 및 예약 승인 액션 버튼 등에서 파트너의 집중력을 흐트러뜨리는 과도한 `animate-pulse`, `animate-ping` 등의 움직임을 완전히 지우고, 격조 높고 정적이며 차분한 럭셔리 visual style로 귀결시켰습니다.
+- **로그인 Selector**: 데모 로그인 Selector에서도 `catering@yeon.local` (Orsay Floral)을 완벽 배제하고, 핵심 3개 역할(일반 사용자 / 웨딩 파트너 / 장례 파트너)만 품격 있게 노출시켰습니다.
+
+### 3. 검증 통과 및 안정성 보장
+- `verify-service-category-contract.ts` 검증 도구를 통해 Orsay Floral의 비활성화 상태와 2개 코어 벤더(Moment Garden, Hankyul Memorial)의 지원 모듈을 100% 검증 완료했습니다.
+- 12종의 전체 빌드 및 검증 파이프라인이 완전한 무오류 상태로 통과하여 즉시 릴리즈 가능한 상태입니다.
+
 

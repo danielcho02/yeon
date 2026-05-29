@@ -1475,3 +1475,37 @@ Claude QA에서 발견된 핵심 버그 5종을 완벽하게 Stabilization 완�
 ### 2. 빌드 및 검증
 - Prisma Generate, DB Seed, custom verify 스크립트 6종, TSC, Lint, Production Build 등 12종의 전체 validation pipeline을 100% 무결점으로 통과 완료했습니다.
 
+## 23. Ship coherent yeON product flow - 2026-05-29
+
+Product Owner + Full-stack Lead Engineer 권한으로 yeON 프로젝트의 전반적인 제품 경험을 일관되고 품격 있게 설계 및 마감했습니다. 이전의 단편화된 조치들을 극복하고, 행사 유형별 단일 파트너사가 전체 준비 패키지 및 모듈러 조율을 대변하는 3-role 코어 모델(Planner, Wedding Vendor, Funeral Vendor)을 명확하게 수립했습니다.
+
+### 1. 3-role 코어 제품 모델 확립 및 전문 벤더 비활성화
+- **데모 계정 단일화**:
+  - 핵심 데모 계정을 `planner@yeon.local` (플래너), `venue@yeon.local` (모먼트 가든, Wedding Vendor), `memorial@yeon.local` (한결 의전, Funeral Vendor) 3개로 공고화했습니다.
+  - 기존 전문 업체 계정인 `catering@yeon.local` (오르세 플로럴)은 `isActive: false`로 비활성화하여 데모 selector, 플래너 Step 3/4 화면, 문서 및 QA 기준에서 깨끗이 제거했습니다.
+  - 전문 업체 분리(Catering, Floral specialist)는 핵심 데모 흐름에서 배제하고 Future Expansion(향후 확장)으로 문서화에 명시했습니다.
+
+### 2. Wedding / Funeral 단일 핵심 벤더 모델 구성
+- **Wedding Vendor (모먼트 가든)**:
+  - 기존의 단독 공간 제공자에서 식사, 플라워, 장식, 음향, 신부대기실, 청첩장 등 결혼 준비에 필요한 모든 서비스를 일괄 또는 선택 옵션으로 제공하는 종합 웨딩 벤더로 전환했습니다.
+  - `floral` 모듈을 `venueVendor`'s `supportedServiceModules`에 추가하여, 사용자가 모먼트 가든 하나로부터 대관과 꽃장식을 원스톱으로 확인하고 견적을 요청하는 직관적인 흐름으로 개편했습니다.
+- **Funeral Vendor (한결 의전)**:
+  - 장례식장/빈소, 문상객 식사, 부고 안내, 운구, 제단꽃, 장례 지도사 등 모든 의전 서비스를 한결 의전 벤더 아래의 서비스 모듈로 재정리했습니다.
+  - 복잡한 개별 상품 장바구니 구성을 배제하고, 기본 의전 구성을 정중하고 차분하게 확인한 뒤 통합 상담을 요청하는 품격 있는 흐름을 구축했습니다.
+
+### 3. Step 3 & Step 4 UI 및 비즈니스 필터 정제
+- **Server Action 기반 Orsay Floral 원천 필터링**:
+  - SQLite의 `(planId, vendorId)` unique index 제약을 준수하면서 기존 데이터 정합성을 해치지 않기 위해, `app/actions/quote.ts` 내 `getQuotesByPlan`, `getStep4DashboardData` server actions의 쿼리에 `vendor: { isActive: true }` 필터를 완벽히 내장했습니다.
+  - 이로써 비활성화된 Orsay Floral의 견적 요청/예약 데이터가 플래너 워크스페이스 상에서 깔끔하게 숨겨지며, single active vendor 기준에 따른 정상 흐름을 완벽하게 완성했습니다.
+- **용어 및 비주얼 정화**:
+  - "비교"라는 불필요한 경쟁적 표현을 모두 걷어내고, "제안서 확인 / 수락 / 업체 확정 대기" 등의 도메인 언어로 `event-planning-workspace.tsx`와 `step4-booking-dashboard.tsx` 내의 헤더, 설명 문구, 버튼 라벨을 모두 아름답게 다듬었습니다.
+
+### 4. 벤더 대시보드 애니메이션 및 프리미엄 터치 최적화
+- **정적 프리미엄 레이아웃 완성**:
+  - 파트너가 당일 처리할 업무인 "최종 예약 승인" 및 "최종 확정 대기" 영역에서 시선을 어지럽히는 과도한 모션 애니메이션(`animate-pulse`, `animate-ping`)을 전면 박멸했습니다.
+  - 엄숙하고 격조 높은 럭셔리 골드/바이올렛 계열의 정적 강조 배너와 배지를 배치하여 최상급의 visual excellence를 확보했습니다.
+
+### 5. 종합 검증 파이프라인
+- 업그레이드된 `verify-service-category-contract.ts` 스크립트를 포함하여 6종의 도메인 검증 스크립트, `tsc`, `lint`, Next.js optimized production build가 100% 무결점으로 통과함을 엄격하게 확인 완료했습니다.
+
+

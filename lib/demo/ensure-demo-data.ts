@@ -126,7 +126,7 @@ export async function ensureDemoData(prisma: PrismaClient) {
       vendorApprovalStatus: VendorApprovalStatus.APPROVED,
       location: "서울 강남구",
       supportedEventTypes: [EventType.WEDDING],
-      supportedServiceModules: ["venue"],
+      supportedServiceModules: ["venue", "floral"],
       bio: "웨딩과 프라이빗 가족연을 위한 공간 연출 전문 업체입니다."
     },
     create: {
@@ -141,7 +141,7 @@ export async function ensureDemoData(prisma: PrismaClient) {
       vendorApprovalStatus: VendorApprovalStatus.APPROVED,
       location: "서울 강남구",
       supportedEventTypes: [EventType.WEDDING],
-      supportedServiceModules: ["venue"],
+      supportedServiceModules: ["venue", "floral"],
       bio: "웨딩과 프라이빗 가족연을 위한 공간 연출 전문 업체입니다."
     }
   });
@@ -156,7 +156,7 @@ export async function ensureDemoData(prisma: PrismaClient) {
       role: UserRole.VENDOR,
       phone: "010-5555-6666",
       phoneVerifiedAt: new Date(),
-      isActive: true,
+      isActive: false,
       vendorApprovalStatus: VendorApprovalStatus.APPROVED,
       location: "서울 성동구",
       supportedEventTypes: [EventType.WEDDING],
@@ -171,7 +171,7 @@ export async function ensureDemoData(prisma: PrismaClient) {
       role: UserRole.VENDOR,
       phone: "010-5555-6666",
       phoneVerifiedAt: new Date(),
-      isActive: true,
+      isActive: false,
       vendorApprovalStatus: VendorApprovalStatus.APPROVED,
       location: "서울 성동구",
       supportedEventTypes: [EventType.WEDDING],
