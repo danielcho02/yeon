@@ -1509,3 +1509,68 @@ Product Owner + Full-stack Lead Engineer 권한으로 yeON 프로젝트의 전�
 - 업그레이드된 `verify-service-category-contract.ts` 스크립트를 포함하여 6종의 도메인 검증 스크립트, `tsc`, `lint`, Next.js optimized production build가 100% 무결점으로 통과함을 엄격하게 확인 완료했습니다.
 
 
+---
+
+## Auth Routing Stale Session Loop 수정 (2026-05-30)
+
+### 1. Root Cause
+- `npm run db:seed` 이후 브라우저 JWT 세션은 이전 CUID를 그대로 유지함.
+- DB에는 새로운 CUID가 생성되므로, 기존 세션의 user ID가 DB에 존재하지 않는 상태가 됨.
+- `/vendor/dashboard` 페이지가 DB에서 vendor를 찾지 못하면 `/login?callbackUrl=/vendor/dashboard`로 redirect함.
+- `/login` 페이지는 JWT 세션만 확인하고, session이 유효하면(DB 확인 없이) `callbackUrl`로 redirect함.
+- 이로 인해 `/vendor/dashboard` ↔ `/login?callbackUrl=/vendor/dashboard` 무한 307 리다이렉트 루프 발생.
+
+### 2. 수정 사항
+- **`app/(auth)/login/page.tsx`**: 인증된 사용자의 자동 redirect 전에 `prisma.user.findUnique()`로 DB 존재 여부를 검증. stale session이면 로그인 폼을 표시하여 재인증 유도.
+- **`app/vendor/dashboard/page.tsx`**: stale session 감지 시 redirect 대상을 `/login?callbackUrl=/vendor/dashboard` 대신 `/login`으로 변경하여 루프 차단.
+- **`app/vendor/actions.ts` `completeVendorOnboarding`**: `prisma.user.update()` 호출 전 `prisma.user.findUnique()` 존재 확인 가드 (기존 커밋에서 적용 완료).
+
+### 3. `/logout` 404 관련
+- `/logout`는 지원되지 않는 경로이며, UI 어디에서도 `/logout`로 링크하지 않음.
+- 로그아웃은 `LogoutButton` 컴포넌트 → `next-auth/react` `signOut()` → `/api/auth/signout`으로 처리됨.
+- 조치 불필요.
+
+### 4. 추가된 검증 스크립트
+- **`scripts/verify-role-routing-contract.ts`**: 9개 검증 항목 포함.
+  1. 코어 데모 계정 존재 여부 (planner, venue, memorial)
+  2. 시드 벤더의 `supportedEventTypes` 유효성
+  3. 시드 벤더의 `supportedServiceModules` 유효성
+  4. 시드 벤더 프로필 완성도 (onboarding bypass)
+  5. 플래너의 벤더 대시보드 접근 차단
+  6. 비활성 벤더(Orsay Floral) 코어 데모 제외
+  7. 로그인 redirect destination 로직 검증
+  8. 벤더 대시보드 가드 로직 검증
+  9. 시드 벤더 onboarding bypass 검증
+
+### 5. 검증 결과 (2026-05-30)
+| 항목 | 결과 |
+|---|---|
+| `npx prisma generate` | ✅ |
+| `npm run db:seed` | ✅ |
+| `verify-demo-data-integrity` | ✅ |
+| `verify-quote-flow` | ✅ |
+| `launch-readiness-smoke` | ✅ |
+| `server-action-read-concurrency-smoke` | ✅ |
+| `verify-planner-auth-redirect` | ✅ |
+| `verify-service-category-contract` | ✅ |
+| `verify-role-routing-contract` | ✅ |
+| `npx tsc --noEmit` | ✅ |
+| `npm run lint` | ✅ |
+| `npm run build` | ✅ |
+| `npx prisma migrate status` | ✅ (14 migrations, up to date) |
+
+### 6. Browser QA 결과
+| 시나리오 | 결과 |
+|---|---|
+| 비인증 `/login` | 200 로그인 폼 표시 ✅ |
+| 비인증 `/vendor/dashboard` | 307 → `/login?callbackUrl=...` → 200 (루프 없음) ✅ |
+| Planner `/login` → redirect | 307 → `/plans` ✅ |
+| Planner `/vendor/dashboard` | 307 → `/plans` ✅ |
+| Planner `/plans` | 200 ✅ |
+| Venue vendor `/login` → redirect | 307 → `/vendor/dashboard` ✅ |
+| Venue vendor `/vendor/dashboard` | 200 (onboarding 없음) ✅ |
+| Memorial vendor `/login` → redirect | 307 → `/vendor/dashboard` ✅ |
+| Memorial vendor `/vendor/dashboard` | 200 (onboarding 없음) ✅ |
+| Stale session `/vendor/dashboard` | 307 → `/login` → 200 (루프 없음, 1회 redirect) ✅ |
+| Stale session `/login` | 200 (폼 표시, redirect 없음) ✅ |
+| Server log | 500/503 에러 없음 ✅ |

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { LoginForm } from "@/components/auth/login-form";
 import { getServerAuthSession } from "@/lib/auth/session";
+import { prisma } from "@/lib/prisma";
 
 function readSearchParam(value?: string | string[]) {
   return typeof value === "string" ? value : undefined;
@@ -41,7 +42,20 @@ export default async function LoginPage({
   const session = await getServerAuthSession();
 
   if (session?.user?.id) {
-    redirect(resolveLoginDestination(session.user.role, callbackUrl));
+    // Validate the session user actually exists in the DB.
+    // After db:seed, the JWT may hold a stale CUID that no longer exists.
+    // If the user doesn't exist, we must NOT redirect — show the login page
+    // so the user can re-authenticate and get a fresh JWT.
+    const dbUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true, isActive: true }
+    });
+
+    if (dbUser && dbUser.isActive) {
+      redirect(resolveLoginDestination(session.user.role, callbackUrl));
+    }
+    // If dbUser is null or inactive, fall through to show login form.
+    // The stale JWT will be replaced when the user logs in again.
   }
 
   const initialEmail = readSearchParam(searchParams?.email);

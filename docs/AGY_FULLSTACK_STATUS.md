@@ -153,3 +153,18 @@ Product Owner + Full-stack Lead Engineer로서 yeON의 데모 및 도메인 정�
 ### 4. 추가된 Verification 통과 결과
 - `verify-service-category-contract.ts` 검증 항목에 **3-role model active vendor constraints** 규칙을 신설하여, 활성 APPROVED 벤더의 수가 정확히 2개(모먼트 가든, 한결 의전)이며 Orsay Floral은 비활성 상태임을 매 build 단계마다 강제 보장하게 함으로써, 전수 감사 baseline의 무결성을 철저히 완성했습니다.
 
+---
+
+## 5. Auth Routing Stale Session Loop 수정 (2026-05-30)
+
+### Root Cause
+- `npm run db:seed` 후 JWT 세션의 user CUID가 DB에 존재하지 않아 `/vendor/dashboard` ↔ `/login?callbackUrl=/vendor/dashboard` 무한 307 루프 발생.
+
+### 수정
+- **`app/(auth)/login/page.tsx`**: `prisma.user.findUnique()`로 DB 존재 검증 후 redirect. stale session은 로그인 폼으로 fallthrough.
+- **`app/vendor/dashboard/page.tsx`**: stale session redirect 대상을 `/login`으로 변경하여 루프 차단.
+- **`scripts/verify-role-routing-contract.ts`**: 9개 항목의 역할/라우팅 계약 검증 스크립트 추가.
+
+### 검증 결과
+- 7종 검증 스크립트 + `tsc` + `lint` + `build` + `migrate status` 전원 통과.
+- Browser QA: 비인증/플래너/웨딩 벤더/장례 벤더/stale session 전 시나리오 정상 통과. 500/503 에러 없음.

@@ -133,3 +133,21 @@ PM 검수 및 최종 릴리즈를 위해, Claude QA에서 지적된 4대 Workflo
 - 12종의 전체 빌드 및 검증 파이프라인이 완전한 무오류 상태로 통과하여 즉시 릴리즈 가능한 상태입니다.
 
 
+---
+
+## 4. Auth Routing Stale Session Loop 수정 (2026-05-30)
+
+### Root Cause
+- `npm run db:seed` 후 브라우저 JWT에 남아있는 stale CUID로 인해 `/vendor/dashboard` ↔ `/login?callbackUrl=/vendor/dashboard` 무한 307 리다이렉트 루프 발생.
+
+### 수정
+- **`app/(auth)/login/page.tsx`**: 인증 세션의 DB 존재 검증 추가. stale session일 경우 redirect하지 않고 로그인 폼을 표시.
+- **`app/vendor/dashboard/page.tsx`**: stale session redirect를 `/login`으로 변경하여 루프 방지.
+- **`scripts/verify-role-routing-contract.ts`**: 역할/라우팅 계약 검증 (9개 항목).
+
+### `/logout` 404
+- `/logout`는 지원 경로가 아님. UI의 모든 로그아웃은 `signOut()` → `/api/auth/signout` 사용. 조치 불필요.
+
+### 검증
+- 7종 검증 스크립트 + `tsc` + `lint` + `build` + `migrate status` 전원 통과.
+- Browser QA: 비인증/플래너/웨딩 벤더/장례 벤더/stale session 전 시나리오 정상. 500/503 에러 없음.

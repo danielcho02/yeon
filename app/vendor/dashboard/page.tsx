@@ -102,7 +102,7 @@ export default async function VendorDashboardPage() {
   );
 
   if (!vendor) {
-    redirect("/login?callbackUrl=/vendor/dashboard");
+    redirect("/login");
   }
 
   const supportedEventTypes = getVendorSupportedEventTypes({
