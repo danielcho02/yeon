@@ -16,6 +16,7 @@ export type ModuleCategory =
 export interface VendorServiceModuleData {
   id: string;
   vendorId: string;
+  catalogKey?: string | null;
   name: string;
   category: ModuleCategory;
   price: number;

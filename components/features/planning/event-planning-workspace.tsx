@@ -169,6 +169,7 @@ type Props = {
   eventType: EventType;
   initialPlanId?: string | null;
   initialStep?: number | null;
+  initialCreateMode?: boolean;
   viewerName: string;
   viewerEmail: string;
   plans: PlanOption[];
@@ -190,6 +191,7 @@ export function EventPlanningWorkspace({
   eventType,
   initialPlanId,
   initialStep,
+  initialCreateMode = false,
   viewerName,
   plans,
   vendors,
@@ -203,15 +205,19 @@ export function EventPlanningWorkspace({
   const ThemeIcon = theme.Icon;
   const [onlyPlan] = plans;
   const singlePlan = plans.length === 1 ? onlyPlan : null;
-  const initialPlan =
+  const initialPlan = initialCreateMode
+    ? null
+    : (
     (initialPlanId ? plans.find((item) => item.id === initialPlanId) : null) ??
-    singlePlan;
+    singlePlan
+  );
   const [selectedPlanId, setSelectedPlanId] = useState(initialPlan?.id ?? "");
   const plan = useMemo(
     () => plans.find((item) => item.id === selectedPlanId) ?? null,
     [plans, selectedPlanId]
   );
-  const needsPlanSelection = !plan && plans.length > 0;
+  const [isEditingPlan, setIsEditingPlan] = useState(initialCreateMode || (!Boolean(initialPlan) && plans.length === 0));
+  const needsPlanSelection = !plan && plans.length > 0 && !isEditingPlan;
 
   const planReservations = useMemo(
     () => (plan ? reservations.filter((r) => r.eventPlan.id === plan.id) : []),
@@ -273,7 +279,6 @@ export function EventPlanningWorkspace({
 
   const [activeStep, setActiveStep] = useState<StepKey>(resolvedInitialStep);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
-  const [isEditingPlan, setIsEditingPlan] = useState(!Boolean(initialPlan) && plans.length === 0);
   const [selectedVendorId, setSelectedVendorId] = useState<string>(vendors[0]?.id ?? "");
   const selectedVendor = vendors.find((vendor) => vendor.id === selectedVendorId) ?? null;
   const [checkedServiceIds, setCheckedServiceIds] = useState<Set<string>>(new Set());
@@ -292,6 +297,12 @@ export function EventPlanningWorkspace({
   const quoteActionLockedRef = useRef(false);
   const [confettiActive, setConfettiActive] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const requestStatusPanelRef = useRef<HTMLDivElement>(null);
+
+  function focusRequestStatusPanel() {
+    requestStatusPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    requestStatusPanelRef.current?.focus();
+  }
 
   function navigateStep(next: StepKey) {
     const currentIdx = STEPS.findIndex((s) => s.key === activeStep);
@@ -375,6 +386,49 @@ export function EventPlanningWorkspace({
       ]),
     [planReservations, quoteRequestsData]
   );
+  const selectedVendorRequestState = useMemo(() => {
+    if (!selectedVendorId) return null;
+
+    const activeRequest =
+      (quoteRequestsData ?? []).find(
+        (request) => request.vendorId === selectedVendorId && request.status !== "CANCELED"
+      ) ?? null;
+
+    if (!activeRequest) return null;
+
+    const reservationStatus = activeRequest.reservation?.status ?? null;
+    const isConfirmed = reservationStatus === "CONFIRMED" || reservationStatus === "COMPLETED";
+
+    if (isConfirmed) {
+      return {
+        isAlreadyRequested: true,
+        label: "예약 확정 완료",
+        description: "이미 최종 확정된 요청입니다. 새 견적 요청 대신 현재 진행 상태를 확인해 주세요.",
+      };
+    }
+
+    if (activeRequest.status === "ACCEPTED") {
+      return {
+        isAlreadyRequested: true,
+        label: "업체 최종 확정 대기",
+        description: "업체의 최종 확정을 기다리는 중입니다.",
+      };
+    }
+
+    if (activeRequest.status === "RESPONDED") {
+      return {
+        isAlreadyRequested: true,
+        label: "제안서 확인 필요",
+        description: "업체 제안서가 도착했습니다. Step 4에서 금액과 포함 항목을 확인해 주세요.",
+      };
+    }
+
+    return {
+      isAlreadyRequested: true,
+      label: "업체 응답 대기",
+      description: "업체 응답을 기다리는 중입니다.",
+    };
+  }, [quoteRequestsData, selectedVendorId]);
   const comparisonQuotes = useMemo(
     () => mapQuoteRequestsToVendorQuotes(quoteRequestsData ?? []),
     [quoteRequestsData]
@@ -413,7 +467,7 @@ export function EventPlanningWorkspace({
               vendorName: request.vendor?.companyName ?? "업체",
               serviceLabel,
               statusLabel: "업체 최종 확정 대기",
-              statusTone: "bg-violet-100 text-violet-700",
+              statusTone: "bg-[#faf8f4] text-[#8c8275]",
               helperText: dueAt
                 ? `견적은 수락됐고, 업체가 ${formatDate(dueAt)}까지 예약을 확정해야 완료됩니다.`
                 : "견적은 수락됐고, 업체가 예약을 확정해야 완료됩니다.",
@@ -470,7 +524,7 @@ export function EventPlanningWorkspace({
         statusTone: isConfirmed
           ? "bg-emerald-100 text-emerald-700"
           : isAccepted
-            ? "bg-violet-100 text-violet-700"
+            ? "bg-[#faf8f4] text-[#8c8275]"
             : meta.tone,
         helperText: isConfirmed
           ? "업체가 예약을 최종 확정했습니다."
@@ -602,7 +656,10 @@ export function EventPlanningWorkspace({
       showNotice("success", "견적 요청을 보냈습니다. 업체 응답이 오면 제안서 확인 화면에서 확인할 수 있습니다.");
       setCheckedServiceIds(new Set());
       setRequestForm((c) => ({ ...c, notes: "" }));
-      if (plan?.id) await refreshQuoteRequests(plan.id);
+      if (plan?.id) {
+        await refreshQuoteRequests(plan.id);
+        focusRequestStatusPanel();
+      }
       startTransition(() => router.refresh());
     } finally {
       setIsQuoteActionPending(false);
@@ -643,6 +700,7 @@ export function EventPlanningWorkspace({
       if (!result.success) { showNotice("error", result.error); return; }
       showNotice("success", "견적 요청을 보냈습니다. 업체 응답이 오면 제안서 확인 화면에서 확인할 수 있습니다.");
       await refreshQuoteRequests(plan.id);
+      focusRequestStatusPanel();
       startTransition(() => router.refresh());
     } finally {
       setIsQuoteActionPending(false);
@@ -727,7 +785,7 @@ export function EventPlanningWorkspace({
                   ))}
                 </select>
               )}
-              <Link href="/planner" className={`rounded-xl border border-white/80 bg-white/70 px-3 py-1.5 text-xs font-medium text-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-sm`}>← 목록</Link>
+              <Link href="/plans" className={`rounded-xl border border-white/80 bg-white/70 px-3 py-1.5 text-xs font-medium text-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-sm`}>← 목록</Link>
               <Link href="/account" className="rounded-xl border border-white/80 bg-white/70 px-3 py-1.5 text-xs font-medium text-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-sm">계정</Link>
             </div>
           </div>
@@ -846,7 +904,7 @@ export function EventPlanningWorkspace({
                   </select>
                   <Link
                     className={`flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-semibold ${theme.btnAccent}`}
-                    href={`/plans/new?type=${eventType}`}
+                    href={`/planner/${eventType === "WEDDING" ? "wedding" : "funeral"}?create=1`}
                   >
                     새 {theme.label} 플랜 만들기
                     <ArrowRight className="h-4 w-4" />
@@ -1349,6 +1407,9 @@ export function EventPlanningWorkspace({
                       guestCount={Math.max(1, Number.parseInt(requestForm.guestCount, 10) || 1)}
                       vendorModules={vendorModules}
                       isSubmitting={isQuoteActionPending}
+                      isAlreadyRequested={selectedVendorRequestState?.isAlreadyRequested}
+                      requestStatusLabel={selectedVendorRequestState?.label}
+                      requestStatusDescription={selectedVendorRequestState?.description}
                       onRequestQuote={handleModuleQuoteRequest}
                     />
                   ) : (
@@ -1464,12 +1525,31 @@ export function EventPlanningWorkspace({
 
                         <button
                           className={`flex items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-semibold ${theme.btnAccent}`}
-                          disabled={isQuoteActionPending || isPending || (vendorSvcsForForm.length > 0 && checkedServiceIds.size === 0)}
+                          disabled={
+                            isQuoteActionPending ||
+                            isPending ||
+                            Boolean(selectedVendorRequestState?.isAlreadyRequested) ||
+                            (vendorSvcsForForm.length > 0 && checkedServiceIds.size === 0)
+                          }
                           type="submit"
                         >
                           <HeartHandshake className="h-4 w-4" />
-                          {isQuoteActionPending ? "요청 보내는 중..." : "견적 요청 보내기"}
+                          {isQuoteActionPending
+                            ? "요청 보내는 중..."
+                            : selectedVendorRequestState?.label ?? "견적 요청 보내기"}
                         </button>
+                        {selectedVendorRequestState && (
+                          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-3 text-xs text-emerald-800">
+                            <p className="font-semibold">
+                              {selectedVendorRequestState.label === "업체 응답 대기"
+                                ? "견적 요청 완료"
+                                : selectedVendorRequestState.label}
+                            </p>
+                            <p className="mt-1 leading-5 text-emerald-700/90">
+                              {selectedVendorRequestState.description}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </form>
                   )}
@@ -1478,7 +1558,7 @@ export function EventPlanningWorkspace({
             </div>
 
             {/* Sent requests sidebar */}
-            <div className="space-y-3">
+            <div ref={requestStatusPanelRef} tabIndex={-1} className="space-y-3 outline-none">
               <h3 className="font-[var(--font-display)] text-sm font-bold text-foreground">보낸 요청 현황</h3>
               {requestStatusItems.length > 0 ? (
                 requestStatusItems.map((item) => (
@@ -1570,4 +1650,3 @@ function EmptyState({ title, description, icon: Icon }: { title: string; descrip
     </div>
   );
 }
-

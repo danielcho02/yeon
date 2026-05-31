@@ -13,6 +13,7 @@ export interface QuoteModule {
   categoryLabel: string
   price: number
   pricingType: 'FLAT' | 'PER_GUEST'
+  isVendorSpecific?: boolean
 }
 
 // UI-extended base package (compatible with ApiBasePackage + UI-only fields)
@@ -110,6 +111,7 @@ export function buildModulesFromVendorData(modules: VendorServiceModuleData[]): 
       categoryLabel: MODULE_CATEGORY_LABELS[m.category as string] ?? m.category,
       price: m.price,
       pricingType: m.pricingType,
+      isVendorSpecific: m.catalogKey === null,
     }))
 }
 
@@ -124,8 +126,8 @@ export function buildBasePackageFromVendorData(
   }, 0)
   return {
     id: 'vendor-base',
-    name: '기본 패키지',
-    description: baseModules.map((m) => m.name).join(' + '),
+    name: '업체 기본 패키지',
+    description: `기본 포함 항목: ${baseModules.map((m) => m.name).join(' + ')}`,
     price,
     includedModuleKeys: baseModules.map((m) => m.id),
   }

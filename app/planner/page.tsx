@@ -13,13 +13,29 @@ import {
 import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { mvpEventTypes } from "@/lib/step3.server";
 
+type PlannerSearchParams = Record<string, string | string[] | undefined>;
+
+function readSearchParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function isCreateMode(value: string | string[] | undefined) {
+  return readSearchParam(value) === "1";
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
-export default async function PlannerPage() {
+export default async function PlannerPage({
+  searchParams,
+}: {
+  searchParams?: Promise<PlannerSearchParams>;
+}) {
   const session = await getServerAuthSession();
+  const params = await searchParams;
+  const createMode = isCreateMode(params?.create);
 
   if (!session?.user?.id) {
-    redirect("/login?callbackUrl=/planner");
+    redirect(`/login?callbackUrl=${encodeURIComponent(createMode ? "/planner?create=1" : "/planner")}`);
   }
 
   if (session.user.role === UserRole.VENDOR) {
@@ -41,8 +57,7 @@ export default async function PlannerPage() {
   const hasWedding = existingTypes.some((p) => p.type === "WEDDING");
   const hasFuneral = existingTypes.some((p) => p.type === "FUNERAL");
 
-  if (hasWedding && !hasFuneral) redirect("/planner/wedding");
-  if (hasFuneral && !hasWedding) redirect("/planner/funeral");
+  if (!createMode && (hasWedding || hasFuneral)) redirect("/plans");
 
   const userName = session.user.name ?? "사용자";
 
@@ -76,7 +91,7 @@ export default async function PlannerPage() {
             안녕하세요,<br />{userName}
           </h1>
           <p className="mt-4 max-w-sm text-sm leading-7 text-muted-foreground">
-            준비하려는 행사 유형을 선택하면 맞춤 준비 흐름이 시작됩니다.
+            아직 만든 플랜이 없다면 행사 유형을 먼저 고르세요. 세부 정보 입력과 AI 추천은 다음 단계에서 이어집니다.
           </p>
         </div>
 
@@ -84,7 +99,7 @@ export default async function PlannerPage() {
         <div className="animate-slide-up grid gap-5 sm:grid-cols-2 delay-150">
           {/* Wedding */}
           <Link
-            href="/planner/wedding"
+            href={createMode ? "/planner/wedding?create=1" : "/planner/wedding"}
             className="group relative overflow-hidden rounded-[2.5rem] border border-amber-200/70 shadow-sm shadow-amber-100/40 transition-all duration-500 hover:-translate-y-3 hover:shadow-2xl hover:shadow-rose-200/40"
           >
             <div className="absolute inset-0 surface-wedding" />
@@ -110,7 +125,7 @@ export default async function PlannerPage() {
 
           {/* Funeral */}
           <Link
-            href="/planner/funeral"
+            href={createMode ? "/planner/funeral?create=1" : "/planner/funeral"}
             className="group relative overflow-hidden rounded-[2.5rem] border border-indigo-200/60 shadow-sm shadow-indigo-100/30 transition-all duration-500 hover:-translate-y-3 hover:shadow-2xl hover:shadow-indigo-200/30"
           >
             <div className="absolute inset-0 surface-funeral" />

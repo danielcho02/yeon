@@ -45,11 +45,13 @@ type ServiceRow = {
   eventType: string;
   module: string;
   catalogKey: string | null;
+  category: string;
   pricingType: string;
   name: string;
   description: string | null;
   basePrice: number;
   isActive: boolean;
+  isBaseIncluded: boolean;
 };
 
 type InboxItem =

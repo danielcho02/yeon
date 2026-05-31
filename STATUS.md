@@ -1,14 +1,14 @@
 # yeON Project Status
 
-> Last updated: 2026-05-31
+> Last updated: 2026-06-01
 > Branch: `codex/next-product-stabilization`
-> Current focus: Step 4 proposal/reservation IA stabilization
+> Current focus: planner entry flow + Step 3 request feedback + module-backed custom items
 
 ---
 
 ## What Was Just Implemented
 
-The **canonical quote workflow fix** was implemented on this branch. Changes enforce the correct
+The **canonical quote workflow baseline** is now the branch default. Changes enforce the correct
 domain contract for the full QuoteRequest → QuoteResponse → Reservation lifecycle:
 
 - `createQuoteRequest` now creates **only** QuoteRequest(PENDING) + notification + activity log.
@@ -20,8 +20,11 @@ domain contract for the full QuoteRequest → QuoteResponse → Reservation life
 - `verify-quote-flow.ts` updated to test the canonical accept-creates-Reservation path.
 - `verify-demo-scenario.ts` (new) validates per-state scenario seed output.
 - `package.json` gained `db:seed:scenario`, `db:seed:scenario:A/B/C/D` scripts.
-
-**These changes are staged and ready to commit — not yet committed.**
+- `/planner` is now a first-time entry router: existing planners are sent to `/plans`, while `/planner?create=1` always shows the event-type chooser.
+- `/plans/new` is now a compatibility redirect into `/planner?create=1` or `/planner/{type}?create=1`; the flat generic form is no longer part of the main flow.
+- Step 3 now keeps planners on the request screen after submit, locks duplicate active requests per vendor/plan with stable CTA feedback, and refreshes the sent-request panel in place.
+- Vendor dashboard custom items now read/write `VendorServiceModule` so planner Step 3 sees vendor-added custom modules directly.
+- Current package handling is a single derived package per vendor from active `isBaseIncluded` modules. True multi-package support remains deferred until a package schema exists.
 
 ---
 
@@ -48,7 +51,7 @@ After `npm run db:seed`:
 |---------------------|-------|--------------------------------------------------------|
 | User                | 6     | planner, venue, catering (isActive:false), memorial, guest, admin |
 | EventPlan           | 2     | spring-garden-wedding (WEDDING), family-funeral-guidance (FUNERAL) |
-| VendorServiceModule | 15    | 6 venue, 4 floral (inactive vendor), 5 funeral         |
+| VendorServiceModule | 18    | 8 venue, 4 floral (inactive vendor), 6 funeral         |
 | QuoteRequest        | **0** | clean baseline                                         |
 | QuoteResponse       | **0** | clean baseline                                         |
 | Reservation         | **0** | clean baseline                                         |
@@ -66,20 +69,22 @@ Planner lands on **Step 3** (vendors) ready to send their first request.
 | `npm run db:seed:scenario:C` | Accepted  | ACCEPTED    | exists        | PENDING           |
 | `npm run db:seed:scenario:D` | Confirmed | ACCEPTED    | exists        | CONFIRMED         |
 
-State B has **no Reservation** — this is the canonical state. The workspace must auto-navigate
+State B has **no Reservation** — this is the canonical state. Treat it as a regression/dev
+validation state for Step 4 routing and proposal visibility. The workspace must auto-navigate
 to Step 4 based on quoteRequestsData RESPONDED detection (not Reservation existence).
 
 General-user Step 4 is a **proposal → reservation workflow** screen:
 
-- Before accept: selected modules, vendor proposal, amount, response message, and explicit no-Reservation-yet state.
-- After accept: Reservation(PENDING), accepted proposal summary, and vendor final confirmation due date.
-- After vendor confirm: Reservation(CONFIRMED) and final reservation summary.
-- Step 4 detail panels should follow the same module workflow model. Category-lane status is internal/supporting detail only.
+- Before accept: selected modules, vendor proposal, amount, response message, and explicit "아직 예약 확정 전입니다" state.
+- After accept: "업체 최종 확정 대기", accepted proposal summary, and vendor final confirmation due date.
+- After vendor confirm: "예약 확정 완료" and final reservation summary.
+- Step 4 detail panels should follow the same module workflow model. Category-lane status is internal validation data and should not render in the general-user UI.
 
 Step 3 package/module rules:
 
 - Base package included items are shown in the included-spec area and must not reappear as optional adjustment rows.
-- Additional selection rows are only for non-included modules.
+- Additional selection rows are only for active non-included modules.
+- Standard catalog-backed modules, package-included modules, optional add-ons, and vendor-specific add-ons should be labeled distinctly. Vendor-specific add-ons are non-catalog vendor modules, not renamed standard essentials.
 
 Vendor quote response framing:
 
@@ -119,16 +124,16 @@ npm run lint
 npm run build
 ```
 
-Scenario seed validation (optional, run after scenario seed):
+Scenario seed validation (required after Step 4 routing or planner workflow changes):
 ```bash
-npm run db:seed:scenario:C
-npx tsx scripts/verify-demo-scenario.ts --state=C
+npm run db:seed:scenario:B
+npx tsx scripts/verify-demo-scenario.ts --state=B
 ```
 
-### Last Known Validation Results (pre-commit, 2026-05-31)
+### Last Known Validation Results
 
-All 7 verify scripts + tsc + lint + build were passing on the previous commit (84756d4).
-The canonical workflow changes (unstaged/staged diff) need a final validation run before commit.
+Run the full suite again after the current stabilization pass. State B should remain the default
+workflow regression when Step 4 routing, planner entry, or quote-request visibility changes.
 
 ---
 
@@ -138,11 +143,14 @@ These items require manual browser testing against `npm run dev`:
 
 1. **Fresh seed Step 3 landing**: `npm run db:seed` → login planner → `/planner/wedding` → confirm Step 3 active, "보낸 요청 현황" empty
 2. **No Reservation after request**: Submit quote request → DB check: 1 QuoteRequest(PENDING), 0 Reservations
-3. **State B auto-navigate**: After vendor responds (State B seed), planner opens workspace → confirm workspace auto-jumps to Step 4 without manual click
+3. **State B auto-navigate when Step 4 routing/proposal rendering changes**: After vendor responds (State B seed), planner opens workspace → confirm workspace auto-jumps to Step 4 without manual click
 4. **Reservation created at accept**: Click "이 견적 수락하기" → DB check: Reservation(PENDING) now exists for the first time; `vendorConfirmationDueAt` set
 5. **No 503 on Step 3 submit**: Open network tab → submit quote → no 503 on `POST /api/planning/recommendation`
 6. **Step refresh persistence**: Refresh `/planner/wedding?planId=...&step=3` and `step=4` → confirm step maintained
 7. **Vendor confirm flow**: vendor logs in → "예약 최종 확정" → Reservation(CONFIRMED) → planner sees "예약 확정 완료"
+8. **Planner return landing**: logged-in planner at `/` sees `/plans`-oriented primary CTA and partner CTA remains readable on desktop/mobile
+9. **Entry-point IA**: `/planner` with existing plans redirects to `/plans`; zero-plan account sees event-type chooser; `/plans/new` no longer shows the flat generic form
+10. **Custom module visibility**: vendor-added custom wedding/funeral modules appear in Step 3, optional customs are selectable, and base-included customs stay only in the included-spec area
 
 ---
 
@@ -167,5 +175,4 @@ The prior Claude=frontend / Codex=backend split is retired.
 
 ## Safe to Commit?
 
-**Not yet** — browser QA items listed above must be verified first.
-Once browser QA passes, run the full validation suite, then commit.
+Run the validation suite and the browser QA items above after any additional edits.

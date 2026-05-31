@@ -70,10 +70,10 @@ function getNextActionMeta(nextAction: PlanDashboardNextAction, eventType: strin
           ? "고객 승인이 완료되어 파트너사의 최종 스케줄 승인을 대기하고 있습니다."
           : "의전 승인이 완료되어 파트너사의 최종 승인을 대기하고 있습니다.",
         badge: isWedding
-          ? "bg-[#f5f3ff] text-[#6d28d9] border border-purple-100"
+          ? "bg-[#fbf4ee] text-[#9b6b4f] border border-[#e7d2c4]"
           : "bg-[#eef2f6] text-[#475569] border border-[#cbd3e0]",
         cta: "예약 대기 확인",
-        ctaVariant: isWedding ? "weddingPending" : "funeralPrimary",
+        ctaVariant: isWedding ? "weddingPending" : "funeralOutlineStrong",
         Icon: Clock,
       } as const;
     case "confirmed":
@@ -104,10 +104,11 @@ function getNextActionMeta(nextAction: PlanDashboardNextAction, eventType: strin
 const ctaStyles = {
   weddingWarm: "bg-[#c4977a] hover:bg-[#b08569] text-white",
   weddingOutline: "border border-[#c4977a] text-[#c4977a] hover:bg-[#fcf8f2]",
-  weddingPending: "bg-[#8f6a8f] hover:bg-[#7b587b] text-white",
+  weddingPending: "bg-[#a86f4c] hover:bg-[#8f5f43] text-white",
   weddingConfirmed: "bg-[#c4977a] hover:bg-[#b08569] text-white",
   funeralPrimary: "bg-[#2c3455] hover:bg-[#1e2645] text-white",
   funeralOutline: "border border-[#2c3455] text-[#2c3455] hover:bg-[#f4f5f8]",
+  funeralOutlineStrong: "border border-[#475569] bg-[#f4f5f8] text-[#334155] hover:bg-[#e8edf3]",
   gray: "border border-[#e5e2da] bg-white text-muted-foreground hover:bg-[#faf9f5]",
 } as const;
 
@@ -157,7 +158,7 @@ export default async function PlansPage() {
               진행 중인 의례 설계 및 파트너 조율 현황을 차분하게 검토하세요.
             </p>
           </div>
-          <Link href="/plans/new" className="inline-flex h-9 items-center justify-center rounded-xl bg-[#2c3455] px-4 text-xs font-semibold text-white transition-all duration-150 hover:bg-[#1e2645] active:scale-[0.98]">
+          <Link href="/planner?create=1" className="inline-flex h-9 items-center justify-center rounded-xl bg-[#2c3455] px-4 text-xs font-semibold text-white transition-all duration-150 hover:bg-[#1e2645] active:scale-[0.98]">
             <Plus className="mr-1.5 h-3.5 w-3.5" />
             새 행사 만들기
           </Link>
@@ -173,7 +174,7 @@ export default async function PlansPage() {
             <p className="mb-6 max-w-xs text-xs text-[#8c8275] leading-relaxed">
               결혼이나 장례 행사를 준비 중이라면 새 플랜을 만들어 보세요. yeON이 기본 구성을 정돈하여 품격 있게 보좌하겠습니다.
             </p>
-            <Link href="/plans/new" className="inline-flex h-9 items-center justify-center rounded-xl bg-[#2c3455] px-4 text-xs font-semibold text-white transition-all hover:bg-[#1e2645]">
+            <Link href="/planner?create=1" className="inline-flex h-9 items-center justify-center rounded-xl bg-[#2c3455] px-4 text-xs font-semibold text-white transition-all hover:bg-[#1e2645]">
               <Plus className="mr-1.5 h-3.5 w-3.5" />
               첫 행사 만들기
             </Link>
@@ -262,7 +263,7 @@ export default async function PlansPage() {
                           <span
                             className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-medium ${
                               isWedding
-                                ? "border border-purple-100 bg-[#f5f3ff]/40 text-purple-700"
+                                ? "border border-[#e7d2c4] bg-[#fbf4ee]/70 text-[#9b6b4f]"
                                 : "border border-[#cbd3e0] bg-[#f4f5f8] text-[#475569]"
                             }`}
                           >

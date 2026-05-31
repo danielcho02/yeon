@@ -23,11 +23,13 @@ type ServiceRow = {
   eventType: string;
   module: string;
   catalogKey: string | null;
+  category: string;
   pricingType: string;
   name: string;
   description: string | null;
   basePrice: number;
   isActive: boolean;
+  isBaseIncluded: boolean;
 };
 
 // ── Standard catalog item row ─────────────────────────────────────────────
@@ -81,8 +83,17 @@ function StandardItemRow({
         </div>
       </div>
 
-      {existing && !existing.isActive && (
-        <span className="shrink-0 text-[10px] font-semibold text-muted-foreground/50">비활성</span>
+      {existing && (
+        <div className="shrink-0 space-y-1 text-right">
+          {existing.isBaseIncluded && (
+            <span className="block rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+              기본 포함
+            </span>
+          )}
+          {!existing.isActive && (
+            <span className="block text-[10px] font-semibold text-muted-foreground/50">비활성</span>
+          )}
+        </div>
       )}
     </form>
   );
@@ -104,8 +115,13 @@ function CustomItemRow({ item }: { item: ServiceRow }) {
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium text-foreground">{item.name}</p>
             <span className="rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-              커스텀
+              업체 전용
             </span>
+            {item.isBaseIncluded && (
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                기본 포함
+              </span>
+            )}
           </div>
           {item.description && (
             <p className="mt-0.5 text-xs text-muted-foreground/70">{item.description}</p>
@@ -155,7 +171,7 @@ function AddCustomItemForm({
         onClick={() => setOpen(true)}
         className="mt-2 flex items-center gap-1.5 rounded-2xl border border-dashed border-muted-foreground/30 bg-transparent px-4 py-2.5 text-xs font-semibold text-muted-foreground transition-all hover:border-primary/40 hover:text-primary"
       >
-        + 커스텀 항목 추가
+        + 업체 전용 항목 추가
       </button>
     );
   }
@@ -169,14 +185,14 @@ function AddCustomItemForm({
       <input type="hidden" name="eventType" value={eventType} />
       <input type="hidden" name="module" value={module} />
       <p className="mb-3 text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground/55">
-        커스텀 항목 추가
+        업체 전용 항목 추가
       </p>
       <div className="space-y-3">
         <input
           name="name"
           type="text"
           required
-          placeholder="항목명 (예: 야외 정원 의자 추가)"
+          placeholder="항목명 (예: 야외 버진로드 런너 추가)"
           className="w-full rounded-xl border border-input bg-white px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         />
         <textarea
@@ -205,6 +221,14 @@ function AddCustomItemForm({
             <span className="text-xs text-muted-foreground">원</span>
           </div>
         </div>
+        <label className="flex items-center gap-2 rounded-xl border border-border/50 bg-white px-3 py-2 text-xs font-medium text-foreground">
+          <input
+            name="isBaseIncluded"
+            type="checkbox"
+            className="h-4 w-4 rounded border-input accent-primary"
+          />
+          기본 패키지 포함 항목으로 등록
+        </label>
       </div>
       <div className="mt-3 flex gap-2">
         <button

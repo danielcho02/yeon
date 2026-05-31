@@ -465,6 +465,24 @@ async function main() {
   assert.ok(funeralSeedModules.length > 0, "funeral vendor modules must exist");
   assert.ok(weddingSeedModules.length > 0, "wedding vendor modules must exist");
 
+  const weddingCustomOptionalModule = weddingSeedModules.find(
+    (module) => module.name === "야외 버진로드 런너 추가"
+  );
+  const weddingCustomIncludedModule = weddingSeedModules.find(
+    (module) => module.name === "웰컴 사인보드 커스텀 제작"
+  );
+  const funeralCustomModule = funeralSeedModules.find(
+    (module) => module.name === "추모 동선 안내 사인물"
+  );
+
+  assert.ok(weddingCustomOptionalModule, "wedding custom optional module must exist after seed");
+  assert.ok(weddingCustomIncludedModule, "wedding custom included module must exist after seed");
+  assert.ok(funeralCustomModule, "funeral custom module must exist after seed");
+  assert.equal(weddingCustomOptionalModule.isBaseIncluded, false);
+  assert.equal(weddingCustomIncludedModule.isBaseIncluded, true);
+  assert.equal(funeralCustomModule.isBaseIncluded, false);
+  checks.custom_vendor_modules_seeded = true;
+
   for (const module of funeralSeedModules) {
     assert.ok(
       moduleCategoryMatchesEventType("FUNERAL", module.category),
@@ -490,6 +508,27 @@ async function main() {
     );
   }
   checks.wedding_modules_are_event_specific = true;
+
+  const weddingBaseIncludedModuleIds = new Set(
+    weddingSeedModules.filter((module) => module.isBaseIncluded).map((module) => module.id)
+  );
+  const weddingAdjustableModuleIds = new Set(
+    weddingSeedModules.filter((module) => !module.isBaseIncluded).map((module) => module.id)
+  );
+  assert.ok(
+    weddingBaseIncludedModuleIds.has(weddingCustomIncludedModule.id),
+    "base-included custom wedding module must remain in the included package set"
+  );
+  assert.equal(
+    weddingAdjustableModuleIds.has(weddingCustomIncludedModule.id),
+    false,
+    "base-included custom wedding module must not appear in adjustable module selections"
+  );
+  assert.ok(
+    weddingAdjustableModuleIds.has(weddingCustomOptionalModule.id),
+    "optional custom wedding module must stay selectable"
+  );
+  checks.base_included_custom_module_not_double_counted = true;
 
   assert.equal(
     floristModules.some((module) => module.category === "CATERING" || module.category === "MEAL"),
@@ -546,8 +585,27 @@ async function main() {
   });
 
   assert.ok(modules.length > 0, "vendor modules must exist; run npx prisma db seed first");
+  assert.ok(
+    modules.some((module) => module.id === weddingCustomIncludedModule.id) ||
+    weddingSeedModules.some((module) => module.id === weddingCustomIncludedModule.id),
+    "wedding custom included module must be readable from vendor module queries"
+  );
 
-  const selectedModules = modules.map((module) => module.id);
+  const selectedModules = [
+    weddingCustomOptionalModule.id,
+    modules[0]?.id
+  ].filter((id, index, list): id is string => Boolean(id) && list.indexOf(id) === index);
+  const selectedModuleRecords = weddingSeedModules.filter((module) => selectedModules.includes(module.id));
+  assert.ok(
+    selectedModules.includes(weddingCustomOptionalModule.id),
+    "custom optional wedding module must be selectable into selectedModuleIds"
+  );
+  assert.equal(
+    selectedModuleRecords.length,
+    selectedModules.length,
+    "selected custom wedding modules must resolve back to real VendorServiceModule rows"
+  );
+  checks.custom_module_selectable_into_selected_module_ids = true;
   await expectReject("empty selected modules", async () => {
     await validateQuoteRequestContract({
       ownerId: planner.id,
@@ -621,7 +679,7 @@ async function main() {
   checks.valid_quote_request_contract_passed = true;
 
   const guestCount = plan.guestTarget ?? 80;
-  const quotedAmount = modules.reduce(
+  const quotedAmount = selectedModuleRecords.reduce(
     (sum, module) =>
       sum + (module.pricingType === "PER_GUEST" ? module.price * guestCount : module.price),
     0
@@ -787,7 +845,7 @@ async function main() {
             price: quotedAmount,
             description: "Backend smoke verification response"
           },
-          includedModules: modules.map((module) => ({
+          includedModules: selectedModuleRecords.map((module) => ({
             id: module.id,
             name: module.name,
             category: module.category,
@@ -892,7 +950,7 @@ async function main() {
   };
   assert.equal(
     submittedResponseModules.includedModules?.length,
-    modules.length,
+    selectedModuleRecords.length,
     "QuoteResponse.modules must preserve selected module identity for planner Step 4 and vendor confirmation"
   );
   checks.quote_response_preserves_selected_module_identity = true;
@@ -932,7 +990,7 @@ async function main() {
             price: quotedAmount,
             description: "Duplicate response should fail"
           },
-          includedModules: modules.map((module) => ({
+          includedModules: selectedModuleRecords.map((module) => ({
             id: module.id,
             name: module.name,
             category: module.category,
@@ -1014,13 +1072,13 @@ async function main() {
         quoteRequestId: created.requestId,
         quoteResponseId: created.responseId,
         serviceName: "Backend smoke verification",
-        serviceCategory: String(modules[0].category),
+        serviceCategory: String(selectedModuleRecords[0]?.category ?? weddingCustomOptionalModule.category),
         serviceDate: plan.scheduledAt,
         guestCount,
         quotedAmount,
         confirmedAmount: null,
         vendorConfirmationDueAt,
-        selectedServiceOptions: modules.map((module) => ({
+        selectedServiceOptions: selectedModuleRecords.map((module) => ({
           catalogKey: module.id,
           name: module.name,
           price: 0,
@@ -1073,7 +1131,7 @@ async function main() {
   const acceptedSelectedOptions = selectedOptionsFromJson(newReservation!.selectedServiceOptions);
   assert.equal(
     acceptedSelectedOptions?.length,
-    modules.length,
+    selectedModuleRecords.length,
     "Real accept-compatible Reservation must preserve selected module identity for vendor confirmation"
   );
   checks.real_accept_reservation_preserves_selected_modules = true;

@@ -42,6 +42,10 @@ function parseInitialStep(value: string | string[] | undefined) {
   return step >= 1 && step <= 4 ? step : null;
 }
 
+function isCreateMode(value: string | string[] | undefined) {
+  return readSearchParam(value) === "1";
+}
+
 export default async function FuneralPlannerPage({
   searchParams,
 }: {
@@ -157,9 +161,12 @@ export default async function FuneralPlannerPage({
   const filteredVendors = vendors.filter((vendor) =>
     vendorSupportsAnyServiceModule(vendor, "FUNERAL")
   );
+  const createMode = isCreateMode(params?.create);
   const initialPlan =
-    (requestedPlanId ? plans.find((item) => item.id === requestedPlanId) : null) ??
-    (plans.length === 1 ? plans[0] : null);
+    createMode
+      ? null
+      : (requestedPlanId ? plans.find((item) => item.id === requestedPlanId) : null) ??
+        (plans.length === 1 ? plans[0] : null);
   const initialVendor = filteredVendors[0] ?? null;
   const [initialVendorModulesResult, initialQuoteRequestsResult] = await Promise.all([
     initialVendor ? getVendorServiceModules(initialVendor.id, "FUNERAL") : null,
@@ -180,6 +187,7 @@ export default async function FuneralPlannerPage({
         eventType="FUNERAL"
         initialPlanId={requestedPlanId ?? null}
         initialStep={parseInitialStep(params?.step)}
+        initialCreateMode={createMode}
         viewerEmail={session.user.email ?? ""}
         viewerName={session.user.name ?? "사용자"}
         plans={plans.map((p) => ({

@@ -163,6 +163,21 @@ async function seedModularQuoteData() {
       price: 120_000,
       description: "사진 8장과 지도 링크 포함",
       sortOrder: 6
+    },
+    {
+      name: "웰컴 사인보드 커스텀 제작",
+      category: ModuleCategory.DECORATION,
+      price: 180_000,
+      description: "행사명과 동선을 반영한 현장 사인보드 제작",
+      isBaseIncluded: true,
+      sortOrder: 7
+    },
+    {
+      name: "야외 버진로드 런너 추가",
+      category: ModuleCategory.DECORATION,
+      price: 220_000,
+      description: "잔디 및 야외 동선용 추가 런너 설치",
+      sortOrder: 8
     }
   ]);
 
@@ -235,6 +250,13 @@ async function seedModularQuoteData() {
       price: 350_000,
       description: "수도권·인천 기준 편도 운구 차량 1대",
       sortOrder: 5
+    },
+    {
+      name: "추모 동선 안내 사인물",
+      category: ModuleCategory.OBITUARY,
+      price: 90_000,
+      description: "빈소 내 조문 동선 및 안내 표지 세트",
+      sortOrder: 6
     }
   ]);
 

@@ -18,6 +18,7 @@ import { LogoutButton } from "@/components/auth/logout-button";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { getServerAuthSession } from "@/lib/auth/session";
+import { prisma, withPrismaRetry } from "@/lib/prisma";
 import {
   AnimatedSectionHeader,
   AnimatedCardGrid,
@@ -29,6 +30,17 @@ export default async function HomePage() {
   const session = await getServerAuthSession();
   const isLoggedIn = Boolean(session?.user?.id);
   const isVendor = session?.user?.role === "VENDOR";
+  const hasPlannerSession =
+    isLoggedIn && !isVendor
+      ? (await withPrismaRetry(() =>
+          prisma.eventPlan.count({
+            where: {
+              ownerId: session!.user.id,
+              type: { in: ["WEDDING", "FUNERAL"] }
+            }
+          })
+        )) > 0
+      : false;
   const defaultWorkspaceHref = isVendor ? "/vendor/dashboard" : "/plans";
   const weddingHref = !isLoggedIn
     ? "/login?callbackUrl=/planner/wedding"
@@ -41,6 +53,25 @@ export default async function HomePage() {
       ? "/vendor/dashboard"
       : "/planner/funeral";
   const publicVendorHref = isVendor ? "/vendor/dashboard" : "/vendors";
+  const primaryHeroHref = isLoggedIn
+    ? isVendor
+      ? "/vendor/dashboard"
+      : hasPlannerSession
+        ? "/plans"
+        : "/planner"
+    : "/signup";
+  const primaryHeroLabel = isLoggedIn
+    ? isVendor
+      ? "업체 대시보드로 이동"
+      : hasPlannerSession
+        ? "이어서 준비하기"
+        : "행사 유형 선택하기"
+    : "컨시어지 시작하기";
+  const heroSubcopy = isLoggedIn && !isVendor && hasPlannerSession
+    ? "이전에 만들던 행사와 파트너 조율 현황이 준비되어 있습니다.\n지금 바로 이어서 확인해 보세요."
+    : "yeON이 준비하신 플랜의 가장 알맞은 기본 구성을 먼저 정리해 드립니다.\n과밀한 조립 대신, 품격 있는 컨시어지 서비스처럼 확인만 해보세요.";
+  const plannerRoleHref = isLoggedIn ? (isVendor ? "/vendor/dashboard" : hasPlannerSession ? "/plans" : "/planner") : "/login?callbackUrl=/plans";
+  const plannerRoleCta = isLoggedIn && !isVendor && hasPlannerSession ? "내 행사 보기" : "내 플랜 준비하기";
 
   return (
     <div className="min-h-screen bg-[#faf9f5] text-[#2c3455] selection:bg-[#ebdccf] selection:text-[#2c3455]">
@@ -118,17 +149,17 @@ export default async function HomePage() {
 
             {/* Sub Copy */}
             <p className="relative z-10 mb-10 max-w-md mx-auto text-xs leading-relaxed text-[#8c8275] sm:text-sm">
-              yeON이 준비하신 플랜의 가장 알맞은 기본 구성을 먼저 정리해 드립니다.<br className="hidden sm:block" />
-              과밀한 조립 대신, 품격 있는 컨시어지 서비스처럼 확인만 해보세요.
+              {heroSubcopy.split("\n")[0]}<br className="hidden sm:block" />
+              {heroSubcopy.split("\n")[1]}
             </p>
 
             {/* CTA Buttons */}
             <div className="relative z-10 mb-12 flex items-center justify-center gap-3">
               <Link
-                href={isLoggedIn ? defaultWorkspaceHref : "/signup"}
+                href={primaryHeroHref}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#2c3455] px-6 text-xs font-bold text-white transition-all duration-150 hover:bg-[#1e2645] active:scale-[0.98] shadow-sm"
               >
-                컨시어지 시작하기
+                {primaryHeroLabel}
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
               <Link
@@ -242,8 +273,8 @@ export default async function HomePage() {
               role="일반 사용자"
               title="격식 있는 예식을 앞두신 분"
               items={["yeON이 조율한 기본 추천 구성 확인", "원하는 파트너를 향한 정중한 제안 요청", "총액 및 옵션의 일관된 비교 검토", "업체 최종 승인 후 예약 완료"]}
-              href={isLoggedIn ? defaultWorkspaceHref : "/login?callbackUrl=/plans"}
-              ctaText="내 플랜 준비하기"
+              href={plannerRoleHref}
+              ctaText={plannerRoleCta}
               colorScheme="primary"
             />
             <RoleCard
@@ -383,7 +414,7 @@ function RoleCard({
       badge: "bg-[#eef2f6] text-[#2c3455] border border-[#cbd3e0] hover:bg-[#eef2f6]",
       dot: "bg-[#cbd3e0]",
       border: "hover:border-[#cbd3e0]",
-      btn: "border border-[#e5e2da] bg-white text-[#2c3455] hover:bg-[#faf9f5]"
+      btn: "border border-[#475569] bg-[#475569] text-white hover:bg-[#334155]"
     }
   }[colorScheme];
 
@@ -418,4 +449,3 @@ function DemoChip({ role, email }: { role: string; email: string }) {
     </div>
   );
 }
-

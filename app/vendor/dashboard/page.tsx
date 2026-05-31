@@ -11,6 +11,10 @@ import {
   getVendorSupportedEventTypes,
   getVendorSupportedServiceModules
 } from "@/lib/step3.shared";
+import {
+  deriveModuleManagerSection,
+  getCatalogKeyForVendorModule
+} from "@/lib/vendor-service-modules";
 import { buildVendorDashboardReservationContract } from "@/lib/vendor-dashboard-contract";
 import type { VendorDashboardReservationDTO } from "@/types/reservation";
 import type { QuoteRequestForVendorDTO, QuoteStatus } from "@/types/quote";
@@ -25,7 +29,7 @@ export default async function VendorDashboardPage() {
 
   const vendorId = session.user.id;
 
-  const [vendor, rawReservations, vendorServices, rawQuoteRequests] = await withPrismaRetry(() =>
+  const [vendor, rawReservations, vendorServiceModules, rawQuoteRequests] = await withPrismaRetry(() =>
     Promise.all([
       prisma.user.findUnique({
         where: { id: vendorId },
@@ -85,20 +89,21 @@ export default async function VendorDashboardPage() {
         },
         orderBy: { createdAt: "desc" }
       }),
-      prisma.vendorService.findMany({
+      prisma.vendorServiceModule.findMany({
         where: { vendorId },
         select: {
           id: true,
-          eventType: true,
-          module: true,
-          catalogKey: true,
+          vendorId: true,
+          category: true,
+          price: true,
           pricingType: true,
           name: true,
           description: true,
-          basePrice: true,
-          isActive: true
+          isBaseIncluded: true,
+          isActive: true,
+          sortOrder: true
         },
-        orderBy: [{ eventType: "asc" }, { module: "asc" }, { createdAt: "asc" }]
+        orderBy: [{ category: "asc" }, { sortOrder: "asc" }]
       }),
       prisma.quoteRequest.findMany({
         where: {
@@ -147,6 +152,27 @@ export default async function VendorDashboardPage() {
   });
   const supportedServiceModules = getVendorSupportedServiceModules({
     supportedServiceModules: vendor.supportedServiceModules
+  });
+  const vendorServices = vendorServiceModules.map((module) => {
+    const derivedSection = deriveModuleManagerSection({
+      category: module.category,
+      name: module.name,
+      pricingType: module.pricingType
+    });
+
+    return {
+      id: module.id,
+      eventType: derivedSection.eventType,
+      module: derivedSection.module,
+      catalogKey: derivedSection.catalogKey,
+      category: module.category,
+      pricingType: module.pricingType,
+      name: module.name,
+      description: module.description,
+      basePrice: module.price,
+      isActive: module.isActive,
+      isBaseIncluded: module.isBaseIncluded
+    };
   });
 
   if (supportedEventTypes.length === 0) {
@@ -204,12 +230,12 @@ export default async function VendorDashboardPage() {
         })
       )
     : [];
-  const selectedModuleMap = new Map(
-    selectedModules.map((module) => [
-      module.id,
-      {
+  const selectedModuleMap = new Map<string, VendorServiceModuleData>(
+    selectedModules.map((module) => {
+      const dto: VendorServiceModuleData = {
         id: module.id,
         vendorId: module.vendorId,
+        catalogKey: getCatalogKeyForVendorModule(module),
         name: module.name,
         category: module.category as VendorServiceModuleData["category"],
         price: module.price,
@@ -218,8 +244,10 @@ export default async function VendorDashboardPage() {
         isBaseIncluded: module.isBaseIncluded,
         isActive: module.isActive,
         sortOrder: module.sortOrder
-      } satisfies VendorServiceModuleData
-    ])
+      };
+
+      return [module.id, dto];
+    })
   );
 
   const quoteRequestsForVendor: QuoteRequestForVendorDTO[] = rawQuoteRequests.map((qr) => ({

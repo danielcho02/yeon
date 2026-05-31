@@ -19,6 +19,7 @@ import { quoteServiceModules, serviceCatalog, type MvpQuoteEventType } from '@/l
 
 const MOCK_PRICES: Record<string, number> = {
   venue_hall: 3000000, venue_sound: 500000, venue_photo: 300000, venue_bridal: 200000,
+  mobile_invitation_basic: 120000,
   catering_meal: 55000, catering_drink: 15000, catering_cake: 400000,
   studio_snap: 1200000, studio_outdoor: 500000, studio_album: 800000, studio_video: 1500000,
   dress_wedding: 1500000, dress_fitting: 0, dress_accessory: 300000, dress_hanbok: 500000,
@@ -114,8 +115,13 @@ function ModuleRow({
         >
           {module.name}
         </span>
-        <span className="mt-1 text-[10px] text-muted-foreground/60 font-normal">
-          {module.categoryLabel}
+        <span className="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground/60 font-normal">
+          <span>{module.categoryLabel}</span>
+          {module.isVendorSpecific && (
+            <span className="rounded-full bg-[#faf8f4] px-1.5 py-0.5 font-semibold text-[#9b6b4f]">
+              업체 전용 추가
+            </span>
+          )}
         </span>
       </div>
 
@@ -148,19 +154,30 @@ function SummaryPanel({
   theme,
   guestCount,
   isSubmitting = false,
+  isAlreadyRequested = false,
   onRequestQuote,
   validationMessage,
+  requestStatusLabel,
+  requestStatusDescription,
 }: {
   builder: ReturnType<typeof useQuoteBuilder>
   theme: EventTheme
   guestCount: number
   isSubmitting?: boolean
+  isAlreadyRequested?: boolean
   onRequestQuote?: () => void
   validationMessage?: string | null
+  requestStatusLabel?: string | null
+  requestStatusDescription?: string | null
 }) {
   const config = getThemeConfig(theme)
   const { selectedModules, basePackage, totalPrice } = builder
   const isWedding = theme === 'wedding'
+  const statusTitle = requestStatusLabel === '업체 응답 대기' ? '견적 요청 완료' : requestStatusLabel
+  const statusDescription =
+    requestStatusLabel === '업체 응답 대기'
+      ? '업체 응답을 기다리는 중입니다.'
+      : requestStatusDescription
 
   return (
     <div className="flex flex-col gap-4">
@@ -242,17 +259,29 @@ function SummaryPanel({
 
       <button
         type="button"
-        disabled={isSubmitting || (selectedModules.length === 0 && !basePackage)}
+        disabled={isSubmitting || isAlreadyRequested || (selectedModules.length === 0 && !basePackage)}
         onClick={onRequestQuote}
         className="w-full rounded-xl py-2.5 text-xs font-bold text-white transition-all duration-150 hover:opacity-95 disabled:opacity-40 whitespace-nowrap shadow-sm hover:shadow"
         style={{ backgroundColor: config.primary }}
       >
         {isSubmitting 
           ? '전송 중...' 
+          : isAlreadyRequested
+            ? requestStatusLabel ?? '업체 응답 대기'
           : isWedding 
             ? '이 구성으로 견적 요청' 
             : '의전 맞춤 상담 요청하기'}
       </button>
+      {isAlreadyRequested && (statusTitle || statusDescription) && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 px-3.5 py-3 text-[10px] text-emerald-800">
+          <p className="font-semibold">
+            {statusTitle}
+          </p>
+          {statusDescription && (
+            <p className="mt-1 leading-relaxed text-emerald-700/90">{statusDescription}</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -264,25 +293,42 @@ function MobileBottomBar({
   theme,
   onOpen,
   isSubmitting = false,
+  isAlreadyRequested = false,
   onRequestQuote,
   validationMessage,
+  requestStatusLabel,
+  requestStatusDescription,
 }: {
   builder: ReturnType<typeof useQuoteBuilder>
   theme: EventTheme
   onOpen: () => void
   isSubmitting?: boolean
+  isAlreadyRequested?: boolean
   onRequestQuote?: () => void
   validationMessage?: string | null
+  requestStatusLabel?: string | null
+  requestStatusDescription?: string | null
 }) {
   const config = getThemeConfig(theme)
   const count = builder.selectedModules.length + (builder.basePackage ? 1 : 0)
   const isWedding = theme === 'wedding'
+  const statusTitle = requestStatusLabel === '업체 응답 대기' ? '견적 요청 완료' : requestStatusLabel
+  const statusDescription =
+    requestStatusLabel === '업체 응답 대기'
+      ? '업체 응답을 기다리는 중입니다.'
+      : requestStatusDescription
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#e5e2da] bg-white p-4 shadow-md lg:hidden">
       {validationMessage && (
         <p className="mb-2 rounded-xl border border-amber-200 bg-amber-50/50 px-3 py-2 text-[10px] font-semibold text-amber-800 break-keep" role="status">
           {validationMessage}
+        </p>
+      )}
+      {isAlreadyRequested && (statusTitle || statusDescription) && (
+        <p className="mb-2 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-2 text-[10px] font-semibold text-emerald-800 break-keep" role="status">
+          {statusTitle}
+          {statusDescription ? ` · ${statusDescription}` : ''}
         </p>
       )}
       <div className="flex items-center justify-between gap-3">
@@ -303,13 +349,15 @@ function MobileBottomBar({
         </button>
         <button
           type="button"
-          disabled={isSubmitting || count === 0}
+          disabled={isSubmitting || isAlreadyRequested || count === 0}
           onClick={onRequestQuote}
           className="rounded-xl px-4 py-2 text-xs font-bold text-white disabled:opacity-40 shrink-0 whitespace-nowrap shadow-sm hover:shadow"
           style={{ backgroundColor: config.primary }}
         >
           {isSubmitting 
             ? '전송 중...' 
+            : isAlreadyRequested
+              ? requestStatusLabel ?? '업체 응답 대기'
             : isWedding 
               ? '견적 요청' 
               : '상담 요청하기'}
@@ -327,6 +375,9 @@ interface ModularQuoteBuilderProps {
   /** Real vendor service modules from DB — when provided, replaces catalog+mock data */
   vendorModules?: VendorServiceModuleData[]
   isSubmitting?: boolean
+  isAlreadyRequested?: boolean
+  requestStatusLabel?: string | null
+  requestStatusDescription?: string | null
   onRequestQuote?: (modules: QuoteModule[], base: BasePackage | null) => void
 }
 
@@ -335,11 +386,15 @@ export function ModularQuoteBuilder({
   guestCount = 100,
   vendorModules,
   isSubmitting = false,
+  isAlreadyRequested = false,
+  requestStatusLabel,
+  requestStatusDescription,
   onRequestQuote,
 }: ModularQuoteBuilderProps) {
   const config = getThemeConfig(theme)
   const eventType: MvpQuoteEventType = theme === 'wedding' ? 'WEDDING' : 'FUNERAL'
   const isWedding = theme === 'wedding'
+  const usesVendorModules = Boolean(vendorModules && vendorModules.length > 0)
 
   const [showCustomizer, setShowCustomizer] = useState(false)
 
@@ -382,27 +437,39 @@ export function ModularQuoteBuilder({
   const { basePackage, setBasePackage, pruneSelectedModules } = builder
   const hasQuoteSelection = builder.selectedModules.length > 0 || Boolean(builder.basePackage)
 
-  // Automatically select the first package by default to provide a high-end concierge presets
   useEffect(() => {
-    if (!builder.basePackage && basePackages.length > 0) {
-      builder.setBasePackage(basePackages[0])
+    const firstPackage = basePackages[0] ?? null
+    if (!firstPackage) {
+      if (basePackage) setBasePackage(null)
+      return
     }
-  }, [basePackages, builder])
+
+    if (!basePackage) {
+      setBasePackage(firstPackage)
+      return
+    }
+
+    const refreshed = basePackages.find((pkg) => pkg.id === basePackage.id) ?? null
+    if (!refreshed) {
+      setBasePackage(firstPackage)
+      return
+    }
+
+    const hasChanged =
+      refreshed.price !== basePackage.price ||
+      refreshed.description !== basePackage.description ||
+      refreshed.includedModuleKeys.join('|') !== basePackage.includedModuleKeys.join('|')
+
+    if (hasChanged) setBasePackage(refreshed)
+  }, [basePackage, basePackages, setBasePackage])
 
   const selectionValidationMessage = useMemo(() => {
+    if (isAlreadyRequested) return null
     if (hasQuoteSelection) return null
     return isWedding
       ? '견적을 요청하려면 1개 이상의 구성 항목을 선택해 주세요.'
       : '상담을 진행하려면 1개 이상의 준비 항목을 선택해 주세요.'
-  }, [hasQuoteSelection, isWedding])
-
-  useEffect(() => {
-    if (!basePackage) return
-    const refreshed = basePackages.find((pkg) => pkg.id === basePackage.id)
-    if (refreshed && refreshed.price !== basePackage.price) {
-      setBasePackage(refreshed)
-    }
-  }, [basePackage, basePackages, setBasePackage])
+  }, [hasQuoteSelection, isAlreadyRequested, isWedding])
 
   const filtered = activeCategory === 'all'
     ? allModules
@@ -430,34 +497,40 @@ export function ModularQuoteBuilder({
   }, [baseIncludedKeys, pruneSelectedModules])
 
   const handleRequestQuote = () => {
-    if (!hasQuoteSelection) return
+    if (isAlreadyRequested || !hasQuoteSelection) return
     onRequestQuote?.(builder.selectedModules, builder.basePackage)
   }
 
   return (
     <div className="relative space-y-6">
-      {/* ── 1. Concierge Package Proposal Board (지배적이고 우아한 단일 패키지 구성안 노출) ── */}
+      {/* ── 1. Package Proposal Board ── */}
       {basePackages.length > 0 && (
         <div className="space-y-3.5">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e5e2da] pb-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[#2c3455]">
-              {isWedding ? 'yeON 엄선 웨딩 권장 패키지' : 'yeON 정립 정중 의전 상담 패키지'}
+              {usesVendorModules
+                ? '업체 기본 패키지'
+                : isWedding
+                  ? 'yeON 엄선 웨딩 권장 패키지'
+                  : 'yeON 정립 정중 의전 상담 패키지'}
             </h3>
             <span className="text-[10px] text-muted-foreground/60 leading-normal">
-              {isWedding 
-                ? '번거로운 구성 조립 없이, 검증된 세트로 아름답고 확실하게 준비합니다.' 
-                : '갑작스러운 슬픔 속에서, 경건하고 품격 있게 배웅을 보좌할 필수 구성 절차안입니다.'}
+              {usesVendorModules
+                ? '업체가 기본 포함으로 등록한 항목을 하나의 패키지로 계산합니다.'
+                : isWedding
+                  ? '번거로운 구성 조립 없이, 검증된 세트로 아름답고 확실하게 준비합니다.'
+                  : '갑작스러운 슬픔 속에서, 경건하고 품격 있게 배웅을 보좌할 필수 구성 절차안입니다.'}
             </span>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className={`grid grid-cols-1 gap-3 ${basePackages.length > 1 ? 'sm:grid-cols-3' : ''}`}>
             {basePackages.map((pkg) => {
               const active = builder.basePackage?.id === pkg.id
               return (
                 <button
                   key={pkg.id}
                   type="button"
-                  onClick={() => builder.setBasePackage(active ? null : pkg)}
+                  onClick={() => builder.setBasePackage(active && !usesVendorModules ? null : pkg)}
                   className="rounded-xl border p-4 text-left transition-all duration-150 hover:bg-[#faf9f5]/30 group relative overflow-hidden animate-fade-in"
                   style={{
                     borderColor: active ? config.primary : '#ebdccf/40',
@@ -469,7 +542,7 @@ export function ModularQuoteBuilder({
                       className="absolute right-0 top-0 rounded-bl-lg px-2 py-0.5 text-[8px] font-bold text-white whitespace-nowrap"
                       style={{ backgroundColor: config.primary }}
                     >
-                      {isWedding ? '기본 선택됨' : '상담 기준'}
+                      {usesVendorModules ? '포함 선택됨' : isWedding ? '기본 선택됨' : '상담 기준'}
                     </div>
                   )}
                   <div className="flex items-start justify-between gap-2 pr-4">
@@ -506,6 +579,11 @@ export function ModularQuoteBuilder({
                 <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: config.primary }} />
                 <span>{m.name}</span>
                 <span className="text-[9px] text-[#8c8275]/50">({m.categoryLabel})</span>
+                {m.isVendorSpecific && (
+                  <span className="rounded-full bg-[#faf8f4] px-1.5 py-0.5 text-[9px] font-semibold text-[#9b6b4f]">
+                    업체 전용 포함
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -527,8 +605,8 @@ export function ModularQuoteBuilder({
             </h4>
             <p className="text-[10px] text-muted-foreground/60 leading-normal break-keep">
               {isWedding 
-                ? "제안된 구성안 외에 사진 촬영, 신부 드레스 등 추가적인 옵션이나 수량 변경을 원하시는 경우에만 펼쳐주세요."
-                : "제안된 의례 품목 외에 부고장, 제단꽃 유형 등 특수한 세부 조정을 원하시는 경우에만 펼쳐주세요."}
+                ? "패키지 외 표준 추가 항목과 업체 전용 추가 옵션을 선택할 수 있습니다."
+                : "패키지 외 표준 준비 항목과 업체 전용 추가 옵션을 선택할 수 있습니다."}
             </p>
           </div>
           <button
@@ -628,8 +706,11 @@ export function ModularQuoteBuilder({
               theme={theme}
               guestCount={guestCount}
               isSubmitting={isSubmitting}
+              isAlreadyRequested={isAlreadyRequested}
               onRequestQuote={handleRequestQuote}
               validationMessage={selectionValidationMessage}
+              requestStatusLabel={requestStatusLabel}
+              requestStatusDescription={requestStatusDescription}
             />
           </div>
         </div>
@@ -642,8 +723,11 @@ export function ModularQuoteBuilder({
         theme={theme}
         onOpen={() => setSheetOpen(true)}
         isSubmitting={isSubmitting}
+        isAlreadyRequested={isAlreadyRequested}
         onRequestQuote={handleRequestQuote}
         validationMessage={selectionValidationMessage}
+        requestStatusLabel={requestStatusLabel}
+        requestStatusDescription={requestStatusDescription}
       />
 
       {/* Mobile Bottom Sheet */}
@@ -676,8 +760,11 @@ export function ModularQuoteBuilder({
                 theme={theme}
                 guestCount={guestCount}
                 isSubmitting={isSubmitting}
+                isAlreadyRequested={isAlreadyRequested}
                 onRequestQuote={() => { setSheetOpen(false); handleRequestQuote() }}
                 validationMessage={selectionValidationMessage}
+                requestStatusLabel={requestStatusLabel}
+                requestStatusDescription={requestStatusDescription}
               />
             </motion.div>
           </>

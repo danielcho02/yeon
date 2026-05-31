@@ -60,6 +60,20 @@ function categoryLabel(category: string | null | undefined) {
   return MODULE_CATEGORY_LABELS[category] ?? category;
 }
 
+function isVendorSpecificModule(
+  module: VendorServiceModuleData | { id: string; name: string; category: string; price: number }
+): module is VendorServiceModuleData {
+  return "catalogKey" in module && module.catalogKey === null;
+}
+
+function moduleScopeLabel(module: VendorServiceModuleData) {
+  if (module.catalogKey === null) {
+    return module.isBaseIncluded ? "업체 전용 포함" : "업체 전용 추가";
+  }
+
+  return module.isBaseIncluded ? "패키지 포함" : "추가 선택";
+}
+
 function getLatestResponse(request: QuoteRequestWithResponses) {
   return request.responses[0] ?? null;
 }
@@ -80,7 +94,7 @@ function getStatusTone(request: QuoteRequestWithResponses, reservation: ReturnTy
     return { label: "예약 확정 완료", tone: "bg-emerald-50 text-emerald-700 border border-emerald-200/60" };
   }
   if (request.status === "ACCEPTED") {
-    return { label: "업체 최종 확정 대기", tone: "bg-violet-50 text-violet-700 border border-violet-200/60" };
+    return { label: "업체 최종 확정 대기", tone: "bg-[#faf8f4] text-[#8c8275] border border-[#e5e2da]" };
   }
   if (request.status === "RESPONDED") {
     return { label: "제안서 도착", tone: "bg-amber-50 text-amber-700 border border-amber-200/60" };
@@ -110,6 +124,9 @@ function ModulePills({
         >
           {module.name}
           <span className="text-[#8c8275]">{categoryLabel(module.category)}</span>
+          {isVendorSpecificModule(module) && (
+            <span className="text-[#9b6b4f]">업체 전용</span>
+          )}
           {!hidePrices && module.price > 0 && (
             <span className="font-mono text-[#c4977a]">{formatCurrency(module.price)}</span>
           )}
@@ -254,7 +271,7 @@ function ModuleWorkflowDetail({
                                 {categoryLabel(module.category)}
                               </span>
                               <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-                                {module.isBaseIncluded ? "기본 포함" : "추가 선택"}
+                                {moduleScopeLabel(module)}
                               </span>
                             </div>
                             {module.description && (
@@ -306,20 +323,20 @@ function ModuleWorkflowDetail({
                     </div>
                   ) : (
                     <p className="text-xs leading-5 text-muted-foreground">
-                      아직 업체 제안이 도착하지 않았습니다. 제안 전에는 Reservation이 생성되지 않습니다.
+                      아직 업체 제안이 도착하지 않았습니다. 업체 응답을 기다리는 중입니다.
                     </p>
                   )}
                 </SectionBlock>
 
-                <SectionBlock title="예약 전환 상태">
+                <SectionBlock title="예약 상태">
                   {reservation ? (
                     <div className="space-y-2 text-xs text-[#2c3455]">
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-muted-foreground">현재 상태</span>
                         <span className="font-semibold">
                           {reservation.status === "CONFIRMED" || reservation.status === "COMPLETED"
-                            ? "Reservation(CONFIRMED)"
-                            : "Reservation(PENDING)"}
+                            ? "예약 확정 완료"
+                            : "업체 최종 확정 대기"}
                         </span>
                       </div>
                       <div className="flex items-center justify-between gap-3">
@@ -339,11 +356,11 @@ function ModuleWorkflowDetail({
                     </div>
                   ) : request.status === "RESPONDED" ? (
                     <p className="text-xs leading-5 text-muted-foreground">
-                      제안서는 도착했지만 아직 수락 전입니다. 수락 시점에만 Reservation(PENDING)이 생성됩니다.
+                      제안서는 도착했지만 아직 수락 전입니다. 아직 예약 확정 전입니다.
                     </p>
                   ) : (
                     <p className="text-xs leading-5 text-muted-foreground">
-                      현재는 요청 단계입니다. 업체 응답 전까지는 예약 레코드가 없습니다.
+                      현재는 요청 단계입니다. 업체 응답을 기다리는 중입니다.
                     </p>
                   )}
                 </SectionBlock>
@@ -356,37 +373,6 @@ function ModuleWorkflowDetail({
   );
 }
 
-function InternalCategoryStatusDetail({ data }: { data?: Step4CategoryStatusDTO[] | null }) {
-  if (!data || data.length === 0) return null;
-
-  const statusLabel: Record<Step4CategoryStatusDTO["status"], string> = {
-    NOT_REQUESTED: "요청 전",
-    REQUESTED: "응답 대기",
-    RESPONDED: "제안 도착",
-    ACCEPTED_WAITING_VENDOR: "최종 확정 대기",
-    CONFIRMED: "예약 확정"
-  };
-
-  return (
-    <details className="rounded-2xl border border-[#e5e2da] bg-white p-5 shadow-sm">
-      <summary className="cursor-pointer list-none text-sm font-bold text-[#2c3455]">
-        내부 카테고리 집계 보기
-        <span className="ml-2 text-[10px] font-semibold text-muted-foreground">
-          보조 참고용 {data.length}개
-        </span>
-      </summary>
-      <div className="mt-4 grid gap-2">
-        {data.map((item) => (
-          <div key={item.key} className="flex items-center justify-between rounded-xl bg-[#faf9f5]/70 px-3 py-2 text-xs">
-            <span className="font-semibold text-[#2c3455]">{item.label}</span>
-            <span className="text-muted-foreground">{statusLabel[item.status]}</span>
-          </div>
-        ))}
-      </div>
-    </details>
-  );
-}
-
 export function Step4BookingDashboard({
   eventType,
   quoteRequestsData,
@@ -395,8 +381,7 @@ export function Step4BookingDashboard({
   totalCost,
   isQuoteActionPending,
   handleAcceptQuote,
-  theme,
-  step4DashboardData
+  theme
 }: Step4BookingDashboardProps) {
   const isWedding = eventType === "WEDDING";
   const activeRequests = (quoteRequestsData ?? []).filter((request) => request.status !== "CANCELED");
@@ -456,7 +441,7 @@ export function Step4BookingDashboard({
                 </div>
                 <div className="flex items-center gap-2 rounded-xl bg-[#faf9f5] px-3 py-2 text-[10px] font-semibold text-[#8c8275]">
                   {reservation ? <ShieldCheck className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
-                  {reservation ? "예약 레코드 생성됨" : "아직 예약은 생성되지 않았습니다"}
+                  {reservation ? "예약 요청이 생성되었습니다" : "아직 예약 확정 전입니다"}
                 </div>
               </div>
 
@@ -476,7 +461,7 @@ export function Step4BookingDashboard({
 
                 {request.status === "PENDING" && (
                   <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 text-xs leading-5 text-slate-700">
-                    업체가 선택 모듈과 요청 메모를 검토하고 있습니다. 응답이 도착하기 전까지는 예약이 생성되지 않습니다.
+                    업체가 선택 모듈과 요청 메모를 검토하고 있습니다. 업체 응답을 기다리는 중입니다.
                   </div>
                 )}
 
@@ -485,7 +470,7 @@ export function Step4BookingDashboard({
                     <ProposalSummary response={response} />
                     <div className="flex flex-col gap-3 rounded-xl border border-amber-200/70 bg-amber-50/30 p-4 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-xs leading-5 text-amber-800">
-                        이 제안을 수락하면 그때 `Reservation(PENDING)`이 생성되고, 업체의 최종 확정을 기다립니다.
+                        이 제안을 수락하면 예약 요청이 생성되고, 업체의 최종 확정을 기다립니다.
                       </p>
                       <button
                         disabled={isQuoteActionPending}
@@ -503,16 +488,16 @@ export function Step4BookingDashboard({
                 {response && isAccepted && !isConfirmed && (
                   <>
                     <ProposalSummary response={response} isAccepted />
-                    <div className="rounded-xl border border-violet-200/70 bg-violet-50/30 p-4">
+                    <div className="rounded-xl border border-[#e5e2da] bg-[#faf8f4]/70 p-4">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="space-y-1">
-                          <p className="text-xs font-bold text-violet-800">Reservation(PENDING)</p>
+                          <p className="text-xs font-bold text-[#8c8275]">업체 최종 확정 대기</p>
                           <p className="text-xs leading-5 text-muted-foreground">
-                            제안 수락으로 예약이 생성되었습니다. 업체가 일정과 사양을 최종 확인하면 예약이 확정됩니다.
+                            예약 요청이 생성되었습니다. 업체가 일정과 사양을 최종 확인하면 예약이 확정됩니다.
                           </p>
                         </div>
                         {reservation?.vendorConfirmationDueAt && (
-                          <div className="rounded-lg bg-white px-3 py-2 text-[10px] font-semibold text-violet-700">
+                          <div className="rounded-lg bg-white px-3 py-2 text-[10px] font-semibold text-[#8c8275]">
                             확정 기한: {formatDate(reservation.vendorConfirmationDueAt)}
                           </div>
                         )}
@@ -527,7 +512,7 @@ export function Step4BookingDashboard({
                     <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/30 p-4">
                       <div className="mb-3 flex items-center gap-2">
                         <Check className="h-4 w-4 text-emerald-700" />
-                        <p className="text-sm font-bold text-emerald-800">Reservation(CONFIRMED)</p>
+                        <p className="text-sm font-bold text-emerald-800">예약 확정 완료</p>
                       </div>
                       <div className="grid gap-2 text-xs text-[#2c3455] sm:grid-cols-3">
                         <span className="inline-flex items-center gap-1.5">
@@ -561,7 +546,7 @@ export function Step4BookingDashboard({
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
             {confirmedRes.length > 0
               ? `${confirmedRes.length}개 예약이 최종 확정되었습니다.`
-              : "제안 수락 전에는 예약이 생성되지 않습니다."}
+              : "제안 수락 전에는 아직 예약 확정 전입니다."}
           </p>
         </div>
 
@@ -569,14 +554,12 @@ export function Step4BookingDashboard({
           <p className="mb-3 font-[var(--font-serif)] text-sm font-bold text-[#2c3455]">예약 전환 기준</p>
           <div className="space-y-3 text-xs leading-5 text-muted-foreground">
             <p>1. 업체 제안서가 도착하면 금액과 포함 범위를 확인합니다.</p>
-            <p>2. 제안을 수락하면 Reservation(PENDING)이 생성됩니다.</p>
-            <p>3. 업체가 최종 확정하면 Reservation(CONFIRMED)이 됩니다.</p>
+            <p>2. 제안을 수락하면 예약 요청이 생성됩니다.</p>
+            <p>3. 업체가 최종 확정하면 예약 확정 완료 상태가 됩니다.</p>
           </div>
         </div>
 
         <ModuleWorkflowDetail requests={activeRequests} planReservations={planReservations} />
-
-        <InternalCategoryStatusDetail data={step4DashboardData} />
       </aside>
     </div>
   );

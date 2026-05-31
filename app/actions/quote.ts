@@ -29,6 +29,7 @@ import {
   vendorServiceModuleCategoryMatchesEventType,
   vendorSupportsEventType
 } from "@/lib/step3.shared";
+import { getCatalogKeyForVendorModule } from "@/lib/vendor-service-modules";
 
 import type { ActionResult } from "@/types/common";
 import type {
@@ -258,9 +259,12 @@ function mapVendorServiceModuleData(module: {
   isActive: boolean;
   sortOrder: number;
 }): VendorServiceModuleData {
+  const catalogKey = getCatalogKeyForVendorModule(module);
+
   return {
     id: module.id,
     vendorId: module.vendorId,
+    catalogKey,
     name: module.name,
     category: module.category as VendorServiceModuleData["category"],
     price: module.price,
