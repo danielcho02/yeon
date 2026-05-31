@@ -1,7 +1,7 @@
 # yeON Agent Operating Model
 
 > Effective from: 2026-05-31
-> Branch: codex/step3-main-logic-rewrite
+> Branch: codex/next-product-stabilization
 
 ## Core Principle
 
@@ -27,6 +27,9 @@ The prior split (Claude=frontend, Codex=backend) caused incomplete fixes.
 5. **No push without user approval.** Always stop before push and ask.
 6. **No specialist vendors in core demo.** Only core 3-role model unless product fully supports multi-vendor flows.
 7. **No Reservation before accept.** The canonical workflow is the law.
+8. **Step 4 is proposal/reservation first.** General users should see selected modules,
+   vendor proposal, accept action, pending vendor confirmation, and confirmed reservation
+   as the primary IA. Category status can remain internal or collapsed detail only.
 
 ---
 

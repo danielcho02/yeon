@@ -787,7 +787,13 @@ async function main() {
             price: quotedAmount,
             description: "Backend smoke verification response"
           },
-          includedModules: [],
+          includedModules: modules.map((module) => ({
+            id: module.id,
+            name: module.name,
+            category: module.category,
+            price: 0,
+            description: module.description ?? undefined
+          })),
           optionalModules: [],
           excludedModules: []
         },
@@ -864,6 +870,15 @@ async function main() {
     submittedResponse?.note === "Backend smoke verification response";
   assert.equal(respondedRequest.requirements, "Backend smoke verification request");
   assert.equal(submittedResponse?.note, "Backend smoke verification response");
+  const submittedResponseModules = submittedResponse?.modules as unknown as {
+    includedModules?: Array<{ id: string; name: string; category: string; price: number }>;
+  };
+  assert.equal(
+    submittedResponseModules.includedModules?.length,
+    modules.length,
+    "QuoteResponse.modules must preserve selected module identity for planner Step 4 and vendor confirmation"
+  );
+  checks.quote_response_preserves_selected_module_identity = true;
 
   await expectReject("non-owner quote response accept", async () => {
     await validateQuoteAcceptContract({
@@ -900,7 +915,13 @@ async function main() {
             price: quotedAmount,
             description: "Duplicate response should fail"
           },
-          includedModules: [],
+          includedModules: modules.map((module) => ({
+            id: module.id,
+            name: module.name,
+            category: module.category,
+            price: 0,
+            description: module.description ?? undefined
+          })),
           optionalModules: [],
           excludedModules: []
         },
@@ -923,6 +944,16 @@ async function main() {
   checks.get_quotes_by_plan_has_responded_quote =
     getQuotesByPlanShape[0]?.status === QuoteStatus.RESPONDED &&
     getQuotesByPlanShape[0]?.responses[0]?.id === created.responseId;
+  const selectedModuleDetailsForPlan = await prisma.vendorServiceModule.findMany({
+    where: { id: { in: selectedModules } },
+    select: { id: true, name: true, category: true }
+  });
+  assert.equal(
+    selectedModuleDetailsForPlan.length,
+    selectedModules.length,
+    "getQuotesByPlan selectedModuleDetails source records must be available for Step 4"
+  );
+  checks.get_quotes_by_plan_selected_module_details_visible = true;
 
   const planDashboardShapeBeforeAccept = await prisma.eventPlan.findFirstOrThrow({
     where: { id: plan.id, ownerId: planner.id },
@@ -971,11 +1002,8 @@ async function main() {
         selectedServiceOptions: modules.map((module) => ({
           catalogKey: module.id,
           name: module.name,
-          price: module.price,
-          pricingType: module.pricingType,
-          ...(module.pricingType === "PER_GUEST"
-            ? { quantity: guestCount, subtotal: module.price * guestCount }
-            : {})
+          price: 0,
+          pricingType: "FLAT"
         })) as Prisma.InputJsonValue,
         status: ReservationStatus.PENDING,
         notes: "견적 응답 수락으로 생성된 예약입니다. 업체 확정 대기 중입니다."
@@ -1021,6 +1049,13 @@ async function main() {
   assert.equal(newReservation!.quoteResponseId, created.responseId, "Reservation must link to QuoteResponse");
   assert.equal(newReservation!.status, "PENDING", "Reservation status must be PENDING after accept");
   assert.ok(newReservation!.vendorConfirmationDueAt, "vendorConfirmationDueAt must be set");
+  const acceptedSelectedOptions = selectedOptionsFromJson(newReservation!.selectedServiceOptions);
+  assert.equal(
+    acceptedSelectedOptions?.length,
+    modules.length,
+    "Real accept-compatible Reservation must preserve selected module identity for vendor confirmation"
+  );
+  checks.real_accept_reservation_preserves_selected_modules = true;
 
   const reservationCountAfterAccept = await prisma.reservation.count({
     where: { quoteRequestId: created.requestId }

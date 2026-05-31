@@ -53,6 +53,10 @@ async function main() {
       assert.ok(res.quoteResponseId, `State ${state}: Reservation must have quoteResponseId`);
       assert.ok(res.quoteRequestId, `State ${state}: Reservation must have quoteRequestId`);
       assert.ok(res.vendorConfirmationDueAt, `State ${state}: Reservation must have vendorConfirmationDueAt`);
+      assert.ok(
+        Array.isArray(res.selectedServiceOptions) && res.selectedServiceOptions.length > 0,
+        `State ${state}: Reservation must preserve selected module/options summary`
+      );
       assert.equal(res.quoteRequest?.status, "ACCEPTED", `State ${state}: linked QuoteRequest must be ACCEPTED`);
       if (state === "C") {
         assert.equal(res.status, "PENDING", `State C: Reservation must be PENDING`);

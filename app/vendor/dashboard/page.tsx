@@ -14,6 +14,7 @@ import {
 import { buildVendorDashboardReservationContract } from "@/lib/vendor-dashboard-contract";
 import type { VendorDashboardReservationDTO } from "@/types/reservation";
 import type { QuoteRequestForVendorDTO, QuoteStatus } from "@/types/quote";
+import type { VendorServiceModuleData } from "@/types/vendor-module";
 import { VendorOnboardingForm } from "./onboarding-form";
 
 export default async function VendorDashboardPage() {
@@ -186,6 +187,40 @@ export default async function VendorDashboardPage() {
     }
   }));
   const reservationContract = buildVendorDashboardReservationContract(reservations);
+  const selectedModuleIds = Array.from(
+    new Set(
+      rawQuoteRequests.flatMap((qr) =>
+        Array.isArray(qr.selectedModules)
+          ? qr.selectedModules.filter((id): id is string => typeof id === "string")
+          : []
+      )
+    )
+  );
+  const selectedModules = selectedModuleIds.length > 0
+    ? await withPrismaRetry(() =>
+        prisma.vendorServiceModule.findMany({
+          where: { id: { in: selectedModuleIds } },
+          orderBy: [{ category: "asc" }, { sortOrder: "asc" }]
+        })
+      )
+    : [];
+  const selectedModuleMap = new Map(
+    selectedModules.map((module) => [
+      module.id,
+      {
+        id: module.id,
+        vendorId: module.vendorId,
+        name: module.name,
+        category: module.category as VendorServiceModuleData["category"],
+        price: module.price,
+        pricingType: module.pricingType === "PER_GUEST" ? "PER_GUEST" : "FLAT",
+        description: module.description,
+        isBaseIncluded: module.isBaseIncluded,
+        isActive: module.isActive,
+        sortOrder: module.sortOrder
+      } satisfies VendorServiceModuleData
+    ])
+  );
 
   const quoteRequestsForVendor: QuoteRequestForVendorDTO[] = rawQuoteRequests.map((qr) => ({
     id: qr.id,
@@ -194,6 +229,12 @@ export default async function VendorDashboardPage() {
     requirements: qr.requirements,
     requestMemo: qr.requirements,
     selectedModules: Array.isArray(qr.selectedModules) ? qr.selectedModules as string[] : [],
+    selectedModuleDetails: Array.isArray(qr.selectedModules)
+      ? qr.selectedModules
+          .filter((id): id is string => typeof id === "string")
+          .map((id) => selectedModuleMap.get(id))
+          .filter((module): module is VendorServiceModuleData => Boolean(module))
+      : [],
     preferredDate: qr.preferredDate?.toISOString() ?? null,
     budget: qr.budget,
     status: qr.status as QuoteStatus,

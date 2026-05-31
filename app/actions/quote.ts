@@ -236,6 +236,15 @@ function getReservationServiceCategory(modules: QuoteResponseModules) {
   return modules.includedModules[0]?.category ?? modules.optionalModules[0]?.category ?? null;
 }
 
+function getReservationSelectedServiceOptions(modules: QuoteResponseModules) {
+  return [...modules.includedModules, ...modules.optionalModules].map((module) => ({
+    catalogKey: module.id,
+    name: module.name,
+    price: module.price,
+    pricingType: "FLAT"
+  }));
+}
+
 
 function mapVendorServiceModuleData(module: {
   id: string;
@@ -736,7 +745,7 @@ export async function acceptQuoteResponse(
               quotedAmount: response.totalPrice,
               confirmedAmount: null,
               vendorConfirmationDueAt,
-              selectedServiceOptions: response.modules as Prisma.InputJsonValue,
+              selectedServiceOptions: getReservationSelectedServiceOptions(modules) as Prisma.InputJsonValue,
               status: PrismaReservationStatus.PENDING,
               notes:
                 existingReservation.notes ??
@@ -764,7 +773,7 @@ export async function acceptQuoteResponse(
               quotedAmount: response.totalPrice,
               confirmedAmount: null,
               vendorConfirmationDueAt,
-              selectedServiceOptions: response.modules as Prisma.InputJsonValue,
+              selectedServiceOptions: getReservationSelectedServiceOptions(modules) as Prisma.InputJsonValue,
               status: PrismaReservationStatus.PENDING,
               notes: "견적 응답 수락으로 생성된 예약입니다. 업체 확정 대기 중입니다."
             },
@@ -1399,4 +1408,3 @@ export async function getStep4DashboardData(
     return actionError(getActionError(error), "GET_STEP4_DASHBOARD_DATA_FAILED");
   }
 }
-

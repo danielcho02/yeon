@@ -1,8 +1,8 @@
 # yeON Project Status
 
 > Last updated: 2026-05-31
-> Branch: `codex/step3-main-logic-rewrite`
-> HEAD commit: 84756d4 Fix auth routing stale session loop
+> Branch: `codex/next-product-stabilization`
+> Current focus: Step 4 proposal/reservation IA stabilization
 
 ---
 
@@ -68,6 +68,15 @@ Planner lands on **Step 3** (vendors) ready to send their first request.
 
 State B has **no Reservation** — this is the canonical state. The workspace must auto-navigate
 to Step 4 based on quoteRequestsData RESPONDED detection (not Reservation existence).
+
+General-user Step 4 is a **proposal → reservation workflow** screen:
+
+- Before accept: selected modules, vendor proposal, amount, response message, and explicit no-Reservation-yet state.
+- After accept: Reservation(PENDING), accepted proposal summary, and vendor final confirmation due date.
+- After vendor confirm: Reservation(CONFIRMED) and final reservation summary.
+
+Category-level preparation status may remain as internal/collapsed detail, but it must not be the
+primary user-facing Step 4 IA for the core integrated-vendor demo.
 
 ---
 
