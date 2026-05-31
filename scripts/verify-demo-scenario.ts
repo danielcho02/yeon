@@ -31,9 +31,16 @@ async function main() {
     assert.equal(qrCount, 2, `State B: expected 2 QuoteRequests, got ${qrCount}`);
     assert.equal(qrespCount, 2, `State B: expected 2 QuoteResponses, got ${qrespCount}`);
     assert.equal(resCount, 0, `State B: expected 0 Reservations (canonical — no Reservation before accept), got ${resCount}`);
-    const allResponded = await prisma.quoteRequest.findMany({ select: { status: true } });
+    const allResponded = await prisma.quoteRequest.findMany({
+      include: {
+        responses: true,
+        reservation: true
+      }
+    });
     for (const qr of allResponded) {
       assert.equal(qr.status, "RESPONDED", "State B: all QuoteRequests must be RESPONDED");
+      assert.equal(qr.responses.length, 1, "State B: each RESPONDED QuoteRequest must have exactly one QuoteResponse");
+      assert.equal(qr.reservation, null, "State B: RESPONDED QuoteRequests must not have a Reservation before accept");
     }
   } else if (state === "C" || state === "D") {
     assert.equal(qrCount, 2, `State ${state}: expected 2 QuoteRequests, got ${qrCount}`);
