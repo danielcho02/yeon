@@ -1,3 +1,7 @@
+> **HISTORICAL ARCHIVE** — This document records session work as of 2026-05-29/30.
+> For the current project state, see [STATUS.md](../STATUS.md) and [docs/AGENT_OPERATING_MODEL.md](AGENT_OPERATING_MODEL.md).
+> The frontend/backend agent split described here is retired.
+
 # AGY Full-stack Domain Audit Report & Status
 
 > [!IMPORTANT]

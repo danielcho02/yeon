@@ -1,3 +1,7 @@
+> **HISTORICAL ARCHIVE** — This document records session work as of 2026-05-28.
+> For the current project state, see [STATUS.md](../STATUS.md) and [docs/AGENT_OPERATING_MODEL.md](AGENT_OPERATING_MODEL.md).
+> The frontend/backend agent split described here is retired.
+
 # Codex STATUS
 
 작성 기준: 2026-05-28, `codex/step3-main-logic-rewrite` 브랜치 실제 코드와 로컬 검증 결과 기준. `docs/Claude_STATUS.md`는 읽기 전용으로만 확인했다. `PM-instruction.txt`는 repo root에 없어 확인하지 못했다.

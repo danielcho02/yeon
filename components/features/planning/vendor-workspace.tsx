@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { confirmReservation } from "@/app/actions/reservation";
+import { submitQuoteResponse } from "@/app/actions/quote";
 import { formatCurrency, formatDate } from "@/lib/format";
 import {
   getEventTypeLabel,
@@ -34,6 +35,7 @@ import {
   type MvpQuoteEventType
 } from "@/lib/step3.shared";
 import { ServiceManager } from "@/app/vendor/dashboard/service-manager";
+import type { QuoteRequestForVendorDTO } from "@/types/quote";
 
 import { asDateInput, getWorkspaceTheme, type ReservationItem } from "./workspace-types";
 
@@ -49,6 +51,10 @@ type ServiceRow = {
   isActive: boolean;
 };
 
+type InboxItem =
+  | { type: "reservation"; id: string; label: string; eventPlanTitle: string; eventType?: string; requirements: string | null }
+  | { type: "quoteRequest"; id: string; label: string; eventPlanTitle: string; eventType?: string; requirements: string | null };
+
 type Props = {
   viewerName: string;
   viewerEmail: string;
@@ -58,6 +64,7 @@ type Props = {
   supportedEventTypes?: MvpQuoteEventType[];
   supportedServiceModules?: string[];
   vendorServices?: ServiceRow[];
+  quoteRequests?: QuoteRequestForVendorDTO[];
 };
 
 type PanelKey = "home" | "inbox" | "proposals" | "final_confirm" | "confirmed" | "services";
@@ -98,18 +105,46 @@ export function VendorWorkspace({
   pendingConfirmations,
   supportedEventTypes,
   supportedServiceModules,
-  vendorServices
+  vendorServices,
+  quoteRequests
 }: Props) {
   const router = useRouter();
   const pendingConfirmationsRef = useRef<HTMLElement>(null);
   const [isPending, startTransition] = useTransition();
   const [activePanel, setActivePanel] = useState<PanelKey>("home");
 
+  function getRequestMemo(reservation: ReservationItem | null | undefined) {
+    if (!reservation) return null;
+    return reservation.requestMemo ?? (reservation.quoteResponseId ? null : reservation.notes);
+  }
+
   const inboxReservations = useMemo(() => {
     const base = reservations.filter((r) => r.status === "PENDING" && r.quoteResponseId == null);
     if (!supportedEventTypes || supportedEventTypes.length === 0) return base;
     return base.filter((r) => !r.eventPlan.type || supportedEventTypes.includes(r.eventPlan.type as MvpQuoteEventType));
   }, [reservations, supportedEventTypes]);
+
+  const inboxItems = useMemo<InboxItem[]>(() => {
+    const fromReservations: InboxItem[] = inboxReservations.map((r) => ({
+      type: "reservation" as const,
+      id: r.id,
+      label: getServiceLabel(r),
+      eventPlanTitle: r.eventPlan.title,
+      eventType: r.eventPlan.type,
+      requirements: getRequestMemo(r)
+    }));
+    const fromQuoteRequests: InboxItem[] = (quoteRequests ?? [])
+      .filter((qr) => qr.status === "PENDING")
+      .map((qr) => ({
+        type: "quoteRequest" as const,
+        id: qr.id,
+        label: qr.plan?.title ?? "견적 요청",
+        eventPlanTitle: qr.plan?.title ?? "행사",
+        eventType: qr.plan?.eventType,
+        requirements: qr.requirements
+      }));
+    return [...fromReservations, ...fromQuoteRequests];
+  }, [inboxReservations, quoteRequests]);
   const pendingConfirmationReservations = useMemo(
     () =>
       pendingConfirmations ??
@@ -164,11 +199,6 @@ export function VendorWorkspace({
       ? "새로운 장례 서비스 요청이 없습니다."
       : "새 요청이 없습니다.";
 
-  function getRequestMemo(reservation: ReservationItem | null | undefined) {
-    if (!reservation) return null;
-    return reservation.requestMemo ?? (reservation.quoteResponseId ? null : reservation.notes);
-  }
-
   function getResponseMessage(reservation: ReservationItem | null | undefined) {
     if (!reservation?.quoteResponseId) return "";
     return reservation.responseMessage ?? "";
@@ -176,6 +206,7 @@ export function VendorWorkspace({
 
   const [proposalForm, setProposalForm] = useState(() => ({
     reservationId: selectedReservation?.id ?? "",
+    quoteRequestId: "",
     serviceDate: asDateInput(selectedReservation?.serviceDate ?? null),
     proposalAmount: selectedReservation?.confirmedAmount
       ? String(selectedReservation.confirmedAmount)
@@ -196,7 +227,13 @@ export function VendorWorkspace({
     () => new Set(editableProposalReservations.map((reservation) => reservation.id)),
     [editableProposalReservations]
   );
-  const proposalSelectValue = editableProposalIds.has(proposalForm.reservationId)
+  const editableQuoteRequestIds = useMemo(
+    () => new Set((quoteRequests ?? []).filter(qr => qr.status === "PENDING" || qr.status === "RESPONDED").map(qr => qr.id)),
+    [quoteRequests]
+  );
+  const proposalSelectValue = proposalForm.quoteRequestId && editableQuoteRequestIds.has(proposalForm.quoteRequestId)
+    ? `qr:${proposalForm.quoteRequestId}`
+    : editableProposalIds.has(proposalForm.reservationId)
     ? proposalForm.reservationId
     : "";
 
@@ -204,6 +241,7 @@ export function VendorWorkspace({
     setSelectedReservationId(reservation.id);
     setProposalForm({
       reservationId: reservation.id,
+      quoteRequestId: "",
       serviceDate: asDateInput(reservation.serviceDate),
       proposalAmount: reservation.confirmedAmount
         ? String(reservation.confirmedAmount)
@@ -217,9 +255,68 @@ export function VendorWorkspace({
     if (nextPanel) setActivePanel(nextPanel);
   }
 
+  function loadQuoteRequest(qr: QuoteRequestForVendorDTO, nextPanel?: PanelKey) {
+    setProposalForm({
+      reservationId: "",
+      quoteRequestId: qr.id,
+      serviceDate: qr.preferredDate ? qr.preferredDate.slice(0, 10) : "",
+      proposalAmount: qr.budget ? String(qr.budget) : "",
+      notes: ""
+    });
+    setMessage(null);
+    setError(null);
+    if (nextPanel) setActivePanel(nextPanel);
+  }
+
   async function updateReservation(action: "quote" | "decline") {
-    if (!proposalForm.reservationId) { setError("응답할 요청을 먼저 선택해 주세요."); return; }
-    if (busyReservationId === proposalForm.reservationId) return;
+    const activeQuoteRequestId = proposalForm.quoteRequestId;
+    const activeReservationId = proposalForm.reservationId;
+
+    // Canonical path: QuoteRequest without Reservation
+    if (activeQuoteRequestId && !activeReservationId) {
+      if (action === "decline") {
+        setError("취소는 예약 확정 후 가능합니다.");
+        return;
+      }
+      if (!proposalForm.serviceDate || !proposalForm.proposalAmount) {
+        setError("견적 금액과 가능 일정을 모두 입력해 주세요.");
+        return;
+      }
+      if (busyReservationId === activeQuoteRequestId) return;
+      setBusyReservationId(activeQuoteRequestId);
+      setMessage(null);
+      setError(null);
+      try {
+        const selectedQr = (quoteRequests ?? []).find(qr => qr.id === activeQuoteRequestId);
+        if (!selectedQr) { setError("견적 요청을 찾을 수 없습니다."); return; }
+        const result = await submitQuoteResponse({
+          requestId: activeQuoteRequestId,
+          basePrice: Number(proposalForm.proposalAmount),
+          modules: {
+            basePackage: {
+              name: selectedQr.plan?.title ?? "견적 제안",
+              price: Number(proposalForm.proposalAmount),
+              description: proposalForm.notes || "업체가 제출한 견적 제안입니다."
+            },
+            includedModules: [],
+            optionalModules: [],
+            excludedModules: []
+          },
+          totalPrice: Number(proposalForm.proposalAmount),
+          note: proposalForm.notes || undefined
+        });
+        if (!result.success) { setError(result.error); return; }
+        setMessage("견적 응답을 보냈습니다.");
+        startTransition(() => router.refresh());
+      } finally {
+        setBusyReservationId(null);
+      }
+      return;
+    }
+
+    // Legacy path: Reservation-based
+    if (!activeReservationId) { setError("응답할 요청을 먼저 선택해 주세요."); return; }
+    if (busyReservationId === activeReservationId) return;
     if (isSelectedAcceptedProposal) {
       setError("사용자가 이미 수락한 견적입니다. 이제 예약 최종 확정만 진행할 수 있습니다.");
       return;
@@ -228,12 +325,12 @@ export function VendorWorkspace({
       setError("견적 금액과 가능 일정을 모두 입력해 주세요.");
       return;
     }
-    setBusyReservationId(proposalForm.reservationId);
+    setBusyReservationId(activeReservationId);
     setMessage(null);
     setError(null);
 
     try {
-      const response = await fetch(`/api/vendor/reservations/${proposalForm.reservationId}`, {
+      const response = await fetch(`/api/vendor/reservations/${activeReservationId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -302,14 +399,20 @@ export function VendorWorkspace({
   );
 
   const panelCount = {
-    home: pendingConfirmationReservations.length + inboxReservations.length,
-    inbox: inboxReservations.length,
-    proposals: inProgressReservations.length,
+    home: pendingConfirmationReservations.length + inboxItems.length,
+    inbox: inboxItems.length,
+    proposals: inProgressReservations.length + (quoteRequests ?? []).filter(qr => qr.status === "RESPONDED").length,
     final_confirm: pendingConfirmationReservations.length,
     confirmed: confirmedReservations.length,
     services: 0,
   };
-  const selectedProposalRequestMemo = getRequestMemo(selectedProposalReservation);
+
+  const selectedQuoteRequest = proposalForm.quoteRequestId
+    ? (quoteRequests ?? []).find(qr => qr.id === proposalForm.quoteRequestId) ?? null
+    : null;
+  const selectedProposalRequestMemo = selectedQuoteRequest
+    ? selectedQuoteRequest.requirements
+    : getRequestMemo(selectedProposalReservation);
 
   function scrollToPendingConfirmations() {
     pendingConfirmationsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -357,7 +460,7 @@ export function VendorWorkspace({
         <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-[#2c3455]">
           <div className="flex items-center gap-1.5 bg-white border border-[#ebdccf]/40 px-3 py-1.5 rounded-lg shadow-sm">
             <span className="text-muted-foreground text-[10px]">새 요청</span>
-            <span className={inboxReservations.length > 0 ? "text-amber-600 font-bold" : "text-[#2c3455]"}>{inboxReservations.length}건</span>
+            <span className={inboxItems.length > 0 ? "text-amber-600 font-bold" : "text-[#2c3455]"}>{inboxItems.length}건</span>
           </div>
           <div className="flex items-center gap-1.5 bg-white border border-[#ebdccf]/40 px-3 py-1.5 rounded-lg shadow-sm">
             <span className="text-muted-foreground text-[10px]">진행 제안</span>
@@ -573,17 +676,25 @@ export function VendorWorkspace({
                 <button onClick={() => setActivePanel("inbox")} className="text-[10px] font-bold text-[#c4977a] hover:underline shrink-0">Inbox 가기 →</button>
               </div>
 
-              {inboxReservations.length ? (
+              {inboxItems.length ? (
                 <div className="space-y-3">
-                  {inboxReservations.slice(0, 3).map((r) => (
-                    <div key={r.id} className="rounded-xl border border-[#e5e2da]/70 bg-white p-4 transition-all duration-150 hover:border-[#ebdccf]">
+                  {inboxItems.slice(0, 3).map((item) => (
+                    <div key={item.id} className="rounded-xl border border-[#e5e2da]/70 bg-white p-4 transition-all duration-150 hover:border-[#ebdccf]">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="font-semibold text-xs text-[#2c3455]">{getServiceLabel(r)}</p>
-                          <p className="text-[10px] text-muted-foreground/80 mt-0.5">{r.eventPlan.title} · {formatDate(r.serviceDate)}</p>
+                          <p className="font-semibold text-xs text-[#2c3455]">{item.label}</p>
+                          <p className="text-[10px] text-muted-foreground/80 mt-0.5">{item.eventPlanTitle}</p>
                         </div>
                         <Button
-                          onClick={() => loadReservation(r, "proposals")}
+                          onClick={() => {
+                            if (item.type === "reservation") {
+                              const r = reservations.find(r => r.id === item.id);
+                              if (r) loadReservation(r, "proposals");
+                            } else {
+                              const qr = (quoteRequests ?? []).find(qr => qr.id === item.id);
+                              if (qr) loadQuoteRequest(qr, "proposals");
+                            }
+                          }}
                           size="sm"
                           variant="outline"
                           className="rounded-lg text-[9px] h-7 border-[#e5e2da] text-[#c4977a] hover:bg-[#faf9f5] font-bold px-2.5 shrink-0"
@@ -643,47 +754,63 @@ export function VendorWorkspace({
           <div className="rounded-2xl border border-[#e5e2da] bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center justify-between">
               <p className="font-[var(--font-serif)] text-sm font-bold text-[#2c3455]">새 견적 요청 목록</p>
-              <Badge className="bg-[#faf6f2] text-[#c4977a] border border-[#ebdccf]/50 text-[10px]">{inboxReservations.length}건 대기</Badge>
+              <Badge className="bg-[#faf6f2] text-[#c4977a] border border-[#ebdccf]/50 text-[10px]">{inboxItems.length}건 대기</Badge>
             </div>
 
             <div className="grid gap-3">
-              {inboxReservations.length ? (
-                inboxReservations.map((r) => (
+              {inboxItems.length ? (
+                inboxItems.map((item) => (
                   <article
-                    key={r.id}
+                    key={item.id}
                     className={`rounded-xl border p-4 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#c4977a] ${
-                      selectedReservationId === r.id
+                      (item.type === "reservation" ? selectedReservationId === item.id : proposalForm.quoteRequestId === item.id)
                         ? "border-[#c4977a] bg-[#faf9f5]"
                         : "border-[#e5e2da]/70 bg-white hover:border-[#ebdccf] hover:bg-[#faf9f5]/30"
                     }`}
                   >
                     <button
                       className="w-full text-left focus-visible:outline-none"
-                      onClick={() => loadReservation(r)}
+                      onClick={() => {
+                        if (item.type === "reservation") {
+                          const r = reservations.find(r => r.id === item.id);
+                          if (r) loadReservation(r);
+                        } else {
+                          const qr = (quoteRequests ?? []).find(qr => qr.id === item.id);
+                          if (qr) loadQuoteRequest(qr);
+                        }
+                      }}
                       type="button"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1">
                           <p className="font-semibold text-xs text-[#2c3455]">
-                             {getServiceLabel(r)}
+                             {item.label}
                            </p>
                           <p className="text-[11px] text-muted-foreground">
-                            {r.eventPlan.title} · {getEventTypeLabel(r.eventPlan.type ?? "ETC")}
+                            {item.eventPlanTitle} · {getEventTypeLabel(item.eventType ?? "ETC")}
                           </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
-                          {r.eventPlan.type === "WEDDING" ? (
+                          {item.eventType === "WEDDING" ? (
                             <Heart className="h-3 w-3 text-rose-400" />
                           ) : (
                             <Shield className="h-3 w-3 text-indigo-500" />
                           )}
-                          <Badge className="bg-[#faf6f2] text-[#c4977a] border border-[#ebdccf]/40 text-[9px] font-bold">{getQuoteStatusMeta(r).label}</Badge>
+                          <Badge className="bg-[#faf6f2] text-[#c4977a] border border-[#ebdccf]/40 text-[9px] font-bold">신규</Badge>
                         </div>
                       </div>
                     </button>
                     <button
                       className="mt-3 flex w-full items-center justify-between gap-3 rounded-lg border border-[#ebdccf]/60 bg-[#fcfaf7] px-3.5 py-2.5 text-left text-xs font-semibold text-[#a87f63] transition-colors hover:bg-[#faf9f5] focus-visible:outline-none"
-                      onClick={() => loadReservation(r, "proposals")}
+                      onClick={() => {
+                        if (item.type === "reservation") {
+                          const r = reservations.find(r => r.id === item.id);
+                          if (r) loadReservation(r, "proposals");
+                        } else {
+                          const qr = (quoteRequests ?? []).find(qr => qr.id === item.id);
+                          if (qr) loadQuoteRequest(qr, "proposals");
+                        }
+                      }}
                       type="button"
                     >
                       <span className="font-normal text-muted-foreground/75">가능 일정과 금액을 입력하세요.</span>
@@ -763,7 +890,7 @@ export function VendorWorkspace({
           <div className="rounded-2xl border border-[#e5e2da] bg-[#faf9f5] p-6 shadow-sm">
             <div className="mb-5 flex items-center">
               <Badge className="bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/60 text-[10px]">
-                {selectedProposalReservation?.quoteResponseId ? "기존 제안 수정 및 재조율" : "신규 견적/제안서 작성"}
+                {selectedQuoteRequest ? "신규 견적/제안서 작성" : selectedProposalReservation?.quoteResponseId ? "기존 제안 수정 및 재조율" : "신규 견적/제안서 작성"}
               </Badge>
             </div>
 
@@ -774,8 +901,16 @@ export function VendorWorkspace({
                   className={selectClassName}
                   id="reservationId"
                   onChange={(e) => {
-                    const r = reservations.find((item) => item.id === e.target.value) ?? null;
-                    if (r) loadReservation(r);
+                    const val = e.target.value;
+                    if (!val) return;
+                    if (val.startsWith("qr:")) {
+                      const qrId = val.slice(3);
+                      const qr = (quoteRequests ?? []).find(q => q.id === qrId);
+                      if (qr) loadQuoteRequest(qr);
+                    } else {
+                      const r = reservations.find((item) => item.id === val) ?? null;
+                      if (r) loadReservation(r);
+                    }
                   }}
                   value={proposalSelectValue}
                 >
@@ -783,6 +918,11 @@ export function VendorWorkspace({
                   {editableProposalReservations.map((r) => (
                     <option key={r.id} value={r.id}>
                       {getServiceLabel(r)} / {r.eventPlan.title}
+                    </option>
+                  ))}
+                  {(quoteRequests ?? []).filter(qr => qr.status === "PENDING" || qr.status === "RESPONDED").map((qr) => (
+                    <option key={`qr:${qr.id}`} value={`qr:${qr.id}`}>
+                      {qr.plan?.title ?? "견적 요청"} (견적요청)
                     </option>
                   ))}
                 </select>
@@ -854,19 +994,19 @@ export function VendorWorkspace({
 
               <div className="flex flex-col gap-2 sm:flex-row mt-2">
                 <Button
-                  disabled={isPending || isSelectedAcceptedProposal || busyReservationId === proposalForm.reservationId}
+                  disabled={isPending || isSelectedAcceptedProposal || busyReservationId === (proposalForm.quoteRequestId || proposalForm.reservationId)}
                   onClick={() => updateReservation("quote")}
                   className="flex-1 bg-[#2c3455] text-white hover:bg-[#1e2645] transition-all rounded-xl h-10 text-xs font-semibold"
                 >
                   <MessageSquareQuote className="mr-1.5 h-4 w-4" />
-                  {busyReservationId === proposalForm.reservationId
+                  {busyReservationId === (proposalForm.quoteRequestId || proposalForm.reservationId)
                     ? "제안 전송 중..."
                     : selectedProposalReservation?.quoteResponseId
                     ? "견적 제안 수정"
                     : "견적 제안 전송"}
                 </Button>
                 <Button
-                  disabled={isPending || isSelectedAcceptedProposal || busyReservationId === proposalForm.reservationId}
+                  disabled={isPending || isSelectedAcceptedProposal || busyReservationId === (proposalForm.quoteRequestId || proposalForm.reservationId)}
                   onClick={() => updateReservation("decline")}
                   variant="destructive"
                   className="rounded-xl h-10 text-xs font-semibold"

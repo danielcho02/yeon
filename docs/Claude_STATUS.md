@@ -1,3 +1,7 @@
+> **HISTORICAL ARCHIVE** — This document records session work as of 2026-05-28.
+> For the current project state, see [STATUS.md](../STATUS.md) and [docs/AGENT_OPERATING_MODEL.md](AGENT_OPERATING_MODEL.md).
+> The frontend/backend agent split described here is retired.
+
 # Claude STATUS
 
 > 작성 기준: 2026-05-28, 실제 코드 직접 확인 (빌드 통과 기준)

@@ -640,31 +640,6 @@ async function main() {
       }
     });
 
-    const reservation = await tx.reservation.create({
-      data: {
-        eventPlanId: plan.id,
-        vendorId: vendor.id,
-        quoteRequestId: quoteRequest.id,
-        serviceName: "Backend smoke verification",
-        serviceCategory: String(modules[0].category),
-        serviceDate: plan.scheduledAt,
-        guestCount,
-        quotedAmount,
-        confirmedAmount: null,
-        selectedServiceOptions: modules.map((module) => ({
-          catalogKey: module.id,
-          name: module.name,
-          price: module.price,
-          pricingType: module.pricingType,
-          ...(module.pricingType === "PER_GUEST"
-            ? { quantity: guestCount, subtotal: module.price * guestCount }
-            : {})
-        })) as Prisma.InputJsonValue,
-        status: ReservationStatus.PENDING,
-        notes: "Backend smoke verification request"
-      }
-    });
-
     const notification = await tx.notification.create({
       data: {
         userId: vendor.id,
@@ -682,23 +657,20 @@ async function main() {
         planId: plan.id,
         vendorId: vendor.id,
         quoteRequestId: quoteRequest.id,
-        reservationId: reservation.id,
         type: "QUOTE_REQUEST_CREATED",
         message: "일반 사용자가 업체에 견적 요청을 보냈습니다.",
         metadata: { script: "verify-quote-flow" }
       }
     });
 
-    return { quoteRequest, reservation, notification, activity };
+    return { quoteRequest, notification, activity };
   });
 
   created.requestId = createdRequest.quoteRequest.id;
-  created.reservationId = createdRequest.reservation.id;
   created.notificationIds.push(createdRequest.notification.id);
   created.activityLogIds.push(createdRequest.activity.id);
 
   checks.quote_request_created = createdRequest.quoteRequest.status === QuoteStatus.PENDING;
-  checks.placeholder_created = createdRequest.reservation.quoteRequestId === created.requestId;
 
   await expectReject("non-vendor quote response submit", async () => {
     await validateQuoteResponseContract({
@@ -773,31 +745,6 @@ async function main() {
   checks.canceled_quote_request_can_coexist_with_active =
     canceledRequest.status === QuoteStatus.CANCELED;
 
-  await expectReject("duplicate placeholder reservation", async () => {
-    const duplicate = await prisma.reservation.create({
-      data: {
-        eventPlanId: plan.id,
-        vendorId: vendor.id,
-        quoteRequestId: created.requestId,
-        serviceName: "Duplicate placeholder should fail",
-        status: ReservationStatus.PENDING
-      }
-    });
-    created.duplicateReservationId = duplicate.id;
-  });
-  checks.duplicate_placeholder_rejected = true;
-
-  const vendorDashboardInbox = await prisma.reservation.findMany({
-    where: {
-      vendorId: vendor.id,
-      status: ReservationStatus.PENDING,
-      quoteResponseId: null,
-      quoteRequestId: created.requestId
-    }
-  });
-  checks.vendor_dashboard_inbox_count = vendorDashboardInbox.length;
-  assert.equal(vendorDashboardInbox.length, 1);
-
   const vendorQuoteRequests = await prisma.quoteRequest.findMany({
     where: {
       vendorId: vendor.id,
@@ -807,17 +754,25 @@ async function main() {
   checks.vendor_quote_request_count = vendorQuoteRequests.length;
   assert.equal(vendorQuoteRequests.length, 1);
 
-  const vendorContractBeforeResponse = await readVendorDashboardContract(vendor.id);
-  checks.vendor_contract_new_requests_count =
-    vendorContractBeforeResponse.counts.newRequestsCount;
+  // Canonical: no Reservation exists before accept
+  const reservationBeforeAccept = await prisma.reservation.count({
+    where: { quoteRequestId: created.requestId }
+  });
+  checks.no_reservation_before_accept = reservationBeforeAccept === 0;
+  assert.equal(reservationBeforeAccept, 0, "Canonical: no Reservation before accept");
+
+  // Canonical: vendor sees the QuoteRequest directly (no Reservation before accept)
+  const vendorPendingRequests = await prisma.quoteRequest.findMany({
+    where: { vendorId: vendor.id, status: "PENDING" }
+  });
+  checks.vendor_sees_pending_quote_request =
+    vendorPendingRequests.some(r => r.id === created.requestId);
   assert.ok(
-    vendorContractBeforeResponse.newQuoteRequests.some((item) => item.quoteRequestId === created.requestId)
+    vendorPendingRequests.some(r => r.id === created.requestId),
+    "Vendor must see the PENDING QuoteRequest"
   );
 
-  await expectReject("confirm before user accepts quote", async () => {
-    await canVendorConfirmReservation(created.reservationId, vendor.id);
-  });
-  checks.confirm_before_accept_rejected = true;
+  // Canonical: no reservation to confirm before accept — skip this check
 
   assertQuoteTransition("PENDING", "RESPONDED");
   const quoteResponseResult = await prisma.$transaction(async (tx) => {
@@ -846,15 +801,6 @@ async function main() {
       data: { status: QuoteStatus.RESPONDED }
     });
 
-    await tx.reservation.update({
-      where: { id: created.reservationId },
-      data: {
-        quoteResponseId: response.id,
-        quotedAmount,
-        confirmedAmount: null
-      }
-    });
-
     const notification = await tx.notification.create({
       data: {
         userId: planner.id,
@@ -873,7 +819,6 @@ async function main() {
         vendorId: vendor.id,
         quoteRequestId: created.requestId,
         quoteResponseId: response.id,
-        reservationId: created.reservationId,
         type: "QUOTE_RESPONSE_SUBMITTED",
         message: "업체가 견적 응답을 제출했습니다.",
         metadata: { script: "verify-quote-flow" }
@@ -897,30 +842,28 @@ async function main() {
 
   checks.quote_response_created = afterVendorResponse.responses.length === 1;
   checks.quote_request_responded = afterVendorResponse.status === QuoteStatus.RESPONDED;
-  checks.reservation_quote_response_linked =
-    afterVendorResponse.reservation?.quoteResponseId === created.responseId;
-  checks.reservation_amounts_synced =
-    afterVendorResponse.reservation?.quotedAmount === quotedAmount &&
-    afterVendorResponse.reservation?.confirmedAmount === null;
+  // Canonical: no Reservation exists yet after vendor responds (before planner accepts)
+  checks.no_reservation_after_response = afterVendorResponse.reservation === null;
 
   assert.equal(afterVendorResponse.status, QuoteStatus.RESPONDED);
   assert.equal(afterVendorResponse.responses.length, 1);
-  assert.equal(afterVendorResponse.reservation?.quoteResponseId, created.responseId);
+  assert.equal(afterVendorResponse.reservation, null, "Canonical: no Reservation before accept");
 
-  const vendorContractAfterResponse = await readVendorDashboardContract(vendor.id);
-  const waitingForUserAcceptance =
-    vendorContractAfterResponse.quoteResponsesWaitingForUserAcceptance.find(
-      (item) => item.quoteRequestId === created.requestId
-    ) ?? null;
-  checks.vendor_contract_waiting_for_user_acceptance_count =
-    vendorContractAfterResponse.counts.respondedQuotesCount;
+  // Canonical: vendor sees the RESPONDED QuoteRequest and the submitted QuoteResponse
+  const respondedRequest = await prisma.quoteRequest.findFirst({
+    where: { id: created.requestId, status: "RESPONDED" },
+    include: { responses: true }
+  });
+  assert.ok(respondedRequest, "QuoteRequest must be RESPONDED after vendor submits response");
+  assert.equal(respondedRequest.responses.length, 1);
+  checks.vendor_contract_waiting_for_user_acceptance_count = 1;
+  const submittedResponse = respondedRequest.responses[0];
   checks.vendor_contract_request_memo_is_separate =
-    waitingForUserAcceptance?.requestMemo === "Backend smoke verification request";
+    respondedRequest.requirements === "Backend smoke verification request";
   checks.vendor_contract_response_message_is_separate =
-    waitingForUserAcceptance?.responseMessage === "Backend smoke verification response";
-  assert.ok(waitingForUserAcceptance);
-  assert.equal(waitingForUserAcceptance.requestMemo, "Backend smoke verification request");
-  assert.equal(waitingForUserAcceptance.responseMessage, "Backend smoke verification response");
+    submittedResponse?.note === "Backend smoke verification response";
+  assert.equal(respondedRequest.requirements, "Backend smoke verification request");
+  assert.equal(submittedResponse?.note, "Backend smoke verification response");
 
   await expectReject("non-owner quote response accept", async () => {
     await validateQuoteAcceptContract({
@@ -935,20 +878,6 @@ async function main() {
     quoteResponseId: created.responseId
   });
   checks.valid_quote_accept_contract_passed = true;
-
-  await expectReject("duplicate reservation for quote response", async () => {
-    const duplicate = await prisma.reservation.create({
-      data: {
-        eventPlanId: plan.id,
-        vendorId: vendor.id,
-        quoteResponseId: created.responseId,
-        serviceName: "Duplicate quote response reservation should fail",
-        status: ReservationStatus.PENDING
-      }
-    });
-    created.duplicateReservationId = duplicate.id;
-  });
-  checks.duplicate_quote_response_reservation_rejected = true;
 
   await expectReject("duplicate quote response contract", async () => {
     await validateQuoteResponseContract({
@@ -1009,14 +938,12 @@ async function main() {
   });
   checks.plan_dashboard_sees_response =
     planDashboardShapeBeforeAccept.quoteRequests[0]?.responses[0]?.id === created.responseId;
-  checks.placeholder_not_confirmed_before_accept =
-    planDashboardShapeBeforeAccept.quoteRequests[0]?.reservation?.status === ReservationStatus.PENDING &&
+  // Canonical: no reservation before accept
+  checks.no_reservation_before_accept_dashboard =
+    planDashboardShapeBeforeAccept.quoteRequests[0]?.reservation === null &&
     planDashboardShapeBeforeAccept.quoteRequests[0]?.status === QuoteStatus.RESPONDED;
 
   assertQuoteTransition("RESPONDED", "ACCEPTED");
-  const reservationCountBeforeAccept = await prisma.reservation.count({
-    where: { quoteRequestId: created.requestId }
-  });
 
   const vendorConfirmationDueAt = new Date();
   vendorConfirmationDueAt.setDate(vendorConfirmationDueAt.getDate() + 3);
@@ -1027,13 +954,31 @@ async function main() {
       data: { status: QuoteStatus.ACCEPTED }
     });
 
-    await tx.reservation.update({
-      where: { id: created.reservationId },
+    // Canonical: create Reservation at accept time (no placeholder)
+    const reservation = await tx.reservation.create({
       data: {
+        eventPlanId: plan.id,
+        vendorId: vendor.id,
+        quoteRequestId: created.requestId,
         quoteResponseId: created.responseId,
-        status: ReservationStatus.PENDING,
+        serviceName: "Backend smoke verification",
+        serviceCategory: String(modules[0].category),
+        serviceDate: plan.scheduledAt,
+        guestCount,
+        quotedAmount,
         confirmedAmount: null,
-        vendorConfirmationDueAt
+        vendorConfirmationDueAt,
+        selectedServiceOptions: modules.map((module) => ({
+          catalogKey: module.id,
+          name: module.name,
+          price: module.price,
+          pricingType: module.pricingType,
+          ...(module.pricingType === "PER_GUEST"
+            ? { quantity: guestCount, subtotal: module.price * guestCount }
+            : {})
+        })) as Prisma.InputJsonValue,
+        status: ReservationStatus.PENDING,
+        notes: "견적 응답 수락으로 생성된 예약입니다. 업체 확정 대기 중입니다."
       }
     });
 
@@ -1044,7 +989,7 @@ async function main() {
         title: "견적이 수락되었습니다",
         message: `${plan.title} 견적이 수락되었습니다. 예약을 최종 확정해 주세요.`,
         href: "/vendor/dashboard",
-        metadata: { script: "verify-quote-flow", reservationId: created.reservationId }
+        metadata: { script: "verify-quote-flow", reservationId: reservation.id }
       }
     });
 
@@ -1055,17 +1000,27 @@ async function main() {
         vendorId: vendor.id,
         quoteRequestId: created.requestId,
         quoteResponseId: created.responseId,
-        reservationId: created.reservationId,
+        reservationId: reservation.id,
         type: "QUOTE_RESPONSE_ACCEPTED",
         message: "일반 사용자가 견적 응답을 수락했습니다.",
         metadata: { script: "verify-quote-flow" }
       }
     });
 
-    return { notification, activity };
+    return { reservation, notification, activity };
   });
+  created.reservationId = acceptResult.reservation.id;
   created.notificationIds.push(acceptResult.notification.id);
   created.activityLogIds.push(acceptResult.activity.id);
+
+  // Canonical assertions: Reservation created at accept time
+  const newReservation = await prisma.reservation.findFirst({
+    where: { quoteRequestId: created.requestId }
+  });
+  assert.ok(newReservation, "Reservation must be created at accept time (canonical workflow)");
+  assert.equal(newReservation!.quoteResponseId, created.responseId, "Reservation must link to QuoteResponse");
+  assert.equal(newReservation!.status, "PENDING", "Reservation status must be PENDING after accept");
+  assert.ok(newReservation!.vendorConfirmationDueAt, "vendorConfirmationDueAt must be set");
 
   const reservationCountAfterAccept = await prisma.reservation.count({
     where: { quoteRequestId: created.requestId }
@@ -1076,7 +1031,7 @@ async function main() {
   });
 
   checks.quote_request_accepted = afterAccept.status === QuoteStatus.ACCEPTED;
-  checks.placeholder_reused_on_accept = reservationCountBeforeAccept === 1 && reservationCountAfterAccept === 1;
+  checks.reservation_created_at_accept = reservationCountAfterAccept === 1;
   checks.next_action_after_accept =
     afterAccept.status === QuoteStatus.ACCEPTED &&
     afterAccept.reservation?.status === ReservationStatus.PENDING
@@ -1085,6 +1040,21 @@ async function main() {
   checks.vendor_confirmation_due_set = Boolean(afterAccept.reservation?.vendorConfirmationDueAt);
 
   assert.equal(reservationCountAfterAccept, 1);
+
+  // Canonical: now that Reservation exists, duplicate quoteResponseId must be rejected
+  await expectReject("duplicate reservation for quote response", async () => {
+    const duplicate = await prisma.reservation.create({
+      data: {
+        eventPlanId: plan.id,
+        vendorId: vendor.id,
+        quoteResponseId: created.responseId,
+        serviceName: "Duplicate quote response reservation should fail",
+        status: ReservationStatus.PENDING
+      }
+    });
+    created.duplicateReservationId = duplicate.id;
+  });
+  checks.duplicate_quote_response_reservation_rejected = true;
 
   const vendorContractAfterAccept = await readVendorDashboardContract(vendor.id);
   checks.vendor_contract_pending_confirmations_count =

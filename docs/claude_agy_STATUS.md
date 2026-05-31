@@ -1,3 +1,7 @@
+> **HISTORICAL ARCHIVE** — This document records session work as of 2026-05-29.
+> For the current project state, see [STATUS.md](../STATUS.md) and [docs/AGENT_OPERATING_MODEL.md](AGENT_OPERATING_MODEL.md).
+> The frontend/backend agent split described here is retired.
+
 # yeON Premium Product UI & Full-stack QA Stabilization Status (Antigravity)
 
 이 문서는 yeON 프로젝트의 Full-stack QA Stabilization Owner 겸 Senior Product UX Architect인 Antigravity가 진행한 **QA Stabilization & Category-Based Focus**의 설계 해결 방안, 구현 디테일, 검증 결과 및 마감 상태를 기록한 공식 상태 문서입니다.

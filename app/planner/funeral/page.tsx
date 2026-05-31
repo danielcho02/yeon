@@ -121,7 +121,8 @@ export default async function FuneralPlannerPage({
       }),
       prisma.reservation.findMany({
         where: {
-          eventPlan: { ownerId: session.user.id, type: "FUNERAL" }
+          eventPlan: { ownerId: session.user.id, type: "FUNERAL" },
+          vendor: { isActive: true }
         },
         orderBy: { createdAt: "desc" },
         select: {

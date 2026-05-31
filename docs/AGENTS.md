@@ -1,47 +1,38 @@
-# AGENTS.md
+# Agents
 
-## Scope
-- Only work within the current step.
-- Do not fully implement future-step features.
-- Schema extensibility for later steps is allowed.
+> See [AGENT_OPERATING_MODEL.md](AGENT_OPERATING_MODEL.md) for the current agent rules.
+>
+> All yeON agents are full-stack by default as of 2026-05-31.
+> The prior frontend/backend split model is retired.
 
-## Workspace rules
+---
+
+## Preserved Workspace Rules
+
+The following workspace safety rules from the original AGENTS.md remain in effect:
+
 - Treat this repository as the only writable workspace.
 - Do not modify files outside the project root.
-
-## Protected paths
-- Never edit or delete `.venv/`
-- Never edit or delete `node_modules/`
-- Never edit or delete `.next/`
-- Never edit or delete `dist/`
-- Never edit or delete `build/`
-
-## Environment
-- This project lives in WSL and should be treated as a Linux-first workspace.
-- Prefer WSL/Linux-compatible commands.
-- A Python virtual environment may already exist in `.venv/`.
-- Reuse `.venv/` if needed, but do not recreate or modify it unless explicitly asked.
-
-## Safety
-- Do not use destructive commands.
-- Ask before deleting files.
+- Never edit or delete `.venv/`, `node_modules/`, `.next/`, `dist/`, `build/`.
+- This project lives in WSL — use Linux-compatible commands.
+- Do not use destructive commands; ask before deleting files.
 - Ask before changing shell configuration, dependency managers, or project-wide tooling.
-- Keep all changes within the project root only.
 
-## Domain reference
-- Infer the Prisma schema from the current prompt, use cases, and project requirements.
-- Prefer practical Prisma modeling over literal UML or inheritance-based modeling.
+## Execution Pattern
 
-## Execution
-- First write a short implementation plan.
-- Then implement only the current step.
-- After each milestone, run verification commands and fix failures before finishing.
+1. Write a short implementation plan.
+2. Read all affected layers (see AGENT_OPERATING_MODEL.md Rule 1).
+3. Implement only the current scope.
+4. After each milestone, run the full validation suite.
+5. Fix failures before finishing.
+6. Stop before push — always ask the user first.
 
-## Output
+## Output Format
+
 Always respond with:
-1. implementation plan
-2. file list
-3. full code
-4. run steps
-5. verification steps
-6. checklist before next step
+1. Implementation plan
+2. File list
+3. Full code changes
+4. Run steps
+5. Verification steps
+6. Checklist before next step

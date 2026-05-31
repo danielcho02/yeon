@@ -13,6 +13,7 @@ import {
 } from "@/lib/step3.shared";
 import { buildVendorDashboardReservationContract } from "@/lib/vendor-dashboard-contract";
 import type { VendorDashboardReservationDTO } from "@/types/reservation";
+import type { QuoteRequestForVendorDTO, QuoteStatus } from "@/types/quote";
 import { VendorOnboardingForm } from "./onboarding-form";
 
 export default async function VendorDashboardPage() {
@@ -23,7 +24,7 @@ export default async function VendorDashboardPage() {
 
   const vendorId = session.user.id;
 
-  const [vendor, rawReservations, vendorServices] = await withPrismaRetry(() =>
+  const [vendor, rawReservations, vendorServices, rawQuoteRequests] = await withPrismaRetry(() =>
     Promise.all([
       prisma.user.findUnique({
         where: { id: vendorId },
@@ -97,6 +98,41 @@ export default async function VendorDashboardPage() {
           isActive: true
         },
         orderBy: [{ eventType: "asc" }, { module: "asc" }, { createdAt: "asc" }]
+      }),
+      prisma.quoteRequest.findMany({
+        where: {
+          vendorId,
+          status: { in: ["PENDING", "RESPONDED"] }
+        },
+        include: {
+          plan: {
+            select: {
+              id: true,
+              title: true,
+              type: true,
+              region: true,
+              scheduledAt: true,
+              hostName: true,
+              honoreeName: true,
+              guestTarget: true,
+              budget: true
+            }
+          },
+          responses: {
+            orderBy: { createdAt: "desc" as const },
+            select: {
+              id: true,
+              requestId: true,
+              vendorId: true,
+              basePrice: true,
+              totalPrice: true,
+              note: true,
+              createdAt: true,
+              modules: true
+            }
+          }
+        },
+        orderBy: { createdAt: "desc" as const }
       })
     ])
   );
@@ -151,6 +187,40 @@ export default async function VendorDashboardPage() {
   }));
   const reservationContract = buildVendorDashboardReservationContract(reservations);
 
+  const quoteRequestsForVendor: QuoteRequestForVendorDTO[] = rawQuoteRequests.map((qr) => ({
+    id: qr.id,
+    planId: qr.planId,
+    vendorId: qr.vendorId,
+    requirements: qr.requirements,
+    requestMemo: qr.requirements,
+    selectedModules: Array.isArray(qr.selectedModules) ? qr.selectedModules as string[] : [],
+    preferredDate: qr.preferredDate?.toISOString() ?? null,
+    budget: qr.budget,
+    status: qr.status as QuoteStatus,
+    createdAt: qr.createdAt.toISOString(),
+    plan: qr.plan ? {
+      id: qr.plan.id,
+      title: qr.plan.title,
+      eventType: qr.plan.type ?? "",
+      eventDate: qr.plan.scheduledAt?.toISOString() ?? null,
+      location: qr.plan.region ?? null,
+      guestCount: qr.plan.guestTarget ?? null,
+      budget: qr.plan.budget ?? null
+    } : undefined,
+    responses: qr.responses.map((resp) => ({
+      id: resp.id,
+      requestId: resp.requestId,
+      vendorId: resp.vendorId,
+      basePrice: resp.basePrice,
+      modules: resp.modules as unknown as import("@/types/quote").QuoteResponseModules,
+      totalPrice: resp.totalPrice,
+      note: resp.note,
+      responseMessage: resp.note,
+      createdAt: resp.createdAt.toISOString()
+    })),
+    reservation: null
+  }));
+
   const companyName = vendor?.companyName ?? vendor?.name ?? "업체 대시보드";
 
   return (
@@ -175,6 +245,7 @@ export default async function VendorDashboardPage() {
           supportedEventTypes={supportedEventTypes}
           supportedServiceModules={supportedServiceModules}
           vendorServices={vendorServices}
+          quoteRequests={quoteRequestsForVendor}
         />
 
       </main>

@@ -236,35 +236,6 @@ function getReservationServiceCategory(modules: QuoteResponseModules) {
   return modules.includedModules[0]?.category ?? modules.optionalModules[0]?.category ?? null;
 }
 
-function buildReservationOptions(
-  modules: Array<{
-    id: string;
-    name: string;
-    category: string;
-    price: number;
-    pricingType: string;
-  }>,
-  guestCount: number
-) {
-  return modules.map((module) => {
-    const pricingType = normalizeVendorModulePricingType(module.pricingType);
-    return {
-      catalogKey: module.id,
-      name: module.name,
-      price: module.price,
-      pricingType,
-      ...(pricingType === "PER_GUEST"
-        ? { quantity: guestCount, subtotal: module.price * guestCount }
-        : {})
-    };
-  });
-}
-
-function buildRequestServiceName(modules: Array<{ name: string }>) {
-  if (modules.length === 0) return "모듈형 견적 요청";
-  if (modules.length === 1) return modules[0].name;
-  return `${modules[0].name} 외 ${modules.length - 1}개`;
-}
 
 function mapVendorServiceModuleData(module: {
   id: string;
@@ -456,27 +427,6 @@ export async function createQuoteRequest(
         }
       });
 
-      const reservation = await tx.reservation.create({
-        data: {
-          eventPlanId: plan.id,
-          vendorId: vendor.id,
-          quoteRequestId: created.id,
-          serviceName: buildRequestServiceName(modules),
-          serviceCategory: modules[0]?.category ?? null,
-          description: parsed.data.requirements,
-          serviceDate: preferredDate ?? plan.scheduledAt ?? null,
-          guestCount,
-          quotedAmount,
-          confirmedAmount: null,
-          selectedServiceOptions: buildReservationOptions(
-            modules,
-            guestCount
-          ) as Prisma.InputJsonValue,
-          status: PrismaReservationStatus.PENDING,
-          notes: parsed.data.requirements
-        }
-      });
-
       await createWorkflowNotification(tx, {
         userId: vendor.id,
         type: "QUOTE_REQUEST_RECEIVED",
@@ -486,7 +436,6 @@ export async function createQuoteRequest(
         metadata: {
           planId: plan.id,
           quoteRequestId: created.id,
-          reservationId: reservation.id,
           selectedModuleIds,
           guestCount
         }
@@ -497,7 +446,6 @@ export async function createQuoteRequest(
         planId: plan.id,
         vendorId: vendor.id,
         quoteRequestId: created.id,
-        reservationId: reservation.id,
         type: "QUOTE_REQUEST_CREATED",
         message: "일반 사용자가 업체에 견적 요청을 보냈습니다.",
         metadata: {

@@ -193,26 +193,9 @@ async function assertPlansAndStep4UseSameWorkflowScenario() {
   }
 }
 
-async function assertAcceptedQuotePendingReservationsHaveDueAtOrSeedFallback() {
-  const acceptedPending = await prisma.reservation.findMany({
-    where: {
-      status: "PENDING",
-      quoteRequest: { status: "ACCEPTED" }
-    },
-    select: {
-      id: true,
-      vendorConfirmationDueAt: true
-    }
-  });
-
-  assert.ok(acceptedPending.length > 0, "seed should include an accepted pending reservation");
-
-  for (const reservation of acceptedPending) {
-    assert.ok(
-      reservation.vendorConfirmationDueAt,
-      `${reservation.id}: accepted pending reservation should include vendorConfirmationDueAt`
-    );
-  }
+async function assertVendorModulesExist() {
+  const total = await prisma.vendorServiceModule.count();
+  assert.ok(total >= 10, `Expected ≥10 VendorServiceModules after seed, got ${total}`);
 }
 
 async function main() {
@@ -220,13 +203,13 @@ async function main() {
 
   assert.deepEqual(
     baseline,
-    { reservations: 3, quoteRequests: 4, quoteResponses: 2 },
-    "verify-demo-data-integrity expects npm run db:seed baseline"
+    { reservations: 0, quoteRequests: 0, quoteResponses: 0 },
+    "verify-demo-data-integrity: expects clean npm run db:seed baseline"
   );
 
+  await assertVendorModulesExist();
   await assertVendorContractIgnoresLegacyPendingRows();
   await assertPlansAndStep4UseSameWorkflowScenario();
-  await assertAcceptedQuotePendingReservationsHaveDueAtOrSeedFallback();
 
   await ensureDemoData(prisma);
   assertStableCounts("first ensureDemoData call", baseline, await readCounts());

@@ -236,6 +236,10 @@ export function EventPlanningWorkspace({
     () => planReservations.filter((r) => r.status === "CONFIRMED" || r.status === "COMPLETED"),
     [planReservations]
   );
+  const [quoteRequestsData, setQuoteRequestsData] = useState<QuoteRequestWithResponses[] | null>(
+    () => (plan?.id ? initialQuoteRequestsByPlanId?.[plan.id] ?? null : null)
+  );
+
   const completedSteps = useMemo<StepKey[]>(() => {
     const done: StepKey[] = [];
     if (plan) done.push("setup");
@@ -251,9 +255,12 @@ export function EventPlanningWorkspace({
     if (proposals.length > 0 || pendingFinalConfirmations.length > 0 || confirmedRes.length > 0) {
       return "booking";
     }
+    if ((quoteRequestsData ?? []).some(r => r.status === "RESPONDED" || r.status === "ACCEPTED")) {
+      return "booking";
+    }
     if (!plan.aiRecommendation) return "ai";
     return "vendors";
-  }, [plan, pendingRequests, proposals, pendingFinalConfirmations, confirmedRes]);
+  }, [plan, pendingRequests, proposals, pendingFinalConfirmations, confirmedRes, quoteRequestsData]);
 
   const resolvedInitialStep: StepKey = useMemo(() => {
     const requestedStep = stepKeyFromNumber(initialStep);
@@ -280,9 +287,6 @@ export function EventPlanningWorkspace({
     () => (selectedVendorId ? initialVendorModulesByVendorId?.[selectedVendorId] ?? null : null)
   );
   const [vendorModuleError, setVendorModuleError] = useState(false);
-  const [quoteRequestsData, setQuoteRequestsData] = useState<QuoteRequestWithResponses[] | null>(
-    () => (plan?.id ? initialQuoteRequestsByPlanId?.[plan.id] ?? null : null)
-  );
   const [step4DashboardData, setStep4DashboardData] = useState<Step4CategoryStatusDTO[] | null>(null);
   const [isQuoteActionPending, setIsQuoteActionPending] = useState(false);
   const quoteActionLockedRef = useRef(false);
