@@ -6,7 +6,7 @@ import { z } from "zod";
 import { EventStatus, EventType as PrismaEventType, UserRole } from "@/generated/prisma/client";
 import { actionError, actionSuccess, getActionError } from "@/lib/errors";
 import { generateMockAIRecommendation } from "@/lib/mocks/ai-recommendation";
-import { prisma } from "@/lib/prisma";
+import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { buildEventPlanSlug } from "@/lib/step3.server";
 
 import type { ActionResult } from "@/types/common";
@@ -185,7 +185,7 @@ export async function getPlanById(
       return actionError("플랜 ID가 필요합니다.", "VALIDATION_ERROR");
     }
 
-    const plan = await prisma.eventPlan.findFirst({
+    const plan = await withPrismaRetry(() => prisma.eventPlan.findFirst({
       where: { id: planId, ownerId: user.id },
       include: {
         quoteRequests: {
@@ -218,7 +218,7 @@ export async function getPlanById(
           take: 1
         }
       }
-    });
+    }));
 
     if (!plan) {
       return actionError("플랜을 찾을 수 없습니다.", "NOT_FOUND");
@@ -244,7 +244,7 @@ export async function getPlansWithQuoteStatus(): Promise<ActionResult<PlanDashbo
       return actionError("권한이 없습니다.", "FORBIDDEN");
     }
 
-    const plans = await prisma.eventPlan.findMany({
+    const plans = await withPrismaRetry(() => prisma.eventPlan.findMany({
       where: {
         ownerId: user.id,
         type: { in: [PrismaEventType.WEDDING, PrismaEventType.FUNERAL] }
@@ -295,7 +295,7 @@ export async function getPlansWithQuoteStatus(): Promise<ActionResult<PlanDashbo
         }
       },
       orderBy: { createdAt: "desc" }
-    });
+    }));
 
     return actionSuccess(
       plans.map((plan) => {
@@ -375,10 +375,10 @@ export async function getUserPlans(): Promise<ActionResult<EventPlanData[]>> {
       return actionError("권한이 없습니다.", "FORBIDDEN");
     }
 
-    const plans = await prisma.eventPlan.findMany({
+    const plans = await withPrismaRetry(() => prisma.eventPlan.findMany({
       where: { ownerId: user.id, type: { in: [PrismaEventType.WEDDING, PrismaEventType.FUNERAL] } },
       orderBy: { createdAt: "desc" }
-    });
+    }));
 
     return actionSuccess(plans.map(mapEventPlan));
   } catch (error) {

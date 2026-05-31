@@ -31,7 +31,10 @@ export default async function PlanDetailPage({
     where: { id, ownerId: session.user.id },
     include: {
       reservations: {
-        include: { vendor: { select: { companyName: true, name: true } } },
+        include: {
+          vendor: { select: { companyName: true, name: true } },
+          quoteRequest: { select: { status: true } }
+        },
         orderBy: { createdAt: "desc" },
       },
     },
@@ -42,10 +45,15 @@ export default async function PlanDetailPage({
   const deletePlanById = deletePlan.bind(null, id);
 
   const stats = {
-    requesting: plan.reservations.filter((r) => r.status === "PENDING" && !r.confirmedAmount).length,
-    proposed: plan.reservations.filter((r) => r.status === "PENDING" && r.confirmedAmount !== null).length,
+    requesting: plan.reservations.filter((r) => r.status === "PENDING" && r.quoteResponseId == null).length,
+    proposed: plan.reservations.filter(
+      (r) =>
+        r.status === "PENDING" &&
+        r.quoteResponseId != null &&
+        r.quoteRequest?.status !== "ACCEPTED"
+    ).length,
     confirmed: plan.reservations.filter((r) => r.status === "CONFIRMED").length,
-    cancelled: plan.reservations.filter((r) => r.status === "CANCELLED").length,
+    cancelled: plan.reservations.filter((r) => r.status === "CANCELED").length,
   };
 
   return (
@@ -161,7 +169,22 @@ export default async function PlanDetailPage({
             ) : (
               <div className="space-y-3">
                 {plan.reservations.map((res) => {
-                  const displayMeta = getQuoteStatusMeta(res);
+                  const displayMeta = getQuoteStatusMeta({
+                    ...res,
+                    quoteRequestStatus: res.quoteRequest?.status ?? null
+                  });
+                  const confirmedAmount =
+                    res.status === "CONFIRMED" ? res.confirmedAmount : null;
+                  const proposedAmount =
+                    res.status !== "CONFIRMED" &&
+                    res.quoteResponseId &&
+                    res.quotedAmount != null
+                      ? res.quotedAmount
+                      : null;
+                  const requestedBudget =
+                    res.quoteResponseId == null ? res.quotedAmount : null;
+                  const vendorConfirmationDueAt =
+                    res.quoteRequest?.status === "ACCEPTED" ? res.vendorConfirmationDueAt : null;
 
                   return (
                     <div
@@ -188,14 +211,24 @@ export default async function PlanDetailPage({
                           희망일: {formatDate(res.serviceDate)}
                         </p>
                       )}
-                      {res.quotedAmount && (
+                      {requestedBudget != null && (
                         <p className="mt-0.5 text-xs text-muted-foreground">
-                          예산: {res.quotedAmount.toLocaleString()}원
+                          요청 예산: {requestedBudget.toLocaleString()}원
                         </p>
                       )}
-                      {res.confirmedAmount && (
-                        <p className={`mt-0.5 text-xs ${res.status === "CONFIRMED" ? "font-semibold text-emerald-700" : "font-semibold text-primary"}`}>
-                          {res.status === "CONFIRMED" ? "확정 금액" : "제안 금액"}: {res.confirmedAmount.toLocaleString()}원
+                      {proposedAmount != null && (
+                        <p className="mt-0.5 text-xs font-semibold text-primary">
+                          제안 금액: {proposedAmount.toLocaleString()}원
+                        </p>
+                      )}
+                      {confirmedAmount != null && (
+                        <p className="mt-0.5 text-xs font-semibold text-emerald-700">
+                          확정 금액: {confirmedAmount.toLocaleString()}원
+                        </p>
+                      )}
+                      {vendorConfirmationDueAt && (
+                        <p className="mt-0.5 text-xs font-semibold text-violet-700">
+                          업체 확정 요청 기한: {formatDate(vendorConfirmationDueAt)}
                         </p>
                       )}
                     </div>

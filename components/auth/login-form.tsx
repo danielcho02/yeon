@@ -44,9 +44,9 @@ function resolveLoginDestination(role: string | undefined, callbackUrl: string |
 }
 
 const DEMO_ACCOUNTS = [
-  { label: "일반 사용자", email: "planner@yeon.local", description: "결혼 준비 체험", hoverClass: "hover:border-primary/30 hover:bg-primary/3" },
-  { label: "웨딩 업체", email: "venue@yeon.local", description: "웨딩홀 업체", hoverClass: "hover:border-rose-300 hover:bg-rose-50/50" },
-  { label: "장례 업체", email: "memorial@yeon.local", description: "장례 의전 업체", hoverClass: "hover:border-indigo-300 hover:bg-indigo-50/50" },
+  { label: "일반 사용자", email: "planner@yeon.local", description: "플래너 체험", hoverClass: "hover:border-[#c4977a] hover:bg-[#faf9f5]" },
+  { label: "웨딩 파트너", email: "venue@yeon.local", description: "웨딩홀 파트너", hoverClass: "hover:border-[#ebdccf] hover:bg-[#faf9f5]" },
+  { label: "장례 파트너", email: "memorial@yeon.local", description: "장례 파트너", hoverClass: "hover:border-[#cbd3e0] hover:bg-[#f4f5f8]" },
 ] as const;
 
 export function LoginForm({
@@ -106,10 +106,10 @@ export function LoginForm({
   }
 
   return (
-    <form className="space-y-5" onSubmit={handleSubmit}>
+    <form className="space-y-6" onSubmit={handleSubmit}>
       <div className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="login-email">이메일</Label>
+          <Label htmlFor="login-email" className="text-xs font-semibold text-[#2c3455]">이메일</Label>
           <Input
             autoComplete="email"
             disabled={isSubmitting}
@@ -119,11 +119,12 @@ export function LoginForm({
             required
             type="email"
             value={email}
+            className="rounded-xl border-[#e5e2da] bg-white text-xs h-10 transition-all duration-150 focus-visible:ring-1 focus-visible:ring-[#c4977a]"
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="login-password">비밀번호</Label>
+          <Label htmlFor="login-password" className="text-xs font-semibold text-[#2c3455]">비밀번호</Label>
           <Input
             autoComplete="current-password"
             disabled={isSubmitting}
@@ -133,36 +134,42 @@ export function LoginForm({
             required
             type="password"
             value={password}
+            className="rounded-xl border-[#e5e2da] bg-white text-xs h-10 transition-all duration-150 focus-visible:ring-1 focus-visible:ring-[#c4977a]"
           />
         </div>
       </div>
 
       {notice ? (
-        <div className={`flex items-start gap-2.5 rounded-2xl border px-4 py-3 text-sm ${
+        <div className={`flex items-start gap-2.5 rounded-xl border px-4 py-3 text-xs ${
           notice.tone === "success"
-            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-            : "border-rose-200 bg-rose-50 text-rose-700"
+            ? "border-emerald-100 bg-emerald-50/50 text-emerald-800"
+            : "border-rose-100 bg-rose-50/50 text-rose-800"
         }`}>
           {notice.tone === "success"
-            ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-            : <XCircle className="mt-0.5 h-4 w-4 shrink-0" />}
-          <span>{notice.message}</span>
+            ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+            : <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-600" />}
+          <span className="leading-relaxed">{notice.message}</span>
         </div>
       ) : null}
 
-      <Button className="w-full" disabled={isSubmitting} size="full" type="submit">
+      <Button 
+        className="w-full bg-[#2c3455] text-white hover:bg-[#1e2645] h-10 text-xs font-semibold rounded-xl transition-colors duration-150" 
+        disabled={isSubmitting} 
+        size="full" 
+        type="submit"
+      >
         {isSubmitting ? "로그인 중..." : "로그인"}
       </Button>
 
       {/* Demo accounts */}
-      <div className="space-y-3">
+      <div className="space-y-4 pt-2">
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t border-border/40" />
+            <span className="w-full border-t border-[#e5e2da]/70" />
           </div>
           <div className="relative flex justify-center">
-            <span className="bg-white/93 px-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground/45">
-              데모 계정으로 체험
+            <span className="bg-white px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-[#8c8275]">
+              데모 샌드박스 간편 접속
             </span>
           </div>
         </div>
@@ -170,26 +177,26 @@ export function LoginForm({
         <div className="grid grid-cols-3 gap-2">
           {DEMO_ACCOUNTS.map((account) => (
             <button
-              className={`rounded-xl border border-border/50 bg-white/70 px-2 py-2.5 text-center transition-all duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 ${account.hoverClass}`}
+              className={`rounded-xl border border-[#e5e2da] bg-[#faf9f5]/20 px-2 py-3 text-center transition-all duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 ${account.hoverClass}`}
               disabled={isSubmitting}
               key={account.email}
               onClick={() => fillDemo(account.email)}
               type="button"
             >
-              <p className="text-[11px] font-semibold text-foreground">{account.label}</p>
-              <p className="mt-0.5 font-mono text-[9px] text-muted-foreground/55">{account.email.split("@")[0]}</p>
+              <p className="text-[10px] font-bold text-[#2c3455]">{account.label}</p>
+              <p className="mt-0.5 text-[9px] text-[#8c8275]">{account.description}</p>
             </button>
           ))}
         </div>
-        <p className="text-center text-xs text-muted-foreground">
-          비밀번호:{" "}
-          <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-foreground">demo1234</code>
+        <p className="text-center text-[10px] text-[#8c8275] leading-relaxed">
+          샌드박스 공통 비밀번호:{" "}
+          <code className="rounded bg-[#faf9f5] border border-[#e5e2da] px-1.5 py-0.5 font-mono text-[#2c3455] font-bold">demo1234</code>
         </p>
       </div>
 
-      <p className="text-center text-sm text-muted-foreground">
+      <p className="text-center text-xs text-[#8c8275]">
         아직 계정이 없다면{" "}
-        <Link className="font-semibold text-primary underline-offset-4 hover:underline" href="/signup">
+        <Link className="font-bold text-[#2c3455] hover:text-[#c4977a] underline underline-offset-4" href="/signup">
           회원가입
         </Link>
         하세요.

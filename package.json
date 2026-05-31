@@ -11,6 +11,11 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
+    "db:seed:scenario": "npx tsx scripts/seed-demo-scenario.ts",
+    "db:seed:scenario:A": "npx tsx scripts/seed-demo-scenario.ts --state=A",
+    "db:seed:scenario:B": "npx tsx scripts/seed-demo-scenario.ts --state=B",
+    "db:seed:scenario:C": "npx tsx scripts/seed-demo-scenario.ts --state=C",
+    "db:seed:scenario:D": "npx tsx scripts/seed-demo-scenario.ts --state=D",
     "postinstall": "prisma generate"
   },
   "dependencies": {

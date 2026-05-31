@@ -15,6 +15,7 @@ import type {
 import type { ReservationData, ReservationStatus } from "@/types/reservation";
 import type { TransactionData, TransactionType } from "@/types/transaction";
 import type { VendorProfileData } from "@/types/user";
+import type { VendorServiceModuleData } from "@/types/vendor-module";
 
 type SessionUser = {
   id: string;
@@ -45,6 +46,16 @@ type PlanLike = {
   updatedAt: Date;
 };
 
+type QuoteRequestPlanLike = {
+  id: string;
+  title: string;
+  type: string;
+  scheduledAt: Date | null;
+  region: string | null;
+  guestTarget: number | null;
+  budget: number | null;
+};
+
 type QuoteRequestLike = {
   id: string;
   planId: string;
@@ -55,6 +66,10 @@ type QuoteRequestLike = {
   budget: number | null;
   status: string;
   createdAt: Date;
+  vendor?: VendorLike;
+  plan?: QuoteRequestPlanLike;
+  reservation?: ReservationLike | null;
+  selectedModuleDetails?: VendorServiceModuleData[];
 };
 
 type QuoteResponseLike = {
@@ -78,6 +93,7 @@ type ReservationLike = {
   serviceDate: Date | null;
   quotedAmount: number | null;
   confirmedAmount: number | null;
+  vendorConfirmationDueAt?: Date | null;
   status: string;
   createdAt: Date;
   updatedAt: Date;
@@ -170,11 +186,16 @@ export function mapQuoteStatus(status: string): QuoteStatus {
 }
 
 export function mapReservationStatus(status: string): ReservationStatus {
-  if (status === "CONFIRMED" || status === "REJECTED" || status === "CHANGED" || status === "CANCELED") {
+  if (
+    status === "CONFIRMED" ||
+    status === "REJECTED" ||
+    status === "CHANGED" ||
+    status === "CANCELED" ||
+    status === "COMPLETED"
+  ) {
     return status;
   }
 
-  if (status === "CANCELLED") return "CANCELED";
   return "PENDING";
 }
 
@@ -236,6 +257,7 @@ export function mapQuoteRequest(request: QuoteRequestLike): QuoteRequestData {
     planId: request.planId,
     vendorId: request.vendorId,
     requirements: request.requirements,
+    requestMemo: request.requirements,
     selectedModules: stringArrayFromJson(request.selectedModules),
     preferredDate: request.preferredDate?.toISOString() ?? null,
     budget: request.budget,
@@ -253,6 +275,7 @@ export function mapQuoteResponse(response: QuoteResponseLike): QuoteResponseData
     modules: response.modules as unknown as QuoteResponseModules,
     totalPrice: response.totalPrice,
     note: response.note,
+    responseMessage: response.note,
     createdAt: response.createdAt.toISOString(),
     vendor: response.vendor ? mapVendorProfile(response.vendor) : undefined
   };
@@ -263,6 +286,20 @@ export function mapQuoteRequestWithResponses(
 ): QuoteRequestWithResponses {
   return {
     ...mapQuoteRequest(request),
+    vendor: request.vendor ? mapVendorProfile(request.vendor) : undefined,
+    plan: request.plan
+      ? {
+          id: request.plan.id,
+          title: request.plan.title,
+          eventType: request.plan.type,
+          eventDate: request.plan.scheduledAt?.toISOString() ?? null,
+          location: request.plan.region,
+          guestCount: request.plan.guestTarget,
+          budget: request.plan.budget
+        }
+      : undefined,
+    selectedModuleDetails: request.selectedModuleDetails,
+    reservation: request.reservation ? mapReservation(request.reservation) : null,
     responses: request.responses.map(mapQuoteResponse)
   };
 }
@@ -276,6 +313,7 @@ export function mapReservation(reservation: ReservationLike): ReservationData {
     quoteResponseId: reservation.quoteResponseId,
     reservedDate: (reservation.serviceDate ?? reservation.createdAt).toISOString(),
     totalAmount: reservation.confirmedAmount ?? reservation.quotedAmount ?? 0,
+    vendorConfirmationDueAt: reservation.vendorConfirmationDueAt?.toISOString() ?? null,
     status: mapReservationStatus(reservation.status),
     createdAt: reservation.createdAt.toISOString(),
     updatedAt: reservation.updatedAt.toISOString(),

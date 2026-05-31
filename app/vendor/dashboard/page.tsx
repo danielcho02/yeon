@@ -6,13 +6,15 @@ import { VendorWorkspace } from "@/components/features/planning/vendor-workspace
 import type { ReservationItem } from "@/components/features/planning/workspace-types";
 import { Nav } from "@/components/nav";
 import { getServerAuthSession } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
+import { prisma, withPrismaRetry } from "@/lib/prisma";
 import {
   getVendorSupportedEventTypes,
   getVendorSupportedServiceModules
 } from "@/lib/step3.shared";
+import { buildVendorDashboardReservationContract } from "@/lib/vendor-dashboard-contract";
+import type { VendorDashboardReservationDTO } from "@/types/reservation";
+import type { QuoteRequestForVendorDTO, QuoteStatus } from "@/types/quote";
 import { VendorOnboardingForm } from "./onboarding-form";
-import { ServiceManager } from "./service-manager";
 
 export default async function VendorDashboardPage() {
   const session = await getServerAuthSession();
@@ -22,80 +24,135 @@ export default async function VendorDashboardPage() {
 
   const vendorId = session.user.id;
 
-  const [vendor, rawReservations, vendorServices] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: vendorId },
-      select: {
-        companyName: true,
-        name: true,
-        supportedEventTypes: true,
-        supportedServiceModules: true
-      }
-    }),
-    prisma.reservation.findMany({
-      where: { vendorId },
-      select: {
-        id: true,
-        serviceName: true,
-        serviceCategory: true,
-        serviceDate: true,
-        guestCount: true,
-        quotedAmount: true,
-        confirmedAmount: true,
-        notes: true,
-        status: true,
-        selectedServiceOptions: true,
-        eventPlan: {
-          select: {
-            id: true,
-            title: true,
-            type: true,
-            region: true,
-            scheduledAt: true,
-            hostName: true,
-            honoreeName: true
+  const [vendor, rawReservations, vendorServices, rawQuoteRequests] = await withPrismaRetry(() =>
+    Promise.all([
+      prisma.user.findUnique({
+        where: { id: vendorId },
+        select: {
+          companyName: true,
+          name: true,
+          supportedEventTypes: true,
+          supportedServiceModules: true
+        }
+      }),
+      prisma.reservation.findMany({
+        where: { vendorId },
+        select: {
+          id: true,
+          serviceName: true,
+          serviceCategory: true,
+          serviceDate: true,
+          guestCount: true,
+          quotedAmount: true,
+          confirmedAmount: true,
+          vendorConfirmationDueAt: true,
+          notes: true,
+          status: true,
+          quoteRequestId: true,
+          quoteResponseId: true,
+          quoteRequest: {
+            select: {
+              status: true,
+              requirements: true
+            }
+          },
+          quoteResponse: {
+            select: {
+              note: true
+            }
+          },
+          selectedServiceOptions: true,
+          eventPlan: {
+            select: {
+              id: true,
+              title: true,
+              type: true,
+              region: true,
+              scheduledAt: true,
+              hostName: true,
+              honoreeName: true
+            }
+          },
+          vendor: {
+            select: {
+              id: true,
+              name: true,
+              companyName: true,
+              location: true
+            }
           }
         },
-        vendor: {
-          select: {
-            id: true,
-            name: true,
-            companyName: true,
-            location: true
+        orderBy: { createdAt: "desc" }
+      }),
+      prisma.vendorService.findMany({
+        where: { vendorId },
+        select: {
+          id: true,
+          eventType: true,
+          module: true,
+          catalogKey: true,
+          pricingType: true,
+          name: true,
+          description: true,
+          basePrice: true,
+          isActive: true
+        },
+        orderBy: [{ eventType: "asc" }, { module: "asc" }, { createdAt: "asc" }]
+      }),
+      prisma.quoteRequest.findMany({
+        where: {
+          vendorId,
+          status: { in: ["PENDING", "RESPONDED"] }
+        },
+        include: {
+          plan: {
+            select: {
+              id: true,
+              title: true,
+              type: true,
+              region: true,
+              scheduledAt: true,
+              hostName: true,
+              honoreeName: true,
+              guestTarget: true,
+              budget: true
+            }
+          },
+          responses: {
+            orderBy: { createdAt: "desc" as const },
+            select: {
+              id: true,
+              requestId: true,
+              vendorId: true,
+              basePrice: true,
+              totalPrice: true,
+              note: true,
+              createdAt: true,
+              modules: true
+            }
           }
-        }
-      },
-      orderBy: { createdAt: "desc" }
-    }),
-    prisma.vendorService.findMany({
-      where: { vendorId },
-      select: {
-        id: true,
-        eventType: true,
-        module: true,
-        catalogKey: true,
-        pricingType: true,
-        name: true,
-        description: true,
-        basePrice: true,
-        isActive: true
-      },
-      orderBy: [{ eventType: "asc" }, { module: "asc" }, { createdAt: "asc" }]
-    })
-  ]);
+        },
+        orderBy: { createdAt: "desc" as const }
+      })
+    ])
+  );
+
+  if (!vendor) {
+    redirect("/login");
+  }
 
   const supportedEventTypes = getVendorSupportedEventTypes({
-    supportedEventTypes: vendor?.supportedEventTypes
+    supportedEventTypes: vendor.supportedEventTypes
   });
   const supportedServiceModules = getVendorSupportedServiceModules({
-    supportedServiceModules: vendor?.supportedServiceModules
+    supportedServiceModules: vendor.supportedServiceModules
   });
 
   if (supportedEventTypes.length === 0) {
     return <VendorOnboardingForm />;
   }
 
-  const reservations: ReservationItem[] = rawReservations.map((r) => ({
+  const reservations: VendorDashboardReservationDTO[] = rawReservations.map((r) => ({
     id: r.id,
     serviceName: r.serviceName,
     serviceCategory: r.serviceCategory,
@@ -103,8 +160,14 @@ export default async function VendorDashboardPage() {
     guestCount: r.guestCount,
     quotedAmount: r.quotedAmount,
     confirmedAmount: r.confirmedAmount,
+    vendorConfirmationDueAt: r.vendorConfirmationDueAt?.toISOString() ?? null,
     notes: r.notes,
-    status: r.status as "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED",
+    requestMemo: r.quoteRequest?.requirements ?? r.notes,
+    responseMessage: r.quoteResponse?.note ?? null,
+    status: r.status as ReservationItem["status"],
+    quoteRequestId: r.quoteRequestId,
+    quoteResponseId: r.quoteResponseId,
+    quoteRequestStatus: r.quoteRequest?.status ?? null,
     selectedServiceOptions: r.selectedServiceOptions as ReservationItem["selectedServiceOptions"] ?? null,
     eventPlan: {
       id: r.eventPlan.id,
@@ -122,18 +185,53 @@ export default async function VendorDashboardPage() {
       location: r.vendor.location
     }
   }));
+  const reservationContract = buildVendorDashboardReservationContract(reservations);
+
+  const quoteRequestsForVendor: QuoteRequestForVendorDTO[] = rawQuoteRequests.map((qr) => ({
+    id: qr.id,
+    planId: qr.planId,
+    vendorId: qr.vendorId,
+    requirements: qr.requirements,
+    requestMemo: qr.requirements,
+    selectedModules: Array.isArray(qr.selectedModules) ? qr.selectedModules as string[] : [],
+    preferredDate: qr.preferredDate?.toISOString() ?? null,
+    budget: qr.budget,
+    status: qr.status as QuoteStatus,
+    createdAt: qr.createdAt.toISOString(),
+    plan: qr.plan ? {
+      id: qr.plan.id,
+      title: qr.plan.title,
+      eventType: qr.plan.type ?? "",
+      eventDate: qr.plan.scheduledAt?.toISOString() ?? null,
+      location: qr.plan.region ?? null,
+      guestCount: qr.plan.guestTarget ?? null,
+      budget: qr.plan.budget ?? null
+    } : undefined,
+    responses: qr.responses.map((resp) => ({
+      id: resp.id,
+      requestId: resp.requestId,
+      vendorId: resp.vendorId,
+      basePrice: resp.basePrice,
+      modules: resp.modules as unknown as import("@/types/quote").QuoteResponseModules,
+      totalPrice: resp.totalPrice,
+      note: resp.note,
+      responseMessage: resp.note,
+      createdAt: resp.createdAt.toISOString()
+    })),
+    reservation: null
+  }));
 
   const companyName = vendor?.companyName ?? vendor?.name ?? "업체 대시보드";
 
   return (
     <div className="min-h-screen">
       <Nav />
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-        <div className="mb-8">
-          <p className="mb-1 text-xs font-bold uppercase tracking-[0.24em] text-muted-foreground/55">
-            Vendor Dashboard
+      <main className="mx-auto max-w-5xl px-4 py-10 sm:px-8 sm:py-16">
+        <div className="mb-10">
+          <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/60">
+            Partner Operations
           </p>
-          <h1 className="font-[var(--font-display)] text-2xl font-bold text-foreground sm:text-3xl">
+          <h1 className="font-[var(--font-serif)] text-2xl font-bold tracking-tight text-[#2c3455] sm:text-3xl">
             {companyName}
           </h1>
         </div>
@@ -142,22 +240,13 @@ export default async function VendorDashboardPage() {
           viewerName={session.user.name ?? vendor?.name ?? "업체"}
           viewerEmail={session.user.email ?? ""}
           companyName={companyName}
-          reservations={reservations}
+          reservations={reservationContract.reservations}
+          pendingConfirmations={reservationContract.pendingConfirmations}
           supportedEventTypes={supportedEventTypes}
+          supportedServiceModules={supportedServiceModules}
+          vendorServices={vendorServices}
+          quoteRequests={quoteRequestsForVendor}
         />
-
-        <section className="mt-10">
-          <h2 className="mb-5 font-[var(--font-display)] text-base font-semibold text-foreground">
-            내 서비스 관리
-          </h2>
-          <div className="rounded-[1.5rem] border border-border/60 bg-white/90 p-6 shadow-sm">
-            <ServiceManager
-              supportedEventTypes={supportedEventTypes}
-              supportedModules={supportedServiceModules}
-              existingServices={vendorServices}
-            />
-          </div>
-        </section>
 
       </main>
     </div>

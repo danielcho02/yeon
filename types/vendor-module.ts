@@ -19,6 +19,7 @@ export interface VendorServiceModuleData {
   name: string;
   category: ModuleCategory;
   price: number;
+  pricingType: "FLAT" | "PER_GUEST";
   description: string | null;
   isBaseIncluded: boolean;
   isActive: boolean;

@@ -1,6 +1,10 @@
+> **HISTORICAL ARCHIVE** — This document records session work as of 2026-05-28.
+> For the current project state, see [STATUS.md](../STATUS.md) and [docs/AGENT_OPERATING_MODEL.md](AGENT_OPERATING_MODEL.md).
+> The frontend/backend agent split described here is retired.
+
 # Claude STATUS
 
-> 작성 기준: 2026-05-11, 실제 코드 직접 확인 (빌드 통과 기준)
+> 작성 기준: 2026-05-28, 실제 코드 직접 확인 (빌드 통과 기준)
 > 작성자: Claude Code (프론트엔드 담당)
 
 ---
@@ -17,6 +21,8 @@
 | P4 | Step 4 → "견적 비교 및 수락" — `acceptQuoteResponse` 연결, RESPONDED/ACCEPTED 카드 | ✅ 완료 |
 | P5 | 개발자 용어 제거 (Phase, Step, Server Action 등 사용자 노출 제거) | ✅ 완료 |
 | 추가 | Mobile bottom bar "견적 요청" 버튼 onClick 연결 | ✅ 완료 |
+| UX Polish | 견적 워크플로우 문구 정비 (2026-05-28) | ✅ 완료 |
+| UX Polish 2 | 업체 대시보드 예약 최종 확정 섹션 재설계 (2026-05-28) | ✅ 완료 |
 
 ---
 
@@ -112,14 +118,14 @@ getPlansWithQuoteStatus()
 ```
 
 **nextAction → CTA 스타일**:
-| nextAction | label | ctaVariant |
-|---|---|---|
-| create_quote_request | 업체 찾기 | primary |
-| waiting_for_vendor | 업체 응답 대기 | amber |
-| compare_quotes / accept_quote | 견적 비교 가능 | blue |
-| reservation_pending | 업체 확정 대기 | violet |
-| confirmed | 예약 확정 완료 | emerald |
-| (default) | 취소됨 | gray |
+| nextAction | label | cta 버튼 문구 | ctaVariant |
+|---|---|---|---|
+| create_quote_request | 업체 찾기 | 업체 선택하기 | primary |
+| waiting_for_vendor | 업체 응답 대기 | 견적 요청 현황 보기 | amber |
+| compare_quotes / accept_quote | 견적 비교 가능 | 받은 견적 확인 | blue |
+| reservation_pending | 업체 확정 대기 | 예약 상태 확인 | violet |
+| confirmed | 예약 확정 완료 | 확정 예약 확인 | emerald |
+| (default) | 취소됨 | 새로 시작하기 | gray |
 
 ---
 
@@ -165,15 +171,91 @@ npm run lint         → ✔ No ESLint warnings or errors
 npm run build        → 전체 라우트 컴파일 성공
 ```
 
-빌드 결과 (주요 라우트):
+빌드 결과 (주요 라우트, 2026-05-28):
 ```
-ƒ /planner/wedding    148 B   172 kB
-ƒ /planner/funeral    149 B   172 kB
+ƒ /planner/wedding    148 B   174 kB
+ƒ /planner/funeral    149 B   174 kB
 ƒ /plans              1.11 kB 119 kB
 ƒ /plans/new          35.3 kB 200 kB
 ƒ /account            1.93 kB 123 kB
-ƒ /vendor/dashboard   12 kB   133 kB
+ƒ /vendor/dashboard   13.6 kB 135 kB
 First Load JS shared  87.3 kB
+```
+
+---
+
+## 12. 업체 대시보드 Pending Confirmation 재설계 (2026-05-28)
+
+**커밋**: `Redesign vendor pending confirmation section for business clarity`
+
+**변경 파일 1개**: `components/features/planning/vendor-workspace.tsx`
+
+**변경 내용**:
+- 섹션 위치: 패널 탭바 아래 → 패널 탭바 **위** (dashboard 상단)
+- 섹션 배경: `theme.panel` (블렌딩) → `bg-white border-2 border-violet-300 shadow-md` (강조)
+- 설명 문구: "업체 최종 확정을 완료해야 예약 확정 상태가 됩니다." → "사용자가 견적을 수락했습니다. 업체 최종 확인을 완료하면 예약이 확정됩니다."
+- 카드 정보 계층: 행사명 상단 강조 → 2열 메타데이터 (날짜/장소/인원/금액) → 상태 배지 → 확정 버튼
+- 상태 배지 추가: 각 카드에 "사용자 수락 완료 · 업체 최종 확정 필요"
+- 확정 버튼 스타일: 기본 → `bg-violet-600 text-white hover:bg-violet-700`
+- CONFIRMED/PENDING 중복: `pendingConfirmationReservations`는 `inProgressReservations`와 `confirmedReservations`와 useMemo 단계에서 이미 상호 배타적 — 중복 없음 확인
+
+---
+
+## 11. UX Polish 작업 이력 (2026-05-28)
+
+**커밋**: `Polish quote workflow product UX`
+
+**변경 파일 3개**:
+
+| 파일 | 변경 내용 |
+|---|---|
+| `components/features/planning/vendor-workspace.tsx` | textarea placeholder → "업체의 견적 안내 메시지를 입력해 주세요."; 견적 응답 성공 메시지 → "견적 응답을 보냈습니다."; 예약 확정 성공 메시지 → "예약이 최종 확정되었습니다." |
+| `app/plans/page.tsx` | CTA 문구 4개 정비: waiting_for_vendor→"견적 요청 현황 보기", compare/accept→"받은 견적 확인", reservation_pending→"예약 상태 확인", confirmed→"확정 예약 확인" |
+| `components/nav.tsx` | 네비 로고 Image에 `priority` prop 추가 (LCP 최적화) |
+
+**변경하지 않은 항목**:
+- 업체 pending confirmation 섹션: 이미 `vendor-workspace.tsx` 406-475행에 구현 완료
+- 장례 테마 톤: `event-planning-workspace.tsx` THEMES.FUNERAL이 이미 indigo/navy 팔레트 사용
+- 견적 요청 성공 메시지 (플래너 측): 이미 올바른 문구 사용
+- 모든 `fill` Image의 `sizes` prop: 이미 전부 존재
+
+---
+
+## 13. Planner Step Refresh Routing Fix (2026-05-29)
+
+**커밋**: `Fix planner step refresh routing`
+
+**수정 내용**: step=3/4 새로고침 실패 + cross-plan redirect 버그 수정
+
+### 수정 파일 3개
+
+| 파일 | 수정 내용 |
+|---|---|
+| `app/planner/wedding/page.tsx` | planId 조기 cross-type 검증 추가: planId가 FUNERAL plan이면 `/planner/funeral?planId=...&step=...`로 redirect |
+| `app/planner/funeral/page.tsx` | 동일 로직 반대 방향: planId가 WEDDING plan이면 `/planner/wedding?planId=...&step=...`로 redirect |
+| `components/features/planning/event-planning-workspace.tsx` | `resolvedInitialStep`에서 `requestedStep === "booking" && !hasQuoteOrReservationState → "vendors"` fallback 제거 + `hasQuoteOrReservationState` 상수 제거 |
+
+### 처리 방식
+
+- **planId 검증**: 메인 쿼리 실행 **전에** `prisma.eventPlan.findFirst({ id, ownerId })` 단건 조회로 `type` 확인. mismatch면 즉시 redirect (메인 3개 쿼리 절약).
+- **step 유지**: URL step 파라미터를 redirect URL에 포함. `parseInitialStep(params.step)` 사용.
+- **step=4 보존**: `resolvedInitialStep`이 URL step을 더 이상 override하지 않음. URL step이 1~4이면 그대로 사용.
+
+### 브라우저 재확인 필요 항목
+
+1. `/planner/wedding?planId=WEDDING_ID&step=3` 새로고침 → step 3 유지 확인
+2. `/planner/wedding?planId=WEDDING_ID&step=4` 새로고침 → step 4 유지 확인
+3. `/planner/funeral?planId=FUNERAL_ID&step=3` 새로고침 → step 3 유지 확인
+4. `/planner/funeral?planId=FUNERAL_ID&step=4` 새로고침 → step 4 유지 확인
+5. `/planner/wedding?planId=FUNERAL_ID&step=3` → `/planner/funeral?...&step=3` redirect 확인
+6. `/planner/funeral?planId=WEDDING_ID&step=3` → `/planner/wedding?...&step=3` redirect 확인
+
+### 검증 결과 (2026-05-29)
+
+```
+npx tsc --noEmit     → 출력 없음 (0 오류)
+npm run lint         → ✔ No ESLint warnings or errors
+npm run build        → 전체 라우트 컴파일 성공
 ```
 
 ---

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState, useTransition } from "react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   ArrowRight,
   BadgeCheck,
@@ -10,7 +10,6 @@ import {
   CalendarDays,
   Camera,
   Check,
-  CheckCheck,
   ClipboardList,
   Clock,
   Flower2,
@@ -38,11 +37,14 @@ import {
   createQuoteRequest as createQuoteRequestAction,
   getQuotesByPlan,
   getVendorServiceModules,
+  getStep4DashboardData,
 } from "@/app/actions/quote";
 import { ModularQuoteBuilder } from "./modular-quote-builder";
-import { QuoteComparison } from "./quote-comparison";
+import { Step4BookingDashboard } from "./step4-booking-dashboard";
+import { mapQuoteRequestsToVendorQuotes } from "./quote-comparison";
 import type { VendorServiceModuleData } from "@/types/vendor-module";
-import type { QuoteRequestWithResponses } from "@/types/quote";
+import type { QuoteRequestWithResponses, Step4CategoryStatusDTO } from "@/types/quote";
+import type { BasePackage, QuoteModule } from "@/hooks/use-quote-builder";
 import { formatCurrency, formatDate } from "@/lib/format";
 import {
   getQuoteServiceModuleLabel,
@@ -54,75 +56,74 @@ import type { PlanOption, ReservationItem, VendorOption, VendorServiceOption } f
 export type EventType = "WEDDING" | "FUNERAL";
 type StepKey = "setup" | "ai" | "vendors" | "booking";
 
-// ─── Theme ────────────────────────────────────────────────────────────────────
+// ─── Theme (Refined Luxury System) ─────────────────────────────────────────────
 
 const THEMES = {
   WEDDING: {
-    // Champagne / warm rose
-    heroBg: "from-[#fdf8f0] via-[#fdf1e6] to-[#fce3d0] border-amber-200/60",
-    heroOrb: "bg-[radial-gradient(ellipse_at_75%_10%,rgba(210,148,90,0.13),transparent_55%)]",
-    heroPattern: "radial-gradient(circle, #c47b45 1px, transparent 1px)",
-    heroPatternSize: "24px 24px",
-    heroPatternOpacity: "opacity-[0.04]",
-    badge: "bg-rose-100 text-rose-700 hover:bg-rose-100",
-    stepActive: "bg-rose-600 text-white shadow-[0_4px_14px_-2px_rgba(225,29,72,0.55)]",
-    stepDone: "bg-rose-100 text-rose-600",
-    stepIdle: "bg-muted/70 text-muted-foreground",
-    connectorDone: "bg-rose-200",
-    connectorIdle: "bg-border/30",
-    cardHighlight: "border-amber-200/60 bg-gradient-to-br from-amber-50/50 to-rose-50/20",
-    accentText: "text-rose-700",
-    accentBg: "bg-amber-50/60",
-    accentBorder: "border-amber-200/50",
-    tag: "bg-rose-100 text-rose-700",
-    vendorSelected: "border-rose-300 bg-rose-50/60 ring-1 ring-rose-200",
-    btnAccent: "bg-rose-600 hover:bg-rose-700 text-white shadow-[0_8px_24px_-8px_rgba(225,29,72,0.5)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200",
-    iconBg: "bg-rose-100 text-rose-600",
-    iconSolid: "bg-rose-600 text-white shadow-[0_4px_12px_-2px_rgba(225,29,72,0.5)]",
-    label: "결혼 준비",
+    // Warm Ivory / Soft Champagne Gold
+    heroBg: "border-[#ebdccf] bg-[#faf9f5]",
+    heroOrb: "bg-transparent",
+    heroPattern: "none",
+    heroPatternSize: "0",
+    heroPatternOpacity: "opacity-0",
+    badge: "bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/50 hover:bg-[#fcf8f2]",
+    stepActive: "bg-[#c4977a] text-white shadow-[0_4px_12px_rgba(196,151,122,0.3)]",
+    stepDone: "bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/40",
+    stepIdle: "bg-[#f7f5f0]/80 text-muted-foreground/60 border border-transparent",
+    connectorDone: "bg-[#c4977a]",
+    connectorIdle: "bg-[#e5e2da]",
+    cardHighlight: "border-[#ebdccf]/60 bg-[#fdfcf9]",
+    accentText: "text-[#c4977a]",
+    accentBg: "bg-[#faf8f4]",
+    accentBorder: "border-[#ebdccf]/40",
+    tag: "bg-[#fcf8f2] text-[#c4977a]",
+    vendorSelected: "border-[#c4977a] bg-[#faf8f4]/60 ring-1 ring-[#c4977a]/30",
+    btnAccent: "bg-[#c4977a] hover:bg-[#b08569] text-white tracking-wide transition-all duration-200 rounded-xl",
+    iconBg: "bg-[#fcf8f2] text-[#c4977a]",
+    iconSolid: "bg-[#c4977a] text-white shadow-[0_4px_10px_rgba(196,151,122,0.25)]",
+    label: "결혼 플래닝",
     Icon: Heart,
-    planTitle: (name: string) => `${name}의 결혼 준비`,
+    planTitle: (name: string) => `${name}의 결혼 플랜`,
     guestLabel: "하객",
-    servicePlaceholder: "예: 예식장 대관",
-    createTitle: "결혼 준비를 시작해 보세요",
-    createSub: "예식 정보를 입력하면 AI가 최적 컨셉과 준비 타임라인을 제안합니다.",
-    aiEmptyTitle: "AI 웨딩 컨셉 추천",
-    aiEmptySub: "행사 규모와 예산을 바탕으로 웨딩 컨셉, 서비스 구성, 준비 타임라인을 생성합니다.",
-    vendorTitle: "견적을 요청할 업체를 선택하세요",
-    progressBg: "bg-rose-500",
+    servicePlaceholder: "예식장 대관 등",
+    createTitle: "결혼 플랜 작성",
+    createSub: "기본 정보를 기입하시면 AI가 최적의 공간 컨셉과 타임라인을 구성해 드립니다.",
+    aiEmptyTitle: "AI 스페이스 컨셉 추천",
+    aiEmptySub: "하객 규모와 예산을 토대로 럭셔리 웨딩 스타일, 추천 서비스 구성 및 타임라인을 생성합니다.",
+    vendorTitle: "품격을 함께할 추천 파트너사 선택",
+    progressBg: "bg-[#c4977a]",
   },
   FUNERAL: {
-    // Deep navy / indigo
-    heroBg: "from-[#f0f4fa] via-[#e8edf8] to-[#d8e3f2] border-indigo-200/50",
-    heroOrb: "bg-[radial-gradient(ellipse_at_75%_10%,rgba(45,62,112,0.12),transparent_55%)]",
-    heroPattern: "linear-gradient(rgba(45,62,112,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(45,62,112,0.5) 1px, transparent 1px)",
-    heroPatternSize: "28px 28px",
-    heroPatternOpacity: "opacity-[0.05]",
-    badge: "bg-indigo-100 text-indigo-800 hover:bg-indigo-100",
-    stepActive: "bg-indigo-900 text-white shadow-[0_4px_14px_-2px_rgba(45,62,112,0.55)]",
-    stepDone: "bg-indigo-100 text-indigo-700",
-    stepIdle: "bg-muted/70 text-muted-foreground",
-    connectorDone: "bg-indigo-200",
-    connectorIdle: "bg-border/30",
-    cardHighlight: "border-indigo-200/60 bg-gradient-to-br from-indigo-50/50 to-slate-50/20",
-    accentText: "text-indigo-800",
-    accentBg: "bg-indigo-50/60",
-    accentBorder: "border-indigo-200/50",
-    tag: "bg-indigo-100 text-indigo-800",
-    vendorSelected: "border-indigo-300 bg-indigo-50/60 ring-1 ring-indigo-200",
-    btnAccent: "bg-indigo-900 hover:bg-indigo-950 text-white shadow-[0_8px_24px_-8px_rgba(45,62,112,0.5)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200",
-    iconBg: "bg-indigo-100 text-indigo-700",
-    iconSolid: "bg-indigo-900 text-white shadow-[0_4px_12px_-2px_rgba(45,62,112,0.5)]",
-    label: "장례 준비",
+    // Elegant Muted Slate / Warm Stone Charcoal
+    heroBg: "border-[#cbd3e0] bg-[#f4f5f8]",
+    heroOrb: "bg-transparent",
+    heroPattern: "none",
+    heroPatternSize: "0",
+    heroPatternOpacity: "opacity-0",
+    badge: "bg-[#eef2f6] text-[#475569] border border-[#cbd3e0] hover:bg-[#eef2f6]",
+    stepActive: "bg-[#2c3455] text-white shadow-[0_4px_12px_rgba(44,52,85,0.3)]",
+    stepDone: "bg-[#eef2f6] text-[#2c3455] border border-[#cbd3e0]/60",
+    stepIdle: "bg-[#eceef2] text-muted-foreground/60 border border-transparent",
+    connectorDone: "bg-[#2c3455]",
+    connectorIdle: "bg-[#d9dee6]",
+    cardHighlight: "border-[#cbd3e0]/60 bg-[#fafafc]",
+    accentText: "text-[#2c3455]",
+    accentBg: "bg-[#f7f8fa]",
+    accentBorder: "border-[#cbd3e0]/40",
+    tag: "bg-[#eef2f6] text-[#2c3455]",
+    vendorSelected: "border-[#2c3455] bg-[#f4f5f8] ring-1 ring-[#2c3455]/20",
+    btnAccent: "bg-[#2c3455] hover:bg-[#1e2645] text-white tracking-wide transition-all duration-200 rounded-xl",
+    iconBg: "bg-[#eef2f6] text-[#2c3455]",
+    iconSolid: "bg-[#2c3455] text-white shadow-[0_4px_10px_rgba(44,52,85,0.25)]",
+    label: "장례 의전 플래닝",
     Icon: Shield,
-    planTitle: (name: string) => `${name}의 장례 준비`,
+    planTitle: (name: string) => `${name}의 추모 플랜`,
     guestLabel: "조문객",
-    servicePlaceholder: "예: 장례식장 대관",
-    createTitle: "장례 준비를 시작해 보세요",
-    createSub: "장례 정보를 입력하면 단계별 준비 가이드와 업체 안내를 제공합니다.",
-    aiEmptyTitle: "장례 준비 가이드 생성",
+    createTitle: "추모 플랜 작성",
+    createSub: "기본 정보를 기입하시면 AI가 정중한 의전 양식과 가이드를 마련해 드립니다.",
+    aiEmptyTitle: "AI 추모 가이드 추천",
     aiEmptySub: "행사 규모와 일정을 바탕으로 준비 순서와 서비스 구성 가이드를 제안합니다.",
-    vendorTitle: "견적을 요청할 업체를 선택하세요",
+    vendorTitle: "기본 준비 및 상담을 요청할 파트너사를 확인해 주세요",
     progressBg: "bg-indigo-700",
   }
 } as const;
@@ -149,26 +150,52 @@ function asDateInput(v: string | null) {
   return new Date(v).toISOString().slice(0, 10);
 }
 
+type QuoteRequestStatusItem = {
+  id: string;
+  vendorName: string;
+  serviceLabel: string;
+  statusLabel: string;
+  statusTone: string;
+  helperText: string;
+  amount: number | null;
+  canReview: boolean;
+  vendorConfirmationDueAt?: string | null;
+};
+
 const moduleSelectClassName =
   "h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
 type Props = {
   eventType: EventType;
   initialPlanId?: string | null;
+  initialStep?: number | null;
   viewerName: string;
   viewerEmail: string;
   plans: PlanOption[];
   vendors: VendorOption[];
   reservations: ReservationItem[];
+  initialVendorModulesByVendorId?: Record<string, VendorServiceModuleData[]>;
+  initialQuoteRequestsByPlanId?: Record<string, QuoteRequestWithResponses[]>;
 };
+
+function stepKeyFromNumber(step: number | null | undefined): StepKey | null {
+  if (step === 1) return "setup";
+  if (step === 2) return "ai";
+  if (step === 3) return "vendors";
+  if (step === 4) return "booking";
+  return null;
+}
 
 export function EventPlanningWorkspace({
   eventType,
   initialPlanId,
+  initialStep,
   viewerName,
   plans,
   vendors,
   reservations,
+  initialVendorModulesByVendorId,
+  initialQuoteRequestsByPlanId,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -191,16 +218,26 @@ export function EventPlanningWorkspace({
     [reservations, plan]
   );
   const pendingRequests = useMemo(
-    () => planReservations.filter((r) => r.status === "PENDING" && r.confirmedAmount == null),
+    () => planReservations.filter((r) => r.status === "PENDING" && r.quoteResponseId == null),
     [planReservations]
   );
   const proposals = useMemo(
-    () => planReservations.filter((r) => r.status === "PENDING" && r.confirmedAmount != null),
+    () => planReservations.filter((r) => r.status === "PENDING" && r.quoteResponseId != null),
+    [planReservations]
+  );
+  const pendingFinalConfirmations = useMemo(
+    () =>
+      planReservations.filter(
+        (r) => r.status === "PENDING" && r.quoteRequestStatus === "ACCEPTED"
+      ),
     [planReservations]
   );
   const confirmedRes = useMemo(
     () => planReservations.filter((r) => r.status === "CONFIRMED" || r.status === "COMPLETED"),
     [planReservations]
+  );
+  const [quoteRequestsData, setQuoteRequestsData] = useState<QuoteRequestWithResponses[] | null>(
+    () => (plan?.id ? initialQuoteRequestsByPlanId?.[plan.id] ?? null : null)
   );
 
   const completedSteps = useMemo<StepKey[]>(() => {
@@ -212,21 +249,49 @@ export function EventPlanningWorkspace({
     return done;
   }, [plan, pendingRequests, proposals, confirmedRes]);
 
-  const initialStep: StepKey = useMemo(() => {
+  const planStateInitialStep: StepKey = useMemo(() => {
     if (!plan) return "setup";
-    if (!plan.aiRecommendation) return "ai";
-    if (proposals.length > 0) return "booking";
     if (pendingRequests.length > 0) return "vendors";
-    return "booking";
-  }, [plan, proposals, pendingRequests]);
+    if (proposals.length > 0 || pendingFinalConfirmations.length > 0 || confirmedRes.length > 0) {
+      return "booking";
+    }
+    if ((quoteRequestsData ?? []).some(r => r.status === "RESPONDED" || r.status === "ACCEPTED")) {
+      return "booking";
+    }
+    if (!plan.aiRecommendation) return "ai";
+    return "vendors";
+  }, [plan, pendingRequests, proposals, pendingFinalConfirmations, confirmedRes, quoteRequestsData]);
 
-  const [activeStep, setActiveStep] = useState<StepKey>(initialStep);
+  const resolvedInitialStep: StepKey = useMemo(() => {
+    const requestedStep = stepKeyFromNumber(initialStep);
+
+    if (!requestedStep) return planStateInitialStep;
+    if (!plan) return "setup";
+
+    return requestedStep;
+  }, [initialStep, plan, planStateInitialStep]);
+
+  const [activeStep, setActiveStep] = useState<StepKey>(resolvedInitialStep);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
   const [isEditingPlan, setIsEditingPlan] = useState(!Boolean(initialPlan) && plans.length === 0);
-  const [vendorModules, setVendorModules] = useState<VendorServiceModuleData[] | null>(null);
+  const [selectedVendorId, setSelectedVendorId] = useState<string>(vendors[0]?.id ?? "");
+  const selectedVendor = vendors.find((vendor) => vendor.id === selectedVendorId) ?? null;
+  const [checkedServiceIds, setCheckedServiceIds] = useState<Set<string>>(new Set());
+  const [vendorModuleCache, setVendorModuleCache] = useState<Record<string, VendorServiceModuleData[]>>(
+    () => initialVendorModulesByVendorId ?? {}
+  );
+  const [quoteRequestsCache, setQuoteRequestsCache] = useState<Record<string, QuoteRequestWithResponses[]>>(
+    () => initialQuoteRequestsByPlanId ?? {}
+  );
+  const [vendorModules, setVendorModules] = useState<VendorServiceModuleData[] | null>(
+    () => (selectedVendorId ? initialVendorModulesByVendorId?.[selectedVendorId] ?? null : null)
+  );
   const [vendorModuleError, setVendorModuleError] = useState(false);
-  const [quoteRequestsData, setQuoteRequestsData] = useState<QuoteRequestWithResponses[] | null>(null);
+  const [step4DashboardData, setStep4DashboardData] = useState<Step4CategoryStatusDTO[] | null>(null);
+  const [isQuoteActionPending, setIsQuoteActionPending] = useState(false);
+  const quoteActionLockedRef = useRef(false);
   const [confettiActive, setConfettiActive] = useState(false);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   function navigateStep(next: StepKey) {
     const currentIdx = STEPS.findIndex((s) => s.key === activeStep);
@@ -234,20 +299,24 @@ export function EventPlanningWorkspace({
     setDirection(nextIdx >= currentIdx ? 'forward' : 'back');
     setActiveStep(next);
   }
-  const [selectedVendorId, setSelectedVendorId] = useState<string>(vendors[0]?.id ?? "");
-  const selectedVendor = vendors.find((vendor) => vendor.id === selectedVendorId) ?? null;
-  const [checkedServiceIds, setCheckedServiceIds] = useState<Set<string>>(new Set());
-
   // Load real VendorServiceModule records for the selected vendor
   useEffect(() => {
     if (!selectedVendorId) { setVendorModules(null); setVendorModuleError(false); return; }
+    const cachedModules = vendorModuleCache[selectedVendorId];
+    if (cachedModules) {
+      setVendorModules(cachedModules);
+      setVendorModuleError(false);
+      return;
+    }
+
     let cancelled = false;
     setVendorModules(null);
     setVendorModuleError(false);
-    getVendorServiceModules(selectedVendorId).then((result) => {
+    getVendorServiceModules(selectedVendorId, eventType).then((result) => {
       if (cancelled) return;
       if (result.success) {
         setVendorModules(result.data);
+        setVendorModuleCache((current) => ({ ...current, [selectedVendorId]: result.data }));
         setVendorModuleError(false);
       } else {
         setVendorModules([]);
@@ -255,23 +324,169 @@ export function EventPlanningWorkspace({
       }
     });
     return () => { cancelled = true; };
-  }, [selectedVendorId]);
+  }, [selectedVendorId, eventType, vendorModuleCache]);
+
+  async function refreshQuoteRequests(planId: string) {
+    const result = await getQuotesByPlan(planId);
+    if (result.success) {
+      setQuoteRequestsData(result.data);
+      setQuoteRequestsCache((current) => ({ ...current, [planId]: result.data }));
+    }
+    const dashboardResult = await getStep4DashboardData(planId);
+    if (dashboardResult.success) {
+      setStep4DashboardData(dashboardResult.data);
+    }
+    return result;
+  }
 
   // Load quote request/response data for the current plan (used in Step 4)
   useEffect(() => {
-    if (!plan?.id) { setQuoteRequestsData(null); return; }
+    if (!plan?.id) { setQuoteRequestsData(null); setStep4DashboardData(null); return; }
+    const cachedRequests = quoteRequestsCache[plan.id];
+    if (cachedRequests) {
+      setQuoteRequestsData(cachedRequests);
+    } else {
+      getQuotesByPlan(plan.id).then((result) => {
+        if (result.success) {
+          setQuoteRequestsData(result.data);
+          setQuoteRequestsCache((current) => ({ ...current, [plan.id]: result.data }));
+        }
+      });
+    }
+
     let cancelled = false;
-    getQuotesByPlan(plan.id).then((result) => {
+    getStep4DashboardData(plan.id).then((result) => {
       if (cancelled) return;
-      if (result.success) setQuoteRequestsData(result.data);
+      if (result.success) {
+        setStep4DashboardData(result.data);
+      }
     });
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan?.id]);
 
   const requestedVendorIds = useMemo(
-    () => new Set(planReservations.map((r) => r.vendor.id)),
-    [planReservations]
+    () =>
+      new Set([
+        ...planReservations.map((r) => r.vendor.id),
+        ...(quoteRequestsData ?? [])
+          .filter((request) => request.status !== "CANCELED")
+          .map((request) => request.vendorId)
+      ]),
+    [planReservations, quoteRequestsData]
   );
+  const comparisonQuotes = useMemo(
+    () => mapQuoteRequestsToVendorQuotes(quoteRequestsData ?? []),
+    [quoteRequestsData]
+  );
+  const requestStatusItems = useMemo<QuoteRequestStatusItem[]>(() => {
+    if (quoteRequestsData !== null) {
+      return quoteRequestsData
+        .filter((request) => request.status !== "CANCELED")
+        .map((request) => {
+          const latestResponse = request.responses[0] ?? null;
+          const moduleNames = request.selectedModuleDetails?.map((module) => module.name) ?? [];
+          const serviceLabel =
+            moduleNames.length > 1
+              ? `${moduleNames[0]} 외 ${moduleNames.length - 1}개`
+              : moduleNames[0] ?? request.requirements;
+          const reservationStatus = request.reservation?.status ?? null;
+          const isConfirmed = reservationStatus === "CONFIRMED" || reservationStatus === "COMPLETED";
+
+          if (isConfirmed) {
+            return {
+              id: request.id,
+              vendorName: request.vendor?.companyName ?? "업체",
+              serviceLabel,
+              statusLabel: "예약 확정 완료",
+              statusTone: "bg-emerald-100 text-emerald-700",
+              helperText: "업체가 예약을 최종 확정했습니다.",
+              amount: request.reservation?.totalAmount ?? latestResponse?.totalPrice ?? request.budget,
+              canReview: true
+            };
+          }
+
+          if (request.status === "ACCEPTED") {
+            const dueAt = request.reservation?.vendorConfirmationDueAt ?? null;
+            return {
+              id: request.id,
+              vendorName: request.vendor?.companyName ?? "업체",
+              serviceLabel,
+              statusLabel: "업체 최종 확정 대기",
+              statusTone: "bg-violet-100 text-violet-700",
+              helperText: dueAt
+                ? `견적은 수락됐고, 업체가 ${formatDate(dueAt)}까지 예약을 확정해야 완료됩니다.`
+                : "견적은 수락됐고, 업체가 예약을 확정해야 완료됩니다.",
+              amount: latestResponse?.totalPrice ?? request.reservation?.totalAmount ?? request.budget,
+              canReview: true,
+              vendorConfirmationDueAt: dueAt
+            };
+          }
+
+          if (request.status === "RESPONDED") {
+            return {
+              id: request.id,
+              vendorName: request.vendor?.companyName ?? "업체",
+              serviceLabel,
+              statusLabel: "견적 도착",
+              statusTone: "bg-sky-100 text-sky-700",
+              helperText: "제안서 확인 화면에서 금액과 포함 항목을 확인하세요.",
+              amount: latestResponse?.totalPrice ?? request.reservation?.totalAmount ?? request.budget,
+              canReview: true
+            };
+          }
+
+          return {
+            id: request.id,
+            vendorName: request.vendor?.companyName ?? "업체",
+            serviceLabel,
+            statusLabel: "업체 응답 대기",
+            statusTone: "bg-amber-100 text-amber-700",
+            helperText: "업체가 견적을 보내면 제안서 확인 화면에서 확인할 수 있습니다.",
+            amount: request.budget ?? request.reservation?.totalAmount ?? null,
+            canReview: false
+          };
+        });
+    }
+
+    return planReservations.map((reservation) => {
+      const meta = getQuoteStatusMeta(reservation);
+      const isAccepted = reservation.quoteRequestStatus === "ACCEPTED";
+      const isConfirmed = reservation.status === "CONFIRMED" || reservation.status === "COMPLETED";
+      const dueAt = reservation.vendorConfirmationDueAt;
+      return {
+        id: reservation.id,
+        vendorName: reservation.vendor.companyName ?? reservation.vendor.name,
+        serviceLabel: getQuoteServiceModuleLabel({
+          eventType: reservation.eventPlan.type,
+          serviceCategory: reservation.serviceCategory,
+          serviceName: reservation.serviceName
+        }),
+        statusLabel: isConfirmed
+          ? "예약 확정 완료"
+          : isAccepted
+            ? "업체 최종 확정 대기"
+            : meta.label,
+        statusTone: isConfirmed
+          ? "bg-emerald-100 text-emerald-700"
+          : isAccepted
+            ? "bg-violet-100 text-violet-700"
+            : meta.tone,
+        helperText: isConfirmed
+          ? "업체가 예약을 최종 확정했습니다."
+          : isAccepted
+            ? dueAt
+              ? `견적은 수락됐고, 업체가 ${formatDate(dueAt)}까지 예약을 확정해야 완료됩니다.`
+              : "견적은 수락됐고, 업체가 예약을 확정해야 완료됩니다."
+            : reservation.quoteResponseId != null
+              ? "제안서 확인 화면에서 금액과 포함 항목을 확인하세요."
+              : "업체가 견적을 보내면 제안서 확인 화면에서 확인할 수 있습니다.",
+        amount: reservation.confirmedAmount ?? reservation.quotedAmount,
+        canReview: reservation.quoteResponseId != null || isAccepted || isConfirmed,
+        vendorConfirmationDueAt: dueAt
+      };
+    });
+  }, [planReservations, quoteRequestsData]);
 
   const vendorSvcsForForm = selectedVendor
     ? (selectedVendor.services ?? []).filter(
@@ -354,6 +569,7 @@ export function EventPlanningWorkspace({
 
   async function handleSendRequestWithChecklist(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (quoteActionLockedRef.current) return;
     if (checkedServiceIds.size === 0) {
       showNotice("error", "최소 1개 이상의 항목을 선택해 주세요.");
       return;
@@ -378,51 +594,83 @@ export function EventPlanningWorkspace({
       formData.append("selectedItemIds", id);
     }
 
-    const result = await createQuoteRequestLegacy(formData);
-    if (result?.error) { showNotice("error", result.error); return; }
-    showNotice("success", "업체에 견적 요청을 보냈습니다.");
-    setCheckedServiceIds(new Set());
-    setRequestForm((c) => ({ ...c, notes: "" }));
-    startTransition(() => router.refresh());
+    quoteActionLockedRef.current = true;
+    setIsQuoteActionPending(true);
+    try {
+      const result = await createQuoteRequestLegacy(formData);
+      if (result?.error) { showNotice("error", result.error); return; }
+      showNotice("success", "견적 요청을 보냈습니다. 업체 응답이 오면 제안서 확인 화면에서 확인할 수 있습니다.");
+      setCheckedServiceIds(new Set());
+      setRequestForm((c) => ({ ...c, notes: "" }));
+      if (plan?.id) await refreshQuoteRequests(plan.id);
+      startTransition(() => router.refresh());
+    } finally {
+      setIsQuoteActionPending(false);
+      quoteActionLockedRef.current = false;
+    }
   }
 
   // Handler for ModularQuoteBuilder's onRequestQuote callback
   async function handleModuleQuoteRequest(
-    modules: import("@/hooks/use-quote-builder").QuoteModule[]
+    modules: QuoteModule[],
+    basePackage: BasePackage | null
   ) {
     if (!plan || !selectedVendorId) return;
-    const selectedModuleIds = modules.map((m) => m.id).filter((id): id is string => Boolean(id));
+    if (quoteActionLockedRef.current) return;
+    const selectedModuleIds = Array.from(
+      new Set([
+        ...(basePackage?.includedModuleKeys ?? []),
+        ...modules.map((m) => m.id).filter((id): id is string => Boolean(id))
+      ])
+    );
     if (selectedModuleIds.length === 0) {
       showNotice("error", "최소 1개 이상의 항목을 선택해주세요.");
       return;
     }
-    const result = await createQuoteRequestAction({
-      planId: plan.id,
-      vendorId: selectedVendorId,
-      requirements: requestForm.notes.trim() || "서비스 견적 요청",
-      selectedModuleIds,
-      preferredDate: requestForm.serviceDate || undefined,
-      budget: plan.budget || undefined,
-    });
-    if (!result.success) { showNotice("error", result.error); return; }
-    showNotice("success", "업체에 견적 요청을 보냈습니다.");
-    startTransition(() => router.refresh());
+    const guestCount = Math.max(1, Number.parseInt(requestForm.guestCount, 10) || 1);
+    quoteActionLockedRef.current = true;
+    setIsQuoteActionPending(true);
+    try {
+      const result = await createQuoteRequestAction({
+        planId: plan.id,
+        vendorId: selectedVendorId,
+        requirements: requestForm.notes.trim() || "서비스 견적 요청",
+        selectedModuleIds,
+        guestCount,
+        preferredDate: requestForm.serviceDate || undefined,
+        budget: plan.budget || undefined,
+      });
+      if (!result.success) { showNotice("error", result.error); return; }
+      showNotice("success", "견적 요청을 보냈습니다. 업체 응답이 오면 제안서 확인 화면에서 확인할 수 있습니다.");
+      await refreshQuoteRequests(plan.id);
+      startTransition(() => router.refresh());
+    } finally {
+      setIsQuoteActionPending(false);
+      quoteActionLockedRef.current = false;
+    }
   }
 
   async function handleAcceptQuote(quoteResponseId: string) {
-    const result = await acceptQuoteResponse({
-      quoteResponseId,
-      reservedDate: requestForm.serviceDate || undefined,
-    });
-    if (!result.success) { showNotice("error", result.error); return; }
-    showNotice("success", "견적을 수락했습니다. 업체의 최종 확정을 기다리는 중입니다.");
-    setConfettiActive(true);
-    setTimeout(() => setConfettiActive(false), 1600);
-    // Re-fetch quote data and refresh server-side reservation data
-    if (plan?.id) {
-      getQuotesByPlan(plan.id).then((r) => { if (r.success) setQuoteRequestsData(r.data); });
+    if (quoteActionLockedRef.current) return;
+    quoteActionLockedRef.current = true;
+    setIsQuoteActionPending(true);
+    try {
+      const result = await acceptQuoteResponse({
+        quoteResponseId,
+        reservedDate: requestForm.serviceDate || undefined,
+      });
+      if (!result.success) { showNotice("error", result.error); return; }
+      showNotice("success", "견적을 수락했습니다. 업체의 최종 확정을 기다리는 중입니다.");
+      if (eventType === "WEDDING") {
+        setConfettiActive(true);
+        setTimeout(() => setConfettiActive(false), 1600);
+      }
+      if (plan?.id) await refreshQuoteRequests(plan.id);
+      startTransition(() => router.refresh());
+    } finally {
+      setIsQuoteActionPending(false);
+      quoteActionLockedRef.current = false;
     }
-    startTransition(() => router.refresh());
   }
 
   const totalCost = confirmedRes.reduce(
@@ -660,7 +908,7 @@ export function EventPlanningWorkspace({
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <FieldGroup label={eventType === "WEDDING" ? "행사 이름 💒" : "행사 이름 🌹"}>
+                    <FieldGroup label="행사 이름">
                       <Input
                         placeholder={eventType === "WEDDING" ? "예: 박민준 · 이서연 결혼식" : "예: 故 박민준 님 장례"}
                         value={planForm.title}
@@ -668,7 +916,7 @@ export function EventPlanningWorkspace({
                         required
                       />
                     </FieldGroup>
-                    <FieldGroup label="지역 📍">
+                    <FieldGroup label="지역">
                       <Input
                         placeholder="서울"
                         value={planForm.region}
@@ -678,14 +926,14 @@ export function EventPlanningWorkspace({
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <FieldGroup label={eventType === "WEDDING" ? "행사일 📅" : "행사일 🗓️"}>
+                    <FieldGroup label="행사일">
                       <Input
                         type="date"
                         value={planForm.scheduledAt}
                         onChange={(e) => setPlanForm((c) => ({ ...c, scheduledAt: e.target.value }))}
                       />
                     </FieldGroup>
-                    <FieldGroup label={`${theme.guestLabel} 수 👥`}>
+                    <FieldGroup label={`${theme.guestLabel} 수`}>
                       <Input
                         inputMode="numeric"
                         placeholder="예: 160"
@@ -695,7 +943,7 @@ export function EventPlanningWorkspace({
                     </FieldGroup>
                   </div>
 
-                  <FieldGroup label="예산 💰">
+                  <FieldGroup label="예산">
                     <Input
                       inputMode="numeric"
                       placeholder="예: 30000000"
@@ -704,7 +952,7 @@ export function EventPlanningWorkspace({
                     />
                   </FieldGroup>
 
-                  <FieldGroup label="메모 📝">
+                  <FieldGroup label="메모">
                     <Textarea
                       placeholder={eventType === "WEDDING" ? "분위기, 참고 스타일, 요청 사항" : "종교, 지역 관습, 특이 사항"}
                       value={planForm.description}
@@ -929,23 +1177,23 @@ export function EventPlanningWorkspace({
           <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
             <div className="space-y-4">
               <div>
-                <h2 className="font-[var(--font-display)] text-base font-bold text-foreground">{theme.vendorTitle}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">카드를 클릭해 선택한 후 요청 내용을 입력하세요.</p>
+                <h2 className="font-[var(--font-serif)] text-base font-bold text-[#2c3455] tracking-tight">{theme.vendorTitle}</h2>
+                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed break-keep">
+                  {eventType === "WEDDING"
+                    ? "yeON이 추천 구성을 준비했습니다. 파트너사를 선택하고 필요한 패키지를 확인해보세요."
+                    : "yeON이 기본적인 의례 절차를 정리했습니다. 배웅을 신뢰하고 맡길 파트너사를 확인해 주세요."}
+                </p>
               </div>
 
               {vendors.length > 0 ? (
-                <div className="grid gap-2.5 sm:grid-cols-2">
+                <div className="flex flex-col border border-[#ebdccf]/40 bg-white rounded-2xl p-4 divide-y divide-[#f2ece4]/40">
                   {vendors.map((vendor) => {
                     const isSelected = selectedVendorId === vendor.id;
                     const VIcon = vendorIcon(vendor.companyName, vendor.name);
                     return (
                       <button
                         key={vendor.id}
-                        className={`rounded-[1.75rem] border p-4 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                          isSelected
-                            ? theme.vendorSelected
-                            : "border-border/60 bg-white/90 hover:-translate-y-0.5 hover:border-border hover:shadow-md"
-                        }`}
+                        className="w-full text-left py-4.5 transition-all duration-150 flex items-center justify-between gap-4 px-2 hover:bg-[#faf9f5]/50 group"
                         onClick={() => {
                           setSelectedVendorId(vendor.id);
                           setCheckedServiceIds(new Set());
@@ -957,36 +1205,62 @@ export function EventPlanningWorkspace({
                         }}
                         type="button"
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-start gap-3">
-                            <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${theme.iconBg}`}>
-                              <VIcon className="h-4 w-4" />
-                            </div>
-                            <div>
-                              <p className="font-semibold text-foreground">{vendor.companyName ?? vendor.name}</p>
-                              <p className="mt-0.5 text-xs text-muted-foreground">{vendor.location ?? "위치 정보 없음"}</p>
+                        <div className="flex items-center gap-4 min-w-0 pr-2">
+                          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors ${
+                            isSelected ? theme.iconSolid : "bg-[#faf8f4] text-[#8c8275] border border-[#e5e2da]/60"
+                          }`}>
+                            <VIcon className="h-4.5 w-4.5" />
+                          </div>
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span 
+                                className="font-semibold text-xs text-[#2c3455] group-hover:text-foreground break-keep"
+                                style={{ color: isSelected ? theme.accentText : "#2c3455" }}
+                              >
+                                {vendor.companyName ?? vendor.name}
+                              </span>
                               {(() => {
-                                const vendorSvcs = (vendor.services ?? []).filter(
-                                  (s) => s.eventType === eventType && s.isActive
-                                );
-                                if (vendorSvcs.length === 0) return null;
-                                const minPrice = Math.min(...vendorSvcs.map((s) => s.basePrice));
-                                return (
-                                  <p className={`mt-1 text-xs font-semibold ${theme.accentText}`}>
-                                    {minPrice.toLocaleString()}원~
-                                  </p>
-                                );
+                                const name = (vendor.companyName ?? vendor.name).toLowerCase();
+                                if (eventType === "WEDDING") {
+                                  if (name.includes("모먼트") || name.includes("가든") || name.includes("웨딩") || name.includes("홀")) {
+                                    return <Badge className="bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/50 hover:bg-[#fcf8f2] text-[8px] px-1.5 py-0.5 rounded font-bold shrink-0 shadow-none">공간 패키지 벤더</Badge>;
+                                  }
+                                  if (name.includes("오르세") || name.includes("플로") || name.includes("꽃") || name.includes("데코")) {
+                                    return <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-50 text-[8px] px-1.5 py-0.5 rounded font-bold shrink-0 shadow-none">플라워 업그레이드</Badge>;
+                                  }
+                                } else {
+                                  if (name.includes("의전") || name.includes("한결") || name.includes("장례")) {
+                                    return <Badge className="bg-slate-100 text-[#2c3455] border border-slate-200/50 hover:bg-slate-100 text-[8px] px-1.5 py-0.5 rounded font-bold shrink-0 shadow-none">통합 의전 상담 파트너</Badge>;
+                                  }
+                                }
+                                return null;
                               })()}
                             </div>
+                            <p className="text-[10px] text-muted-foreground/60 font-normal truncate">{vendor.location ?? "위치 정보 없음"}</p>
                           </div>
+                        </div>
+
+                        <div className="flex items-center gap-3.5 shrink-0 ml-auto">
+                          {(() => {
+                            const vendorSvcs = (vendor.services ?? []).filter(
+                              (s) => s.eventType === eventType && s.isActive
+                            );
+                            if (vendorSvcs.length === 0) return null;
+                            const minPrice = Math.min(...vendorSvcs.map((s) => s.basePrice));
+                            return (
+                              <span className="text-xs font-bold font-mono tracking-tight" style={{ color: isSelected ? theme.accentText : "#8c8275" }}>
+                                {minPrice.toLocaleString()}원~
+                              </span>
+                            );
+                          })()}
                           <div className="flex shrink-0 items-center gap-1.5">
                             {requestedVendorIds.has(vendor.id) && (
-                              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                              <span className="rounded bg-amber-50 text-amber-700 px-2 py-0.5 text-[9px] font-bold border border-amber-100 whitespace-nowrap">
                                 요청됨
                               </span>
                             )}
                             {isSelected && (
-                              <div className={`rounded-full p-1.5 ${theme.tag}`}>
+                              <div className={`rounded-full p-1 ${theme.tag}`}>
                                 <Check className="h-3 w-3" />
                               </div>
                             )}
@@ -997,7 +1271,7 @@ export function EventPlanningWorkspace({
                   })}
                 </div>
               ) : (
-                <EmptyState emoji="🏢" title="등록된 업체가 없습니다." description="현재 연결 가능한 업체가 없습니다." />
+                <EmptyState icon={Building2} title="등록된 업체가 없습니다." description="현재 연결 가능한 업체가 없습니다." />
               )}
 
               {selectedVendorId && plan && (
@@ -1009,31 +1283,46 @@ export function EventPlanningWorkspace({
                     </span>
                   </p>
 
-                  {/* Date + notes always shown */}
-                  <div className="mb-4 grid gap-4 sm:grid-cols-2">
-                    <FieldGroup label="희망 날짜">
-                      <Input
-                        type="date"
-                        value={requestForm.serviceDate}
-                        onChange={(e) => setRequestForm((c) => ({ ...c, serviceDate: e.target.value }))}
-                      />
-                    </FieldGroup>
-                    <FieldGroup label={`${theme.guestLabel} 수`}>
-                      <Input
-                        inputMode="numeric"
-                        value={requestForm.guestCount}
-                        onChange={(e) => setRequestForm((c) => ({ ...c, guestCount: e.target.value }))}
-                      />
-                    </FieldGroup>
-                  </div>
-                  <div className="mb-4">
-                    <FieldGroup label="요청 메모">
-                      <Textarea
-                        placeholder="현장 분위기, 필요 조건, 상담 요청 사항"
-                        value={requestForm.notes}
-                        onChange={(e) => setRequestForm((c) => ({ ...c, notes: e.target.value }))}
-                      />
-                    </FieldGroup>
+                  {/* Progressive Disclosure Toggle */}
+                  <div className="mb-5">
+                    <button
+                      type="button"
+                      onClick={() => setIsDetailOpen(!isDetailOpen)}
+                      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-border/40 bg-white/50 hover:bg-white hover:text-foreground transition-all duration-150 ${theme.accentText}`}
+                    >
+                      <span>{isDetailOpen ? "일정 및 상세 조건 접기" : "일정 및 상세 조건 설정 (선택)"}</span>
+                      <span className="text-[9px] transition-transform duration-200">{isDetailOpen ? "▲" : "▼"}</span>
+                    </button>
+
+                    {isDetailOpen && (
+                      <div className="mt-4 space-y-4 border-t border-dashed border-border/50 pt-4 animate-fade-in">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <FieldGroup label="희망 날짜">
+                            <Input
+                              type="date"
+                              value={requestForm.serviceDate}
+                              onChange={(e) => setRequestForm((c) => ({ ...c, serviceDate: e.target.value }))}
+                            />
+                          </FieldGroup>
+                          <FieldGroup label={`${theme.guestLabel} 수`}>
+                            <Input
+                              inputMode="numeric"
+                              value={requestForm.guestCount}
+                              onChange={(e) => setRequestForm((c) => ({ ...c, guestCount: e.target.value }))}
+                            />
+                          </FieldGroup>
+                        </div>
+                        <div>
+                          <FieldGroup label="요청 메모">
+                            <Textarea
+                              placeholder="현장 분위기, 필요 조건, 상담 요청 사항"
+                              value={requestForm.notes}
+                              onChange={(e) => setRequestForm((c) => ({ ...c, notes: e.target.value }))}
+                            />
+                          </FieldGroup>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Module picker: real data → ModularQuoteBuilder, loading → skeleton, error → retry, fallback → old checklist */}
@@ -1055,9 +1344,10 @@ export function EventPlanningWorkspace({
                         onClick={() => {
                           setVendorModules(null);
                           setVendorModuleError(false);
-                          getVendorServiceModules(selectedVendorId).then((result) => {
+                          getVendorServiceModules(selectedVendorId, eventType).then((result) => {
                             if (result.success) {
                               setVendorModules(result.data);
+                              setVendorModuleCache((current) => ({ ...current, [selectedVendorId]: result.data }));
                             } else {
                               setVendorModules([]);
                               setVendorModuleError(true);
@@ -1074,6 +1364,7 @@ export function EventPlanningWorkspace({
                       theme={eventType === "WEDDING" ? "wedding" : "funeral"}
                       guestCount={Math.max(1, Number.parseInt(requestForm.guestCount, 10) || 1)}
                       vendorModules={vendorModules}
+                      isSubmitting={isQuoteActionPending}
                       onRequestQuote={handleModuleQuoteRequest}
                     />
                   ) : (
@@ -1189,11 +1480,11 @@ export function EventPlanningWorkspace({
 
                         <button
                           className={`flex items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-semibold ${theme.btnAccent}`}
-                          disabled={isPending || (vendorSvcsForForm.length > 0 && checkedServiceIds.size === 0)}
+                          disabled={isQuoteActionPending || isPending || (vendorSvcsForForm.length > 0 && checkedServiceIds.size === 0)}
                           type="submit"
                         >
                           <HeartHandshake className="h-4 w-4" />
-                          견적 요청 보내기
+                          {isQuoteActionPending ? "요청 보내는 중..." : "견적 요청 보내기"}
                         </button>
                       </div>
                     </form>
@@ -1205,52 +1496,47 @@ export function EventPlanningWorkspace({
             {/* Sent requests sidebar */}
             <div className="space-y-3">
               <h3 className="font-[var(--font-display)] text-sm font-bold text-foreground">보낸 요청 현황</h3>
-              {planReservations.length > 0 ? (
-                planReservations.map((r) => (
+              {requestStatusItems.length > 0 ? (
+                requestStatusItems.map((item) => (
                   <div
-                    key={r.id}
+                    key={item.id}
                     className="rounded-[1.75rem] border border-border/60 bg-white/90 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="text-sm font-semibold text-foreground">
-                          {getQuoteServiceModuleLabel({
-                            eventType: r.eventPlan.type,
-                            serviceCategory: r.serviceCategory,
-                            serviceName: r.serviceName
-                          })}
-                        </p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">{r.vendor.companyName ?? r.vendor.name}</p>
+                        <p className="text-sm font-semibold text-foreground">{item.serviceLabel}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{item.vendorName}</p>
                       </div>
-                      <Badge className={getQuoteStatusMeta(r).tone}>
-                        {getQuoteStatusMeta(r).label}
-                      </Badge>
+                      <Badge className={item.statusTone}>{item.statusLabel}</Badge>
                     </div>
-                    {r.confirmedAmount != null && r.status === "PENDING" && (
-                      <div className="mt-3 flex items-center justify-between">
-                        <span className={`text-sm font-bold ${theme.accentText}`}>{formatCurrency(r.confirmedAmount)}</span>
+                    <p className="mt-2 text-xs leading-5 text-muted-foreground">{item.helperText}</p>
+                    {(item.amount != null || item.canReview) && (
+                      <div className="mt-3 flex items-center justify-between gap-3">
+                        <span className={`text-sm font-bold ${theme.accentText}`}>
+                          {item.amount != null ? formatCurrency(item.amount) : "상세 확인"}
+                        </span>
                         <button
                           className={`text-xs font-semibold underline-offset-2 hover:underline ${theme.accentText}`}
                           onClick={() => navigateStep("booking")}
                           type="button"
                         >
-                          제안 확인 →
+                          {item.canReview ? "진행 상태 확인 →" : "제안서 확인 →"}
                         </button>
                       </div>
                     )}
                   </div>
                 ))
               ) : (
-                <EmptyState emoji="📬" title="아직 요청이 없습니다." description="업체를 선택해 견적 요청을 보내세요." />
+                <EmptyState icon={ClipboardList} title="아직 요청이 없습니다." description="업체를 선택해 견적 요청을 보내세요." />
               )}
 
-              {proposals.length > 0 && (
+              {comparisonQuotes.length > 0 && (
                 <button
                   className={`flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-semibold ${theme.btnAccent}`}
                   onClick={() => navigateStep("booking")}
                   type="button"
                 >
-                  받은 제안 확인 ({proposals.length}건)
+                  제안서 확인 및 상태 확인 ({comparisonQuotes.length}건)
                   <ArrowRight className="h-4 w-4" />
                 </button>
               )}
@@ -1258,170 +1544,21 @@ export function EventPlanningWorkspace({
           </div>
         )}
 
-        {/* ══ STEP 4: 견적 비교 및 수락 ══════════════════════════════════ */}
-        {activeStep === "booking" && (() => {
-          const respondedRequests = (quoteRequestsData ?? []).filter((r) => r.status === "RESPONDED");
-          const acceptedRequests = (quoteRequestsData ?? []).filter((r) => r.status === "ACCEPTED");
-
-          return (
-            <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-              {/* Left column: comparison + acceptance */}
-              <div className="space-y-4">
-                <h2 className="font-[var(--font-display)] text-base font-bold text-foreground">견적 비교 및 수락</h2>
-
-                {/* Comparison table — auto-fetches when planId is available */}
-                {plan && (
-                  <QuoteComparison
-                    planId={plan.id}
-                    theme={eventType === "WEDDING" ? "wedding" : "funeral"}
-                    guestCount={Math.max(1, Number.parseInt(requestForm.guestCount, 10) || 100)}
-                  />
-                )}
-
-                {/* Acceptance cards for RESPONDED quotes */}
-                {respondedRequests.length > 0 ? (
-                  <div className="space-y-3">
-                    <p className="text-xs font-semibold text-muted-foreground">수락 가능한 견적</p>
-                    {respondedRequests.map((req) => {
-                      const resp = req.responses[0];
-                      if (!resp) return null;
-                      const vendorName = resp.vendor?.companyName ?? "업체";
-                      return (
-                        <div
-                          key={req.id}
-                          className={`rounded-[2rem] border p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${theme.cardHighlight}`}
-                        >
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="space-y-1">
-                              <Badge className={theme.badge}>견적 도착</Badge>
-                              <p className="text-lg font-bold text-foreground">{vendorName}</p>
-                              {req.requirements && (
-                                <p className="text-xs text-muted-foreground line-clamp-1">{req.requirements}</p>
-                              )}
-                            </div>
-                            <div className="rounded-2xl bg-white/90 px-4 py-3 text-right shadow-sm ring-1 ring-border/30">
-                              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/55">견적 금액</p>
-                              <p className="mt-1 font-[var(--font-display)] text-2xl font-bold text-foreground">
-                                {formatCurrency(resp.totalPrice)}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Module summary */}
-                          {resp.modules?.includedModules && resp.modules.includedModules.length > 0 && (
-                            <div className="mt-4 flex flex-wrap gap-1.5">
-                              {resp.modules.includedModules.slice(0, 4).map((m) => (
-                                <span key={m.id} className="rounded-full border border-border/40 bg-white/80 px-2.5 py-0.5 text-xs text-muted-foreground">
-                                  {m.name}
-                                </span>
-                              ))}
-                              {resp.modules.includedModules.length > 4 && (
-                                <span className="rounded-full border border-border/40 bg-white/80 px-2.5 py-0.5 text-xs text-muted-foreground">
-                                  +{resp.modules.includedModules.length - 4}
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          {resp.note && (
-                            <p className="mt-3 rounded-xl border border-border/40 bg-white/80 px-3.5 py-2.5 text-sm leading-6 text-muted-foreground">
-                              {resp.note}
-                            </p>
-                          )}
-
-                          <div className="mt-5">
-                            <button
-                              className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold ${theme.btnAccent}`}
-                              disabled={isPending}
-                              onClick={() => handleAcceptQuote(resp.id)}
-                              type="button"
-                            >
-                              <CheckCheck className="h-4 w-4" />
-                              이 견적 수락하기
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : acceptedRequests.length === 0 && quoteRequestsData !== null ? (
-                  <EmptyState
-                    emoji="📩"
-                    title="아직 받은 견적이 없습니다."
-                    description="업체가 견적을 보내면 이곳에서 비교하고 수락할 수 있습니다."
-                  />
-                ) : null}
-
-                {/* ACCEPTED requests → waiting for vendor confirmation */}
-                {acceptedRequests.length > 0 && (
-                  <div className="space-y-3">
-                    <p className="text-xs font-semibold text-muted-foreground">업체 최종 확정 대기 중</p>
-                    {acceptedRequests.map((req) => {
-                      const resp = req.responses[0];
-                      const vendorName = resp?.vendor?.companyName ?? "업체";
-                      return (
-                        <div key={req.id} className="rounded-[1.75rem] border border-violet-200/60 bg-violet-50/30 p-4 shadow-sm">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <Badge className="bg-violet-100 text-violet-700">확정 대기</Badge>
-                              <p className="mt-1.5 text-sm font-semibold text-foreground">{vendorName}</p>
-                              <p className="mt-0.5 text-xs text-muted-foreground">
-                                업체가 예약을 최종 확정하면 완료됩니다
-                              </p>
-                            </div>
-                            {resp && (
-                              <p className="text-sm font-bold text-violet-700">{formatCurrency(resp.totalPrice)}</p>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {pendingRequests.length > 0 && (
-                  <div className="flex items-center gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3.5 text-sm text-amber-700">
-                    <Clock className="h-4 w-4 shrink-0" />
-                    <span>{pendingRequests.length}건의 요청이 업체 응답을 기다리고 있습니다.</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Confirmed + cost sidebar */}
-              <div className="space-y-3">
-                <h3 className="font-[var(--font-display)] text-sm font-bold text-foreground">확정된 예약</h3>
-                {confirmedRes.length > 0 ? (
-                  <>
-                    {confirmedRes.map((r) => (
-                      <div key={r.id} className="rounded-[1.75rem] border border-emerald-200/70 bg-white/90 p-4 shadow-sm ring-1 ring-emerald-100/60 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <Badge className="bg-emerald-100 text-emerald-700">예약 확정</Badge>
-                              <Check className="h-3.5 w-3.5 text-emerald-500" />
-                            </div>
-                            <p className="mt-2 text-sm font-semibold text-foreground">
-                              {r.vendor.companyName ?? r.vendor.name}
-                            </p>
-                            <p className="text-xs text-muted-foreground">{formatDate(r.serviceDate)}</p>
-                          </div>
-                          <p className="text-sm font-bold text-emerald-700">{formatCurrency(r.confirmedAmount ?? r.quotedAmount)}</p>
-                        </div>
-                      </div>
-                    ))}
-                    <div className={`rounded-[1.75rem] border p-5 ${theme.cardHighlight}`}>
-                      <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">총 확정 비용</p>
-                      <p className="font-[var(--font-display)] text-3xl font-bold text-foreground">{formatCurrency(totalCost)}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">{confirmedRes.length}건 합계</p>
-                    </div>
-                  </>
-                ) : (
-                  <EmptyState emoji="✨" title="확정된 예약이 없습니다." description="견적을 수락하면 업체가 최종 확정 후 이곳에 나타납니다." />
-                )}
-              </div>
-            </div>
-          );
-        })()}
+        {/* ══ STEP 4: 제안서 확인 및 수락 ══════════════════════════════════ */}
+        {activeStep === "booking" && (
+          <Step4BookingDashboard
+            eventType={eventType}
+            quoteRequestsData={quoteRequestsData}
+            planReservations={planReservations}
+            confirmedRes={confirmedRes}
+            totalCost={totalCost}
+            isQuoteActionPending={isQuoteActionPending}
+            handleAcceptQuote={handleAcceptQuote}
+            requestForm={requestForm}
+            theme={theme}
+            step4DashboardData={step4DashboardData}
+          />
+        )}
       </SwipeTransition>
     </div>
   );
@@ -1436,12 +1573,18 @@ function FieldGroup({ label, children }: { label: string; children: ReactNode })
   );
 }
 
-function EmptyState({ title, description, emoji }: { title: string; description: string; emoji?: string }) {
+function EmptyState({ title, description, icon: Icon }: { title: string; description: string; icon?: React.ComponentType<{ className?: string }> }) {
   return (
-    <div className="rounded-[1.75rem] border border-dashed border-border/40 bg-white/50 p-8 text-center">
-      {emoji && <p className="mb-3 text-3xl">{emoji}</p>}
+    <div className="rounded-[1.75rem] border border-dashed border-border/40 bg-white/50 p-8 text-center flex flex-col items-center justify-center">
+      {Icon && (
+        <div className="mb-3 rounded-xl bg-muted/40 p-2.5 text-muted-foreground/60">
+          <Icon className="h-5 w-5" />
+        </div>
+      )}
       <p className="text-sm font-semibold text-foreground">{title}</p>
-      <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{description}</p>
+      <p className="mt-1.5 text-xs leading-5 text-muted-foreground max-w-xs">{description}</p>
     </div>
   );
 }
+
+

@@ -11,7 +11,7 @@ export type Step3EventType =
 export type Step3ReservationStatus =
   | "PENDING"
   | "CONFIRMED"
-  | "CANCELLED"
+  | "CANCELED"
   | "COMPLETED";
 
 export type MvpQuoteEventType = "WEDDING" | "FUNERAL";
@@ -161,8 +161,9 @@ export type QuoteWorkflowStatus =
   | "PLANNING"
   | "REQUESTED"
   | "PROPOSED"
+  | "ACCEPTED"
   | "CONFIRMED"
-  | "CANCELLED"
+  | "CANCELED"
   | "COMPLETED";
 
 export const eventTypeOptions: Array<{ value: Step3EventType; label: string }> = [
@@ -192,7 +193,7 @@ export const reservationStatusMeta: Record<
     label: "확정",
     tone: "bg-primary/10 text-primary"
   },
-  CANCELLED: {
+  CANCELED: {
     label: "취소",
     tone: "bg-rose-100 text-rose-700"
   },
@@ -218,11 +219,15 @@ export const quoteWorkflowStatusMeta: Record<
     label: "제안 도착",
     tone: "bg-primary/10 text-primary"
   },
+  ACCEPTED: {
+    label: "확정 대기",
+    tone: "bg-violet-100 text-violet-700"
+  },
   CONFIRMED: {
     label: "확정됨",
     tone: "bg-emerald-100 text-emerald-700"
   },
-  CANCELLED: {
+  CANCELED: {
     label: "취소/거절",
     tone: "bg-rose-100 text-rose-700"
   },
@@ -238,6 +243,43 @@ export function getQuoteServiceModules(type: string | null | undefined) {
   }
 
   return [];
+}
+
+const weddingVendorServiceModuleCategories = new Set([
+  "VENUE",
+  "PHOTO",
+  "DRESS",
+  "MAKEUP",
+  "DECORATION",
+  "CATERING",
+  "INVITATION",
+  "CEREMONY"
+]);
+
+const funeralVendorServiceModuleCategories = new Set([
+  "FUNERAL_HALL",
+  "WREATH",
+  "TRANSPORT",
+  "CEREMONY",
+  "MEAL",
+  "OBITUARY"
+]);
+
+export function vendorServiceModuleCategoryMatchesEventType(
+  eventType: string | null | undefined,
+  category: string | null | undefined
+) {
+  if (!eventType || !category) return false;
+
+  if (eventType === "WEDDING") {
+    return weddingVendorServiceModuleCategories.has(category);
+  }
+
+  if (eventType === "FUNERAL") {
+    return funeralVendorServiceModuleCategories.has(category);
+  }
+
+  return false;
 }
 
 export function parseMvpQuoteEventType(value: string | null | undefined) {
@@ -353,11 +395,52 @@ export function getQuoteServiceModule(
   return getQuoteServiceModules(type).find((module) => module.value === value?.toLowerCase()) ?? null;
 }
 
+const CATEGORY_LABEL_MAP: Record<string, string> = {
+  // DB UPPERCASE values
+  VENUE: "예식장·식대",
+  CATERING: "식음료",
+  DECORATION: "꽃장식",
+  INVITATION: "초대장",
+  PHOTO: "스튜디오",
+  DRESS: "드레스",
+  MAKEUP: "메이크업",
+  CEREMONY: "기타",
+  FUNERAL_HALL: "장례식장·빈소",
+  MEAL: "문상객 식사",
+  OBITUARY: "부고 안내",
+  TRANSPORT: "운구",
+  WREATH: "제단꽃",
+
+  // Step3 lowercase values
+  venue: "예식장·식대",
+  catering: "식음료",
+  floral: "꽃장식",
+  invitation: "초대장",
+  studio: "스튜디오",
+  dress: "드레스",
+  makeup: "메이크업",
+  honeymoon: "신혼여행",
+  weddingOther: "기타",
+  funeralHall: "장례식장·빈소",
+  altarFloral: "제단꽃",
+  hearse: "운구",
+  cremation: "화장",
+  ossuary: "납골당",
+  shroud: "수의",
+  funeralOther: "기타",
+};
+
 export function getQuoteServiceModuleLabel(params: {
   eventType?: string | null;
   serviceCategory?: string | null;
   serviceName?: string | null;
 }) {
+  const cat = params.serviceCategory;
+  if (cat) {
+    const upperCat = cat.toUpperCase();
+    if (CATEGORY_LABEL_MAP[upperCat]) return CATEGORY_LABEL_MAP[upperCat];
+    if (CATEGORY_LABEL_MAP[cat]) return CATEGORY_LABEL_MAP[cat];
+  }
   return (
     getQuoteServiceModule(params.eventType, params.serviceCategory)?.label ??
     params.serviceName ??
@@ -369,12 +452,18 @@ export function getQuoteServiceModuleLabel(params: {
 export function getQuoteStatusMeta(reservation: {
   status: string;
   confirmedAmount?: number | null;
+  quoteResponseId?: string | null;
+  quoteRequestStatus?: string | null;
   notes?: string | null;
 }) {
   if (reservation.status === "PENDING") {
-    return reservation.confirmedAmount == null
-      ? quoteWorkflowStatusMeta.REQUESTED
-      : quoteWorkflowStatusMeta.PROPOSED;
+    if (reservation.quoteRequestStatus === "ACCEPTED") {
+      return quoteWorkflowStatusMeta.ACCEPTED;
+    }
+
+    return reservation.quoteResponseId || reservation.confirmedAmount != null
+      ? quoteWorkflowStatusMeta.PROPOSED
+      : quoteWorkflowStatusMeta.REQUESTED;
   }
 
   if (reservation.status === "CONFIRMED") {
@@ -385,15 +474,15 @@ export function getQuoteStatusMeta(reservation: {
     return quoteWorkflowStatusMeta.COMPLETED;
   }
 
-  if (reservation.status === "CANCELLED") {
+  if (reservation.status === "CANCELED") {
     const isVendorRejection =
       reservation.notes?.includes("업체") ||
       reservation.notes?.includes("불가") ||
       reservation.notes?.includes("거절");
 
     return {
-      ...quoteWorkflowStatusMeta.CANCELLED,
-      label: isVendorRejection ? "업체 거절" : quoteWorkflowStatusMeta.CANCELLED.label
+      ...quoteWorkflowStatusMeta.CANCELED,
+      label: isVendorRejection ? "업체 거절" : quoteWorkflowStatusMeta.CANCELED.label
     };
   }
 
@@ -404,6 +493,8 @@ export function getPlanQuoteSummaryMeta(
   reservations: Array<{
     status: string;
     confirmedAmount?: number | null;
+    quoteResponseId?: string | null;
+    quoteRequestStatus?: string | null;
     notes?: string | null;
   }>
 ) {
@@ -422,14 +513,28 @@ export function getPlanQuoteSummaryMeta(
   if (
     reservations.some(
       (reservation) =>
-        reservation.status === "PENDING" && reservation.confirmedAmount != null
+        reservation.status === "PENDING" && reservation.quoteRequestStatus === "ACCEPTED"
+    )
+  ) {
+    return quoteWorkflowStatusMeta.ACCEPTED;
+  }
+
+  if (
+    reservations.some(
+      (reservation) =>
+        reservation.status === "PENDING" &&
+        (reservation.quoteResponseId || reservation.confirmedAmount != null)
     )
   ) {
     return quoteWorkflowStatusMeta.PROPOSED;
   }
 
-  if (reservations.every((reservation) => reservation.status === "CANCELLED")) {
-    return quoteWorkflowStatusMeta.CANCELLED;
+  if (
+    reservations.every(
+      (reservation) => reservation.status === "CANCELED"
+    )
+  ) {
+    return quoteWorkflowStatusMeta.CANCELED;
   }
 
   if (reservations.some((reservation) => reservation.status === "PENDING")) {

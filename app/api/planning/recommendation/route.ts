@@ -21,69 +21,97 @@ function revalidatePlanViews(planId: string) {
 }
 
 export async function POST(request: Request) {
-  const session = await getServerAuthSession();
+  try {
+    const session = await getServerAuthSession();
 
-  if (!session?.user?.id) {
-    return Response.json({ error: "로그인이 필요합니다." }, { status: 401 });
-  }
-
-  if (session.user.role !== UserRole.GENERAL) {
-    return Response.json(
-      { error: "일반 사용자만 행사 준비 화면을 생성할 수 있습니다." },
-      { status: 403 }
-    );
-  }
-
-  const body = (await request.json()) as Record<string, unknown>;
-  const title = typeof body.title === "string" ? body.title.trim() : "";
-  const type = parseMvpEventType(body.type);
-  const region = typeof body.region === "string" ? body.region.trim() : "";
-  const scheduledAt =
-    typeof body.scheduledAt === "string" && body.scheduledAt
-      ? parseDateOnlyToKst(body.scheduledAt)
-      : null;
-  const guestTarget = normalizePositiveInt(body.guestTarget);
-  const budget = normalizePositiveInt(body.budget);
-  const description =
-    typeof body.description === "string" ? body.description.trim() : "";
-  const planId = typeof body.planId === "string" ? body.planId : "";
-
-  if (!title || !type || !region) {
-    return Response.json(
-      { error: "행사명, wedding/funeral 유형, 지역은 필수입니다." },
-      { status: 400 }
-    );
-  }
-
-  const recommendation = generateStep3MockAIRecommendation({
-    budget,
-    guestCount: guestTarget,
-    region,
-    eventType: type,
-    description
-  });
-
-  if (planId) {
-    const ownedPlan = await prisma.eventPlan.findFirst({
-      where: {
-        id: planId,
-        ownerId: session.user.id
-      },
-      select: {
-        id: true
-      }
-    });
-
-    if (!ownedPlan) {
-      return Response.json({ error: "수정할 행사 계획을 찾을 수 없습니다." }, { status: 404 });
+    if (!session?.user?.id) {
+      return Response.json({ error: "로그인이 필요합니다." }, { status: 401 });
     }
 
-    const updatedPlan = await prisma.eventPlan.update({
-      where: {
-        id: ownedPlan.id
-      },
+    if (session.user.role !== UserRole.GENERAL) {
+      return Response.json(
+        { error: "일반 사용자만 행사 준비 화면을 생성할 수 있습니다." },
+        { status: 403 }
+      );
+    }
+
+    const body = (await request.json()) as Record<string, unknown>;
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    const type = parseMvpEventType(body.type);
+    const region = typeof body.region === "string" ? body.region.trim() : "";
+    const scheduledAt =
+      typeof body.scheduledAt === "string" && body.scheduledAt
+        ? parseDateOnlyToKst(body.scheduledAt)
+        : null;
+    const guestTarget = normalizePositiveInt(body.guestTarget);
+    const budget = normalizePositiveInt(body.budget);
+    const description =
+      typeof body.description === "string" ? body.description.trim() : "";
+    const planId = typeof body.planId === "string" ? body.planId : "";
+
+    if (!title || !type || !region) {
+      return Response.json(
+        { error: "행사명, wedding/funeral 유형, 지역은 필수입니다." },
+        { status: 400 }
+      );
+    }
+
+    const recommendation = generateStep3MockAIRecommendation({
+      budget,
+      guestCount: guestTarget,
+      region,
+      eventType: type,
+      description
+    });
+
+    if (planId) {
+      const ownedPlan = await prisma.eventPlan.findFirst({
+        where: {
+          id: planId,
+          ownerId: session.user.id
+        },
+        select: {
+          id: true
+        }
+      });
+
+      if (!ownedPlan) {
+        return Response.json({ error: "수정할 행사 계획을 찾을 수 없습니다." }, { status: 404 });
+      }
+
+      const updatedPlan = await prisma.eventPlan.update({
+        where: {
+          id: ownedPlan.id
+        },
+        data: {
+          title,
+          type,
+          region,
+          scheduledAt,
+          guestTarget,
+          budget,
+          description: description || null,
+          status: "PLANNING",
+          aiRecommendation: recommendation
+        },
+        select: {
+          id: true
+        }
+      });
+
+      revalidatePlanViews(updatedPlan.id);
+
+      return Response.json({
+        planId: updatedPlan.id,
+        recommendation
+      });
+    }
+
+    const createdPlan = await prisma.eventPlan.create({
       data: {
+        ownerId: session.user.id,
         title,
+        slug: buildEventPlanSlug(title),
         type,
         region,
         scheduledAt,
@@ -98,37 +126,14 @@ export async function POST(request: Request) {
       }
     });
 
-    revalidatePlanViews(updatedPlan.id);
+    revalidatePlanViews(createdPlan.id);
 
     return Response.json({
-      planId: updatedPlan.id,
+      planId: createdPlan.id,
       recommendation
     });
+  } catch (error) {
+    console.error("[recommendation] unhandled error:", error);
+    return Response.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
   }
-
-  const createdPlan = await prisma.eventPlan.create({
-    data: {
-      ownerId: session.user.id,
-      title,
-      slug: buildEventPlanSlug(title),
-      type,
-      region,
-      scheduledAt,
-      guestTarget,
-      budget,
-      description: description || null,
-      status: "PLANNING",
-      aiRecommendation: recommendation
-    },
-    select: {
-      id: true
-    }
-  });
-
-  revalidatePlanViews(createdPlan.id);
-
-  return Response.json({
-    planId: createdPlan.id,
-    recommendation
-  });
 }
