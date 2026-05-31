@@ -36,6 +36,7 @@ import {
 } from "@/lib/step3.shared";
 import { ServiceManager } from "@/app/vendor/dashboard/service-manager";
 import type { QuoteRequestForVendorDTO } from "@/types/quote";
+import type { VendorServiceModuleData } from "@/types/vendor-module";
 
 import { asDateInput, getWorkspaceTheme, type ReservationItem } from "./workspace-types";
 
@@ -103,11 +104,89 @@ function getQuoteRequestServiceLabel(qr: QuoteRequestForVendorDTO) {
   return modules.length === 1 ? modules[0].name : `${modules[0].name} 외 ${modules.length - 1}개`;
 }
 
-function getQuoteRequestModuleCategoryLabel(qr: QuoteRequestForVendorDTO, category: string) {
-  return getQuoteServiceModuleLabel({
-    eventType: qr.plan?.eventType,
-    serviceCategory: category
-  });
+function getModulePricingTypeLabel(pricingType: VendorServiceModuleData["pricingType"]) {
+  return pricingType === "PER_GUEST" ? "인원 기준" : "고정가";
+}
+
+function formatModuleBasePrice(module: VendorServiceModuleData) {
+  return module.pricingType === "PER_GUEST"
+    ? `${formatCurrency(module.price)} / 1인`
+    : formatCurrency(module.price);
+}
+
+function formatModuleEstimatedTotal(module: VendorServiceModuleData, guestCount: number | null | undefined) {
+  if (module.pricingType !== "PER_GUEST" || !guestCount) return null;
+  return formatCurrency(module.price * guestCount);
+}
+
+function ModuleRequestScope({
+  modules,
+  eventType,
+  guestCount,
+  heading,
+  summaryTone = "accent"
+}: {
+  modules: VendorServiceModuleData[];
+  eventType?: string | null;
+  guestCount?: number | null;
+  heading: string;
+  summaryTone?: "accent" | "muted";
+}) {
+  if (modules.length === 0) return null;
+
+  const toneClass =
+    summaryTone === "accent"
+      ? "border-[#ebdccf]/40 bg-white"
+      : "border-[#e5e2da]/50 bg-[#fcfaf7]";
+
+  return (
+    <div className={`rounded-xl border p-4 text-xs text-[#2c3455] ${toneClass}`}>
+      <p className="mb-3 text-[9px] font-bold uppercase tracking-wider text-[#c4977a]">{heading}</p>
+      <div className="space-y-2.5">
+        {modules.map((module) => {
+          const estimatedTotal = formatModuleEstimatedTotal(module, guestCount);
+          return (
+            <div
+              key={module.id}
+              className="rounded-xl border border-[#f2ece4] bg-[#faf9f5]/55 px-3.5 py-3"
+            >
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-semibold text-[#2c3455]">{module.name}</span>
+                    <span className="rounded-full border border-[#ebdccf]/70 bg-white px-2 py-0.5 text-[10px] font-semibold text-[#8c8275]">
+                      {eventType
+                        ? getQuoteServiceModuleLabel({ eventType, serviceCategory: module.category })
+                        : module.category}
+                    </span>
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                      {module.isBaseIncluded ? "기본 포함" : "추가 선택"}
+                    </span>
+                  </div>
+                  {module.description && (
+                    <p className="text-[11px] leading-5 text-muted-foreground">{module.description}</p>
+                  )}
+                </div>
+                <div className="space-y-1 text-left sm:text-right">
+                  <p className="text-[10px] font-semibold text-[#8c8275]">
+                    기준가 {formatModuleBasePrice(module)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    가격 방식 {getModulePricingTypeLabel(module.pricingType)}
+                  </p>
+                  {estimatedTotal && (
+                    <p className="text-[10px] font-semibold text-[#2c3455]">
+                      요청 기준 예상 {estimatedTotal}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export function VendorWorkspace({
@@ -298,7 +377,7 @@ export function VendorWorkspace({
         return;
       }
       if (!proposalForm.serviceDate || !proposalForm.proposalAmount) {
-        setError("견적 금액과 가능 일정을 모두 입력해 주세요.");
+        setError("행사 예정일 확인과 최종 제안 총액을 모두 입력해 주세요.");
         return;
       }
       if (busyReservationId === activeQuoteRequestId) return;
@@ -359,7 +438,7 @@ export function VendorWorkspace({
       return;
     }
     if (action === "quote" && (!proposalForm.serviceDate || !proposalForm.proposalAmount)) {
-      setError("견적 금액과 가능 일정을 모두 입력해 주세요.");
+      setError("행사 예정일 확인과 최종 제안 총액을 모두 입력해 주세요.");
       return;
     }
     setBusyReservationId(activeReservationId);
@@ -884,19 +963,13 @@ export function VendorWorkspace({
                   )}
                   <DetailRow label="사용자 요청사항" value={selectedQuoteRequest.requirements} />
                   {selectedQuoteRequest.selectedModuleDetails && selectedQuoteRequest.selectedModuleDetails.length > 0 && (
-                    <div className="rounded-xl border border-[#ebdccf]/50 bg-white p-4">
-                      <p className="mb-3 text-[9px] font-bold uppercase tracking-wider text-[#8c8275]">사용자가 선택한 모듈</p>
-                      <div className="space-y-2">
-                        {selectedQuoteRequest.selectedModuleDetails.map((module) => (
-                          <div key={module.id} className="flex items-center justify-between gap-3 border-b border-[#f2ece4]/40 pb-2 text-xs last:border-0 last:pb-0">
-                            <span className="min-w-0 font-medium text-[#2c3455]">{module.name}</span>
-                            <span className="shrink-0 text-[10px] font-semibold text-[#8c8275]">
-                              {getQuoteRequestModuleCategoryLabel(selectedQuoteRequest, module.category)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                    <ModuleRequestScope
+                      modules={selectedQuoteRequest.selectedModuleDetails}
+                      eventType={selectedQuoteRequest.plan?.eventType}
+                      guestCount={selectedQuoteRequest.plan?.guestCount}
+                      heading="사용자가 선택한 모듈"
+                      summaryTone="muted"
+                    />
                   )}
                 </>
               ) : selectedReservation ? (
@@ -1028,24 +1101,30 @@ export function VendorWorkspace({
                 </div>
               )}
 
-              {selectedQuoteRequest?.selectedModuleDetails && selectedQuoteRequest.selectedModuleDetails.length > 0 && (
-                <div className="rounded-xl border border-[#ebdccf]/40 bg-white p-4 text-xs text-[#2c3455]">
-                  <p className="mb-3 text-[9px] font-bold uppercase tracking-wider text-[#c4977a]">요청된 모듈</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {selectedQuoteRequest.selectedModuleDetails.map((module) => (
-                      <span key={module.id} className="rounded-full border border-[#ebdccf]/60 bg-[#faf9f5] px-2.5 py-1 text-[10px] font-semibold text-[#2c3455]">
-                        {module.name}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="mt-2 text-[10px] leading-relaxed text-[#8c8275]">
-                    위 항목은 사용자가 Step 3에서 선택한 요청 범위입니다. 금액은 총 제안가로 입력하고, 개별 항목에 임의 가격을 배분하지 않습니다.
-                  </p>
+              {selectedQuoteRequest && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <DetailRow label="행사 예정일" value={formatDate(selectedQuoteRequest.preferredDate ?? selectedQuoteRequest.plan?.eventDate)} />
+                  <DetailRow label="행사 지역" value={selectedQuoteRequest.plan?.location ?? "미정"} />
+                  <DetailRow label="예상 인원" value={selectedQuoteRequest.plan?.guestCount != null ? `${selectedQuoteRequest.plan.guestCount}명` : "미정"} />
+                  <DetailRow label="희망 예산" value={selectedQuoteRequest.budget != null ? formatCurrency(selectedQuoteRequest.budget) : "미정"} />
                 </div>
               )}
 
+              {selectedQuoteRequest?.selectedModuleDetails && selectedQuoteRequest.selectedModuleDetails.length > 0 && (
+                <ModuleRequestScope
+                  modules={selectedQuoteRequest.selectedModuleDetails}
+                  eventType={selectedQuoteRequest.plan?.eventType}
+                  guestCount={selectedQuoteRequest.plan?.guestCount}
+                  heading="이번 제안의 요청 범위"
+                />
+              )}
+
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="제공 가능 일정" name="serviceDate">
+                <Field
+                  label="행사 예정일 확인"
+                  name="serviceDate"
+                  hint="플래너가 선택한 날짜가 기본값입니다. 가능하면 그대로 두시고, 불가할 때만 대체 가능한 날짜를 제안해 주세요."
+                >
                   <Input
                     id="serviceDate"
                     type="date"
@@ -1055,7 +1134,11 @@ export function VendorWorkspace({
                     className="rounded-xl border-[#e5e2da] bg-white text-xs h-10 focus-visible:ring-1 focus-visible:ring-[#c4977a]"
                   />
                 </Field>
-                <Field label="견적 제안 금액 (원)" name="proposalAmount">
+                <Field
+                  label="선택 모듈 기준 최종 제안 총액"
+                  name="proposalAmount"
+                  hint="개별 모듈 단가를 다시 나누지 않고, 이번 요청 범위 전체에 대한 최종 총액으로 입력합니다."
+                >
                   <Input
                     id="proposalAmount"
                     inputMode="numeric"
@@ -1067,10 +1150,14 @@ export function VendorWorkspace({
                 </Field>
               </div>
 
-              <Field label="견적 세부 설명 및 안내 메시지" name="notes">
+              <Field
+                label="조정 사유 및 안내 메시지"
+                name="notes"
+                hint="포함 범위, 일정 확인 결과, 조정 이유, 고객에게 전달할 안내를 함께 적어 주세요."
+              >
                 <Textarea
                   id="notes"
-                  placeholder="업체의 견적 안내 메시지를 입력해 주세요."
+                  placeholder="선택 모듈 기준 안내, 일정 확인 결과, 조정 사유를 입력해 주세요."
                   disabled={isSelectedAcceptedProposal || isSelectedRespondedQuoteRequest}
                   value={proposalForm.notes}
                   onChange={(e) => setProposalForm((c) => ({ ...c, notes: e.target.value }))}
@@ -1361,11 +1448,22 @@ export function VendorWorkspace({
   );
 }
 
-function Field({ label, name, children }: { label: string; name: string; children: ReactNode }) {
+function Field({
+  label,
+  name,
+  hint,
+  children
+}: {
+  label: string;
+  name: string;
+  hint?: string;
+  children: ReactNode;
+}) {
   return (
     <div className="grid gap-1.5">
       <Label htmlFor={name} className="text-xs font-semibold text-[#2c3455]">{label}</Label>
       {children}
+      {hint ? <p className="text-[10px] leading-5 text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }

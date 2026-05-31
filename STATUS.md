@@ -74,6 +74,17 @@ General-user Step 4 is a **proposal → reservation workflow** screen:
 - Before accept: selected modules, vendor proposal, amount, response message, and explicit no-Reservation-yet state.
 - After accept: Reservation(PENDING), accepted proposal summary, and vendor final confirmation due date.
 - After vendor confirm: Reservation(CONFIRMED) and final reservation summary.
+- Step 4 detail panels should follow the same module workflow model. Category-lane status is internal/supporting detail only.
+
+Step 3 package/module rules:
+
+- Base package included items are shown in the included-spec area and must not reappear as optional adjustment rows.
+- Additional selection rows are only for non-included modules.
+
+Vendor quote response framing:
+
+- Vendor responses are a **single final total** over the selected module scope.
+- Zero-priced included module entries inside `QuoteResponse.modules` are identity markers only and should not be shown to users as `0원` line items.
 
 Category-level preparation status may remain as internal/collapsed detail, but it must not be the
 primary user-facing Step 4 IA for the core integrated-vendor demo.

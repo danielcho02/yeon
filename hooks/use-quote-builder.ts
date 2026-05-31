@@ -28,6 +28,7 @@ interface UseQuoteBuilderReturn {
   toggleModule: (module: QuoteModule) => void
   setBasePackage: (pkg: BasePackage | null) => void
   isSelected: (key: string) => boolean
+  pruneSelectedModules: (predicate: (module: QuoteModule) => boolean) => void
   reset: () => void
 }
 
@@ -51,6 +52,10 @@ export function useQuoteBuilder(guestCount = 100): UseQuoteBuilderReturn {
     [selectedModules]
   )
 
+  const pruneSelectedModules = useCallback((predicate: (module: QuoteModule) => boolean) => {
+    setSelectedModules((prev) => prev.filter((module) => !predicate(module)))
+  }, [])
+
   const totalPrice = useMemo(() => {
     const base = basePackage?.price ?? 0
     const extra = selectedModules.reduce((sum, m) => {
@@ -65,7 +70,16 @@ export function useQuoteBuilder(guestCount = 100): UseQuoteBuilderReturn {
     setBasePackageState(null)
   }, [])
 
-  return { selectedModules, basePackage, totalPrice, toggleModule, setBasePackage, isSelected, reset }
+  return {
+    selectedModules,
+    basePackage,
+    totalPrice,
+    toggleModule,
+    setBasePackage,
+    isSelected,
+    pruneSelectedModules,
+    reset
+  }
 }
 
 // Helper: build QuoteModule[] from VendorServiceModuleData (real DB records)

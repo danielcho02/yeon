@@ -177,7 +177,186 @@ function ProposalSummary({
   );
 }
 
-function CategoryDetail({ data }: { data?: Step4CategoryStatusDTO[] | null }) {
+function getPricingTypeLabel(pricingType: VendorServiceModuleData["pricingType"]) {
+  return pricingType === "PER_GUEST" ? "인원 기준" : "고정가";
+}
+
+function formatRequestedModulePrice(module: VendorServiceModuleData, guestCount?: number | null) {
+  if (module.pricingType === "PER_GUEST") {
+    const total = guestCount ? ` · 요청 기준 ${formatCurrency(module.price * guestCount)}` : "";
+    return `${formatCurrency(module.price)} / 1인${total}`;
+  }
+  return formatCurrency(module.price);
+}
+
+function ModuleWorkflowDetail({
+  requests,
+  planReservations
+}: {
+  requests: QuoteRequestWithResponses[];
+  planReservations: Step4BookingDashboardProps["planReservations"];
+}) {
+  if (requests.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-[#e5e2da] bg-white p-5 shadow-sm">
+      <div className="mb-4 space-y-1">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">모듈 진행 상세</p>
+        <p className="text-sm font-bold text-[#2c3455]">요청 범위부터 예약 확정까지 한 화면에서 확인합니다.</p>
+      </div>
+
+      <div className="space-y-3">
+        {requests.map((request) => {
+          const response = getLatestResponse(request);
+          const reservation = getLinkedReservation(request, planReservations);
+          const status = getStatusTone(request, reservation);
+          const finalIncludedModules = response
+            ? [...(response.modules.includedModules ?? []), ...(response.modules.optionalModules ?? [])]
+            : [];
+
+          return (
+            <details
+              key={request.id}
+              className="rounded-xl border border-[#f2ece4] bg-[#faf9f5]/45 p-4"
+              open={request.status !== "PENDING"}
+            >
+              <summary className="cursor-pointer list-none">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-[#2c3455]">
+                      {request.vendor?.companyName ?? "파트너 제안"}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {request.selectedModuleDetails?.length
+                        ? `${request.selectedModuleDetails[0].name}${request.selectedModuleDetails.length > 1 ? ` 외 ${request.selectedModuleDetails.length - 1}개` : ""}`
+                        : "선택 모듈 확인"}
+                    </p>
+                  </div>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold ${status.tone}`}>
+                    {status.label}
+                  </span>
+                </div>
+              </summary>
+
+              <div className="mt-4 space-y-3">
+                <SectionBlock title="요청 범위">
+                  <div className="space-y-2.5">
+                    {(request.selectedModuleDetails ?? []).map((module) => (
+                      <div
+                        key={module.id}
+                        className="rounded-xl border border-[#f2ece4] bg-white px-3.5 py-3"
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="font-semibold text-[#2c3455]">{module.name}</span>
+                              <span className="rounded-full border border-[#ebdccf]/70 bg-[#faf9f5] px-2 py-0.5 text-[10px] font-semibold text-[#8c8275]">
+                                {categoryLabel(module.category)}
+                              </span>
+                              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                                {module.isBaseIncluded ? "기본 포함" : "추가 선택"}
+                              </span>
+                            </div>
+                            {module.description && (
+                              <p className="text-[11px] leading-5 text-muted-foreground">{module.description}</p>
+                            )}
+                          </div>
+                          <div className="space-y-1 text-left sm:text-right">
+                            <p className="text-[10px] font-semibold text-[#8c8275]">
+                              기준가 {formatRequestedModulePrice(module, request.plan?.guestCount)}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              가격 방식 {getPricingTypeLabel(module.pricingType)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {(request.selectedModuleDetails ?? []).length === 0 && (
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        요청 모듈 상세가 없습니다. 상단 제안 카드의 메모와 금액을 기준으로 확인해 주세요.
+                      </p>
+                    )}
+                  </div>
+                </SectionBlock>
+
+                <SectionBlock title="업체 제안">
+                  {response ? (
+                    <div className="space-y-2 text-xs">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-muted-foreground">최종 제안 총액</span>
+                        <span className="font-bold text-[#c4977a]">{formatCurrency(response.totalPrice)}</span>
+                      </div>
+                      {response.note && (
+                        <p className="rounded-lg bg-white px-3 py-2 leading-5 text-[#2c3455]">{response.note}</p>
+                      )}
+                      {finalIncludedModules.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {finalIncludedModules.map((module) => (
+                            <span
+                              key={`${module.id}:${module.name}`}
+                              className="inline-flex items-center gap-1 rounded-full border border-[#ebdccf]/70 bg-white px-2.5 py-1 text-[10px] font-semibold text-[#2c3455]"
+                            >
+                              {module.name}
+                              <span className="text-[#8c8275]">{categoryLabel(module.category)}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      아직 업체 제안이 도착하지 않았습니다. 제안 전에는 Reservation이 생성되지 않습니다.
+                    </p>
+                  )}
+                </SectionBlock>
+
+                <SectionBlock title="예약 전환 상태">
+                  {reservation ? (
+                    <div className="space-y-2 text-xs text-[#2c3455]">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-muted-foreground">현재 상태</span>
+                        <span className="font-semibold">
+                          {reservation.status === "CONFIRMED" || reservation.status === "COMPLETED"
+                            ? "Reservation(CONFIRMED)"
+                            : "Reservation(PENDING)"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-muted-foreground">예약 금액</span>
+                        <span className="font-semibold">{formatCurrency(reservation.totalAmount)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-muted-foreground">예정 일자</span>
+                        <span className="font-semibold">{formatDate(reservation.reservedDate)}</span>
+                      </div>
+                      {reservation.vendorConfirmationDueAt && (
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground">업체 확정 기한</span>
+                          <span className="font-semibold">{formatDate(reservation.vendorConfirmationDueAt)}</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : request.status === "RESPONDED" ? (
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      제안서는 도착했지만 아직 수락 전입니다. 수락 시점에만 Reservation(PENDING)이 생성됩니다.
+                    </p>
+                  ) : (
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      현재는 요청 단계입니다. 업체 응답 전까지는 예약 레코드가 없습니다.
+                    </p>
+                  )}
+                </SectionBlock>
+              </div>
+            </details>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function InternalCategoryStatusDetail({ data }: { data?: Step4CategoryStatusDTO[] | null }) {
   if (!data || data.length === 0) return null;
 
   const statusLabel: Record<Step4CategoryStatusDTO["status"], string> = {
@@ -191,9 +370,9 @@ function CategoryDetail({ data }: { data?: Step4CategoryStatusDTO[] | null }) {
   return (
     <details className="rounded-2xl border border-[#e5e2da] bg-white p-5 shadow-sm">
       <summary className="cursor-pointer list-none text-sm font-bold text-[#2c3455]">
-        상세 상태 보기
+        내부 카테고리 집계 보기
         <span className="ml-2 text-[10px] font-semibold text-muted-foreground">
-          내부 카테고리 계산 {data.length}개
+          보조 참고용 {data.length}개
         </span>
       </summary>
       <div className="mt-4 grid gap-2">
@@ -395,7 +574,9 @@ export function Step4BookingDashboard({
           </div>
         </div>
 
-        <CategoryDetail data={step4DashboardData} />
+        <ModuleWorkflowDetail requests={activeRequests} planReservations={planReservations} />
+
+        <InternalCategoryStatusDetail data={step4DashboardData} />
       </aside>
     </div>
   );

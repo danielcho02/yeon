@@ -379,7 +379,7 @@ export function ModularQuoteBuilder({
   const builder = useQuoteBuilder(guestCount)
   const [activeCategory, setActiveCategory] = useState<string>('all')
   const [sheetOpen, setSheetOpen] = useState(false)
-  const { basePackage, setBasePackage } = builder
+  const { basePackage, setBasePackage, pruneSelectedModules } = builder
   const hasQuoteSelection = builder.selectedModules.length > 0 || Boolean(builder.basePackage)
 
   // Automatically select the first package by default to provide a high-end concierge presets
@@ -413,6 +413,21 @@ export function ModularQuoteBuilder({
     if (!basePackage) return []
     return allModules.filter((m) => basePackage.includedModuleKeys.includes(m.key))
   }, [basePackage, allModules])
+
+  const baseIncludedKeys = useMemo(
+    () => new Set(basePackage?.includedModuleKeys ?? []),
+    [basePackage]
+  )
+
+  const adjustableModules = useMemo(
+    () => filtered.filter((module) => !baseIncludedKeys.has(module.key)),
+    [baseIncludedKeys, filtered]
+  )
+
+  useEffect(() => {
+    if (baseIncludedKeys.size === 0) return
+    pruneSelectedModules((module) => baseIncludedKeys.has(module.key))
+  }, [baseIncludedKeys, pruneSelectedModules])
 
   const handleRequestQuote = () => {
     if (!hasQuoteSelection) return
@@ -567,7 +582,7 @@ export function ModularQuoteBuilder({
               ) : (
                 <motion.div layout className="flex flex-col border border-[#ebdccf]/40 bg-white rounded-xl p-3 divide-y divide-[#f2ece4]/40">
                   <AnimatePresence>
-                    {filtered.map((m) => (
+                    {adjustableModules.map((m) => (
                       <ModuleRow
                         key={m.key}
                         module={m}
@@ -578,6 +593,11 @@ export function ModularQuoteBuilder({
                       />
                     ))}
                   </AnimatePresence>
+                  {adjustableModules.length === 0 && (
+                    <div className="px-3 py-8 text-center text-xs leading-relaxed text-muted-foreground/70">
+                      기본 패키지에 포함된 항목은 위 포함 품목에서 확인됩니다.
+                    </div>
+                  )}
                 </motion.div>
               )}
             </div>

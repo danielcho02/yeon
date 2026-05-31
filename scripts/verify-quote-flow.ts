@@ -838,6 +838,23 @@ async function main() {
   created.notificationIds.push(quoteResponseResult.notification.id);
   created.activityLogIds.push(quoteResponseResult.activity.id);
 
+  const responseModules = quoteResponseResult.response.modules as {
+    includedModules?: Array<{ id?: string; name?: string; category?: string; price?: number }>;
+  };
+  const includedModuleIds = (responseModules.includedModules ?? [])
+    .map((module) => module.id)
+    .filter((id): id is string => typeof id === "string");
+  assert.deepEqual(
+    new Set(includedModuleIds),
+    new Set(selectedModules),
+    "QuoteResponse must preserve selected module identity in includedModules"
+  );
+  assert.ok(
+    (responseModules.includedModules ?? []).every((module) => module.price === 0),
+    "QuoteResponse includedModules should stay as identity markers with zero prices"
+  );
+  checks.quote_response_preserves_selected_module_identity = true;
+
   const afterVendorResponse = await prisma.quoteRequest.findUniqueOrThrow({
     where: { id: created.requestId },
     include: {
@@ -946,12 +963,16 @@ async function main() {
     getQuotesByPlanShape[0]?.responses[0]?.id === created.responseId;
   const selectedModuleDetailsForPlan = await prisma.vendorServiceModule.findMany({
     where: { id: { in: selectedModules } },
-    select: { id: true, name: true, category: true }
+    select: { id: true, name: true, category: true, price: true, pricingType: true }
   });
   assert.equal(
     selectedModuleDetailsForPlan.length,
     selectedModules.length,
     "getQuotesByPlan selectedModuleDetails source records must be available for Step 4"
+  );
+  assert.ok(
+    selectedModuleDetailsForPlan.every((module) => module.name.length > 0 && module.price >= 0),
+    "selectedModuleDetails should expose names and prices for Step 4 and vendor detail views"
   );
   checks.get_quotes_by_plan_selected_module_details_visible = true;
 

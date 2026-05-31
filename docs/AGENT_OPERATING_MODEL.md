@@ -30,6 +30,11 @@ The prior split (Claude=frontend, Codex=backend) caused incomplete fixes.
 8. **Step 4 is proposal/reservation first.** General users should see selected modules,
    vendor proposal, accept action, pending vendor confirmation, and confirmed reservation
    as the primary IA. Category status can remain internal or collapsed detail only.
+9. **Base package items are included-only.** Modules already included in the active base
+   package belong in the included summary and must not appear again as optional adjustment rows.
+10. **Vendor quote responses are scope totals.** The vendor-facing form should be framed as
+    confirming the planner-selected event date and submitting one final total across the selected
+    module scope, not line-by-line repricing.
 
 ---
 
