@@ -666,14 +666,14 @@ export function VendorWorkspace({
             </div>
             <div>
               <p className={`text-xs font-bold ${finalConfirmTone.bannerEyebrow}`}>예약 최종 확정 필요</p>
-              <p className={`text-[11px] ${finalConfirmTone.bannerCopy}`}>고객이 견적을 최종 수락했습니다. 일정을 최종 승인해 예약 확정서를 완성해 주세요.</p>
+              <p className={`text-[11px] ${finalConfirmTone.bannerCopy}`}>고객이 견적을 최종 수락했습니다. 실제 승인은 최종 확정 화면에서만 진행됩니다.</p>
             </div>
           </div>
           <button
             onClick={scrollToPendingConfirmations}
             className={`px-4 h-9 text-xs font-bold text-white rounded-xl transition-all shadow-sm whitespace-nowrap break-keep ${finalConfirmTone.bannerButton}`}
           >
-            대기 건 {pendingConfirmationReservations.length}개 확인하기
+            최종 확정 화면으로 이동
           </button>
         </div>
       )}
@@ -735,105 +735,6 @@ export function VendorWorkspace({
         </div>
       )}
 
-      {/* ── Pending Confirmations (Priority Task Queue List) ─────────────────── */}
-      {pendingConfirmationReservations.length > 0 && activePanel !== "final_confirm" && (
-        <section
-          className={`scroll-mt-6 rounded-2xl border p-6 ${finalConfirmTone.emphasisCard}`}
-        >
-          <div className="mb-5 flex items-center justify-between border-b border-[#f2ece4] pb-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className={`h-2 w-2 rounded-full ${finalConfirmTone.emphasisDot}`} />
-                <h2 className="font-[var(--font-serif)] text-base font-bold text-[#2c3455]">오늘 처리할 일: 예약 최종 확정</h2>
-                <Badge className={`${finalConfirmTone.emphasisBadge} hover:bg-transparent text-[10px]`}>
-                  {pendingConfirmationReservations.length}건 대기
-                </Badge>
-              </div>
-              <p className="text-xs text-[#8c8275]">
-                사용자가 제안을 최종 수락했습니다. 아래 목록의 최종 일정 및 상세 요건을 검토하신 후 예약을 최종 승인해 주세요.
-              </p>
-            </div>
-          </div>
-
-          <div className="divide-y divide-[#f2ece4]">
-            {pendingConfirmationReservations.map((r) => {
-              const requestMemo = getRequestMemo(r);
-              const amount = r.confirmedAmount ?? r.quotedAmount;
-
-              return (
-                <article
-                  key={r.id}
-                  className="py-5 first:pt-0 last:pb-0 flex flex-col md:flex-row md:items-center justify-between gap-6"
-                >
-                  <div className="space-y-3 flex-1">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[9px] font-bold border ${finalConfirmTone.emphasisBadge}`}>
-                          수락 완료 · 최종 확정 필요
-                        </span>
-                        <p className="font-[var(--font-serif)] text-sm font-bold text-[#2c3455]">
-                          {r.eventPlan.title ?? "(제목 없음)"}
-                        </p>
-                      </div>
-                      <p className="text-[11px] text-[#8c8275]">
-                        {getServiceLabel(r)}
-                        {" · "}
-                        {getEventTypeLabel(r.eventPlan.type ?? "ETC")}
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-                      <div>
-                        <span className="text-[9px] text-[#8c8275] block">희망 날짜</span>
-                        <span className="font-semibold text-[#2c3455]">{formatDate(r.serviceDate)}</span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] text-[#8c8275] block">행사 지역</span>
-                        <span className="font-semibold text-[#2c3455]">{r.eventPlan.region ?? "미정"}</span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] text-[#8c8275] block">예상 하객</span>
-                        <span className="font-semibold text-[#2c3455]">{r.guestCount ? `${r.guestCount}명` : "미정"}</span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] text-[#8c8275] block">제안 금액</span>
-                        <span className="font-bold text-[#c4977a]">{formatCurrency(amount)}</span>
-                      </div>
-                    </div>
-
-                    {r.vendorConfirmationDueAt && (
-                      <div className={`flex items-center gap-1.5 text-xs font-semibold ${finalConfirmTone.emphasisText}`}>
-                        <Clock className="h-3.5 w-3.5" />
-                        <span>확정 기한: {formatDate(r.vendorConfirmationDueAt)} 까지 (SLA 3일)</span>
-                      </div>
-                    )}
-
-                    {requestMemo && (
-                      <div className="rounded-xl bg-white border border-[#ebdccf]/40 p-3.5 text-xs text-[#2c3455] space-y-1 max-w-2xl">
-                        <span className="text-[9px] font-bold text-[#c4977a] uppercase tracking-wider block">사용자 요청사항</span>
-                        <p className="leading-relaxed font-normal">{requestMemo}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex shrink-0">
-                    <Button
-                      onClick={() => setActivePanel("final_confirm")}
-                      size="sm"
-                      variant="outline"
-                      className="rounded-xl border-[#e5e2da] bg-white text-xs font-semibold text-[#2c3455] hover:bg-[#faf9f5] h-9 px-4 whitespace-nowrap break-keep"
-                    >
-                      <BadgeCheck className="mr-1 h-3.5 w-3.5" />
-                      최종 확정 탭에서 처리
-                    </Button>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
       {/* ── Panel tab bar (Editorial Slider Style) ──────────────────────────────────────────── */}
       <section className="flex border-b border-[#ebdccf]/60 bg-transparent px-1 py-0.5 mb-6">
         {PANELS.map((panel) => {
@@ -888,13 +789,13 @@ export function VendorWorkspace({
                       </p>
                     </div>
                     <Button
-                      onClick={() => setActivePanel("final_confirm")}
+                      onClick={scrollToPendingConfirmations}
                       size="sm"
                       variant="outline"
                       className="rounded-xl text-[10px] h-8 font-semibold shadow-sm shrink-0 px-3.5 whitespace-nowrap break-keep border-[#e5e2da] bg-white text-[#2c3455] hover:bg-[#faf9f5]"
                     >
                       <BadgeCheck className="mr-1 h-3.5 w-3.5" />
-                      최종 확정 탭으로
+                      최종 확정 화면으로 이동
                     </Button>
                   </div>
                 ))}
@@ -1202,12 +1103,12 @@ export function VendorWorkspace({
                   )}
                   <Button
                     className="mt-2 rounded-xl text-xs h-9 font-semibold whitespace-nowrap break-keep border-[#e5e2da] bg-white text-[#2c3455] hover:bg-[#faf9f5]"
-                    onClick={() => setActivePanel("final_confirm")}
+                    onClick={scrollToPendingConfirmations}
                     variant="outline"
                     size="sm"
                   >
                     <BadgeCheck className="mr-1 h-3.5 w-3.5" />
-                    최종 확정 탭으로 이동
+                    최종 확정 화면으로 이동
                   </Button>
                 </div>
               )}
@@ -1345,13 +1246,13 @@ export function VendorWorkspace({
                       <div className="mt-4 pt-1 flex items-center justify-between">
                         {r.quoteRequestStatus === "ACCEPTED" ? (
                           <Button
-                            onClick={() => setActivePanel("final_confirm")}
+                            onClick={scrollToPendingConfirmations}
                             size="sm"
                             variant="outline"
                             className="rounded-xl text-xs h-8 font-semibold px-3 whitespace-nowrap break-keep border-[#e5e2da] bg-white text-[#2c3455] hover:bg-[#faf9f5]"
                           >
                             <BadgeCheck className="mr-1 h-3.5 w-3.5" />
-                            최종 확정 탭으로
+                            최종 확정 화면으로 이동
                           </Button>
                         ) : (
                           <span className="text-[10px] text-[#8c8275]/60">사용자의 수락 및 피드백 대기 중</span>
