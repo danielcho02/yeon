@@ -62,7 +62,7 @@ export default async function PlannerPage({
   const userName = session.user.name ?? "사용자";
 
   return (
-    <main className="relative mx-auto flex min-h-screen max-w-4xl flex-col overflow-hidden px-4 py-10 sm:px-6 lg:px-8 lg:py-16">
+    <main className="relative mx-auto flex min-h-screen max-w-5xl flex-col overflow-hidden px-4 py-10 sm:px-6 lg:px-8 lg:py-16">
       {/* Background orbs */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -left-40 top-20 h-[400px] w-[400px] rounded-full bg-rose-100/35 blur-[100px]" />
@@ -84,14 +84,18 @@ export default async function PlannerPage({
           </div>
         </nav>
 
-        {/* Greeting */}
         <div className="mb-12 animate-slide-up">
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground/55">워크스페이스</p>
-          <h1 className="font-[var(--font-display)] text-4xl font-bold text-foreground sm:text-5xl">
-            안녕하세요,<br />{userName}
-          </h1>
-          <p className="mt-4 max-w-sm text-sm leading-7 text-muted-foreground">
-            아직 만든 플랜이 없다면 행사 유형을 먼저 고르세요. 세부 정보 입력과 AI 추천은 다음 단계에서 이어집니다.
+          <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.3em] text-[#8c8275]">Planning Route</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="font-[var(--font-serif)] text-3xl font-normal text-[#2c3455] sm:text-4xl">
+              어떤 의례를 준비하시나요?
+            </h1>
+            <span className="rounded-full border border-[#e5e2da] bg-white/80 px-3 py-1 text-[10px] font-semibold text-[#8c8275]">
+              {userName}
+            </span>
+          </div>
+          <p className="mt-3 max-w-xl text-sm leading-7 text-[#8c8275]">
+            행사 유형을 먼저 선택하면 다음 화면에서 행사 정보 입력과 AI 추천을 바로 이어서 진행합니다.
           </p>
         </div>
 
@@ -100,25 +104,21 @@ export default async function PlannerPage({
           {/* Wedding */}
           <Link
             href={createMode ? "/planner/wedding?create=1" : "/planner/wedding"}
-            className="group relative overflow-hidden rounded-[2.5rem] border border-amber-200/70 shadow-sm shadow-amber-100/40 transition-all duration-500 hover:-translate-y-3 hover:shadow-2xl hover:shadow-rose-200/40"
+            className="group relative overflow-hidden rounded-2xl border border-[#ebdccf] bg-[#faf9f5] transition-all duration-300 hover:-translate-y-1 hover:border-[#c4977a] hover:shadow-[0_8px_32px_rgba(196,151,122,0.06)]"
           >
-            <div className="absolute inset-0 surface-wedding" />
-            <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-rose-200/40 blur-3xl transition-all duration-500 group-hover:scale-150 group-hover:bg-rose-200/60" />
-            <div className="pointer-events-none absolute inset-0 opacity-[0.035]"
-              style={{ backgroundImage: "radial-gradient(circle, #c47b45 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+            <div className="absolute inset-x-0 bottom-0 h-1.5 bg-[#ebdccf] transition-colors group-hover:bg-[#c4977a]" />
             <div className="relative p-8 sm:p-10">
-              <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-600 shadow-lg shadow-rose-300/50 transition-all duration-300 group-hover:scale-110 group-hover:shadow-rose-400/60">
-                <Heart className="h-6 w-6 text-white" />
+              <div className="mb-6 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#ebdccf]/50 bg-[#fcf8f2] text-[#c4977a]">
+                <Heart className="h-4 w-4" />
               </div>
-              <p className="mb-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.32em] text-rose-500/80">Wedding</p>
-              <h2 className="mb-3 font-[var(--font-display)] text-3xl font-bold text-foreground">결혼 준비</h2>
-              <p className="mb-7 text-sm leading-6 text-rose-900/50">
-                AI 컨셉 추천, 업체 견적 요청, 예약 확정까지<br className="hidden sm:block" />
-                웨딩 준비를 단계별로 안내합니다.
+              <p className="mb-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.25em] text-[#c4977a]">Wedding Ceremony</p>
+              <h2 className="mb-3 font-[var(--font-serif)] text-xl font-bold text-[#2c3455]">결혼 준비</h2>
+              <p className="mb-8 text-xs leading-relaxed text-[#8c8275]">
+                AI 추천, 파트너 견적 요청, 예약 확정까지 한 흐름으로 이어서 준비합니다.
               </p>
-              <div className="flex items-center gap-2 text-sm font-semibold text-rose-600 transition-all duration-200 group-hover:gap-3.5">
+              <div className="flex items-center gap-2 text-xs font-semibold text-[#c4977a] transition-all duration-200 group-hover:gap-3">
                 결혼 준비 시작하기
-                <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
               </div>
             </div>
           </Link>
@@ -126,25 +126,21 @@ export default async function PlannerPage({
           {/* Funeral */}
           <Link
             href={createMode ? "/planner/funeral?create=1" : "/planner/funeral"}
-            className="group relative overflow-hidden rounded-[2.5rem] border border-indigo-200/60 shadow-sm shadow-indigo-100/30 transition-all duration-500 hover:-translate-y-3 hover:shadow-2xl hover:shadow-indigo-200/30"
+            className="group relative overflow-hidden rounded-2xl border border-[#cbd3e0] bg-[#faf9f5] transition-all duration-300 hover:-translate-y-1 hover:border-[#2c3455] hover:shadow-[0_8px_32px_rgba(44,52,85,0.04)]"
           >
-            <div className="absolute inset-0 surface-funeral" />
-            <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-indigo-300/30 blur-3xl transition-all duration-500 group-hover:scale-150 group-hover:bg-indigo-300/50" />
-            <div className="pointer-events-none absolute inset-0 opacity-[0.05]"
-              style={{ backgroundImage: "linear-gradient(rgba(45,62,112,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(45,62,112,0.5) 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
+            <div className="absolute inset-x-0 bottom-0 h-1.5 bg-[#cbd3e0] transition-colors group-hover:bg-[#2c3455]" />
             <div className="relative p-8 sm:p-10">
-              <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-900 shadow-lg shadow-indigo-400/30 transition-all duration-300 group-hover:scale-110 group-hover:shadow-indigo-500/40">
-                <Shield className="h-6 w-6 text-white" />
+              <div className="mb-6 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#cbd3e0] bg-[#eef2f6] text-[#2c3455]">
+                <Shield className="h-4 w-4" />
               </div>
-              <p className="mb-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.32em] text-indigo-400/80">Funeral</p>
-              <h2 className="mb-3 font-[var(--font-display)] text-3xl font-bold text-foreground">장례 준비</h2>
-              <p className="mb-7 text-sm leading-6 text-indigo-900/50">
-                차분하고 신뢰 있는 장례 준비. 일정, 시설,<br className="hidden sm:block" />
-                절차를 안정적인 흐름으로 정리합니다.
+              <p className="mb-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.25em] text-[#8c8275]">Funeral Service</p>
+              <h2 className="mb-3 font-[var(--font-serif)] text-xl font-bold text-[#2c3455]">장례 준비</h2>
+              <p className="mb-8 text-xs leading-relaxed text-[#8c8275]">
+                차분한 안내 흐름으로 일정, 시설, 의전 절차를 안정적으로 정리합니다.
               </p>
-              <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700 transition-all duration-200 group-hover:gap-3.5">
+              <div className="flex items-center gap-2 text-xs font-semibold text-[#2c3455] transition-all duration-200 group-hover:gap-3">
                 장례 준비 시작하기
-                <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
               </div>
             </div>
           </Link>

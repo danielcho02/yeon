@@ -25,6 +25,7 @@ import {
   getVendorConfirmationDueAt,
   getVendorDashboardHref
 } from "@/lib/workflow-events";
+import { declinePendingQuoteRequest } from "@/lib/quote-request-decline";
 import {
   vendorServiceModuleCategoryMatchesEventType,
   vendorSupportsEventType
@@ -877,6 +878,32 @@ export async function acceptQuote(requestId: string): Promise<ActionResult<Quote
     return actionSuccess(accepted.data.quoteRequest);
   } catch (error) {
     return actionError(getActionError(error), "ACCEPT_QUOTE_FAILED");
+  }
+}
+
+export async function declineQuoteRequest(
+  requestId: string,
+  reason?: string
+): Promise<ActionResult<QuoteRequestData>> {
+  try {
+    const vendor = await requireVendorUser();
+
+    if (!requestId) {
+      return actionError("견적 요청 ID가 필요합니다.", "VALIDATION_ERROR");
+    }
+
+    const declined = await prisma.$transaction((tx) =>
+      declinePendingQuoteRequest(tx, {
+        requestId,
+        vendorId: vendor.id,
+        reason
+      })
+    );
+
+    revalidateQuoteViews(declined.planId, declined.vendorId);
+    return actionSuccess(mapQuoteRequest(declined.request));
+  } catch (error) {
+    return actionError(getActionError(error), "DECLINE_QUOTE_REQUEST_FAILED");
   }
 }
 

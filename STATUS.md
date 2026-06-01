@@ -8,6 +8,20 @@
 
 ## What Was Just Implemented
 
+The **Post-QA Phase 1 follow-up pass** is now included in the working tree:
+
+- New plan creation no longer silently defaults the region to `서울`; the region field starts empty and must be entered explicitly.
+- Step 3 preloads request date, guest count, and budget from the selected plan, and reuses active QuoteRequest preferred date/budget when a vendor already has an active request.
+- Step 3 now shows `보낸 요청 현황` inline above the quote builder, with the sidebar kept as secondary detail.
+- The modular quote summary now uses the same full-width card system as the surrounding Step 3 content instead of a narrow detached desktop rail.
+- Vendor final confirmation is actioned from the `최종 확정` panel; home/proposal surfaces route there instead of rendering duplicate confirmation CTAs.
+- Vendor service management now explains the current single derived base package model and separates standard modules, base included items, optional add-ons, and vendor-specific items.
+- `VendorPackage`, `PackageModule`, multiple packages, package price overrides, discount/negotiable pricing, full module price editor, and notification center remain deferred.
+
+---
+
+## Canonical Quote Workflow
+
 The **canonical quote workflow baseline** is now the branch default. Changes enforce the correct
 domain contract for the full QuoteRequest → QuoteResponse → Reservation lifecycle:
 
@@ -27,8 +41,6 @@ domain contract for the full QuoteRequest → QuoteResponse → Reservation life
 - Current package handling is a single derived package per vendor from active `isBaseIncluded` modules. True multi-package support remains deferred until a package schema exists.
 
 ---
-
-## Canonical Quote Workflow
 
 ```
 createQuoteRequest  → QuoteRequest(PENDING) + notification + activity    [NO Reservation]
@@ -57,6 +69,8 @@ After `npm run db:seed`:
 | Reservation         | **0** | clean baseline                                         |
 
 Planner lands on **Step 3** (vendors) ready to send their first request.
+If browser QA still shows prior activity after reseeding, stop any scenario seed, run `npm run db:seed`,
+then hard refresh or sign out/in before checking `/plans` or `/planner`.
 
 ---
 
@@ -85,6 +99,8 @@ Step 3 package/module rules:
 - Base package included items are shown in the included-spec area and must not reappear as optional adjustment rows.
 - Additional selection rows are only for active non-included modules.
 - Standard catalog-backed modules, package-included modules, optional add-ons, and vendor-specific add-ons should be labeled distinctly. Vendor-specific add-ons are non-catalog vendor modules, not renamed standard essentials.
+- The current UI has one derived base package from active `VendorServiceModule.isBaseIncluded` rows. True multi-package behavior requires a future schema change and is not part of this phase.
+- QuoteRequest does not persist guest count or region. Step 3 displays guest count and region from the selected EventPlan, while preferred date and budget can come from the active QuoteRequest.
 
 Vendor quote response framing:
 
@@ -132,8 +148,20 @@ npx tsx scripts/verify-demo-scenario.ts --state=B
 
 ### Last Known Validation Results
 
-Run the full suite again after the current stabilization pass. State B should remain the default
-workflow regression when Step 4 routing, planner entry, or quote-request visibility changes.
+2026-06-01 Post-QA Phase 1 pass:
+
+- `npm run db:seed`: PASS, restored 0 QuoteRequests / 0 QuoteResponses / 0 Reservations.
+- `npx tsx scripts/verify-demo-data-integrity.ts`: PASS.
+- `npx tsx scripts/verify-quote-flow.ts`: PASS.
+- `npx tsx scripts/verify-service-category-contract.ts`: PASS.
+- `npx tsx scripts/verify-planner-auth-redirect.ts`: PASS.
+- `npx tsx scripts/verify-role-routing-contract.ts`: PASS.
+- `npx tsx scripts/verify-quote-decline-contract.ts`: PASS.
+- `npm run db:seed:scenario:B` + `npx tsx scripts/verify-demo-scenario.ts --state=B`: PASS.
+- `lib/workflow-events.ts` and `lib/quote-request-decline.ts` import boundary: PASS, imports are server routes/actions/scripts only, not `use client` components.
+- `npx tsc --noEmit`: PASS.
+- `npm run lint`: PASS.
+- `npm run build`: PASS.
 
 ---
 
@@ -142,15 +170,16 @@ workflow regression when Step 4 routing, planner entry, or quote-request visibil
 These items require manual browser testing against `npm run dev`:
 
 1. **Fresh seed Step 3 landing**: `npm run db:seed` → login planner → `/planner/wedding` → confirm Step 3 active, "보낸 요청 현황" empty
-2. **No Reservation after request**: Submit quote request → DB check: 1 QuoteRequest(PENDING), 0 Reservations
-3. **State B auto-navigate when Step 4 routing/proposal rendering changes**: After vendor responds (State B seed), planner opens workspace → confirm workspace auto-jumps to Step 4 without manual click
-4. **Reservation created at accept**: Click "이 견적 수락하기" → DB check: Reservation(PENDING) now exists for the first time; `vendorConfirmationDueAt` set
-5. **No 503 on Step 3 submit**: Open network tab → submit quote → no 503 on `POST /api/planning/recommendation`
-6. **Step refresh persistence**: Refresh `/planner/wedding?planId=...&step=3` and `step=4` → confirm step maintained
-7. **Vendor confirm flow**: vendor logs in → "예약 최종 확정" → Reservation(CONFIRMED) → planner sees "예약 확정 완료"
-8. **Planner return landing**: logged-in planner at `/` sees `/plans`-oriented primary CTA and partner CTA remains readable on desktop/mobile
-9. **Entry-point IA**: `/planner` with existing plans redirects to `/plans`; zero-plan account sees event-type chooser; `/plans/new` no longer shows the flat generic form
-10. **Custom module visibility**: vendor-added custom wedding/funeral modules appear in Step 3, optional customs are selectable, and base-included customs stay only in the included-spec area
+2. **No silent region default**: `/planner/wedding?create=1` shows an empty region input with placeholder `예: 서울 / 인천 / 수도권`; existing plans still show saved region.
+3. **Step 3 request prefill**: seeded wedding/funeral plans show saved date, guest count, budget, and region context before sending a request.
+4. **Inline sent-request status**: submit a request and confirm `보낸 요청 현황` appears inside the main Step 3 flow without relying on the sidebar.
+5. **No Reservation after request**: Submit quote request → DB check: 1 QuoteRequest(PENDING), 0 Reservations
+6. **State B auto-navigate when Step 4 routing/proposal rendering changes**: After vendor responds (State B seed), planner opens workspace → confirm workspace auto-jumps to Step 4 without manual click
+7. **Reservation created at accept**: Click "이 견적 수락하기" → DB check: Reservation(PENDING) now exists for the first time; `vendorConfirmationDueAt` set
+8. **Vendor confirm flow**: vendor logs in → `최종 확정` panel has the single primary confirmation CTA → Reservation(CONFIRMED) → planner sees "예약 확정 완료"
+9. **Quote summary sizing**: desktop Step 3 summary is a full-width card matching surrounding spacing; mobile bottom summary remains usable.
+10. **Vendor service clarity**: service manager visibly separates standard modules, base included items, optional add-ons, and 업체 전용 항목 using the current `isBaseIncluded` model.
+11. **Custom module visibility**: vendor-added custom wedding/funeral modules appear in Step 3, optional customs are selectable, and base-included customs stay only in the included-spec area.
 
 ---
 

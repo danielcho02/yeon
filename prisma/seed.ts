@@ -132,6 +132,7 @@ async function seedModularQuoteData() {
       category: ModuleCategory.VENUE,
       price: 250_000,
       description: "전용 대기실과 웰컴 드링크",
+      isBaseIncluded: true,
       sortOrder: 2
     },
     {
@@ -169,7 +170,6 @@ async function seedModularQuoteData() {
       category: ModuleCategory.DECORATION,
       price: 180_000,
       description: "행사명과 동선을 반영한 현장 사인보드 제작",
-      isBaseIncluded: true,
       sortOrder: 7
     },
     {

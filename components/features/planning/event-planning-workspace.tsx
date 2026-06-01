@@ -162,8 +162,39 @@ type QuoteRequestStatusItem = {
   vendorConfirmationDueAt?: string | null;
 };
 
+type RequestFormState = {
+  eventPlanId: string;
+  vendorId: string;
+  serviceDate: string;
+  guestCount: string;
+  budget: string;
+  notes: string;
+};
+
 const moduleSelectClassName =
   "h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+
+function numberInputValue(value: number | null | undefined) {
+  return value != null ? String(value) : "";
+}
+
+function getRequestFormPrefill(
+  selectedPlan: PlanOption | null,
+  activeRequest: QuoteRequestWithResponses | null
+) {
+  const budget = activeRequest?.budget ?? selectedPlan?.budget ?? null;
+
+  return {
+    serviceDate: asDateInput(activeRequest?.preferredDate ?? selectedPlan?.scheduledAt ?? null),
+    guestCount: numberInputValue(selectedPlan?.guestTarget),
+    budget: numberInputValue(budget)
+  };
+}
+
+function parseOptionalPositiveInt(value: string) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
 
 type Props = {
   eventType: EventType;
@@ -212,9 +243,12 @@ export function EventPlanningWorkspace({
     singlePlan
   );
   const [selectedPlanId, setSelectedPlanId] = useState(initialPlan?.id ?? "");
+  const [pendingPlanDraft, setPendingPlanDraft] = useState<PlanOption | null>(null);
   const plan = useMemo(
-    () => plans.find((item) => item.id === selectedPlanId) ?? null,
-    [plans, selectedPlanId]
+    () =>
+      plans.find((item) => item.id === selectedPlanId) ??
+      (pendingPlanDraft?.id === selectedPlanId ? pendingPlanDraft : null),
+    [pendingPlanDraft, plans, selectedPlanId]
   );
   const [isEditingPlan, setIsEditingPlan] = useState(initialCreateMode || (!Boolean(initialPlan) && plans.length === 0));
   const needsPlanSelection = !plan && plans.length > 0 && !isEditingPlan;
@@ -296,7 +330,6 @@ export function EventPlanningWorkspace({
   const [isQuoteActionPending, setIsQuoteActionPending] = useState(false);
   const quoteActionLockedRef = useRef(false);
   const [confettiActive, setConfettiActive] = useState(false);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const requestStatusPanelRef = useRef<HTMLDivElement>(null);
 
   function focusRequestStatusPanel() {
@@ -304,12 +337,30 @@ export function EventPlanningWorkspace({
     requestStatusPanelRef.current?.focus();
   }
 
+  function getWorkspaceHref(planId: string, step?: StepKey) {
+    const params = new URLSearchParams({ planId });
+    if (step) {
+      params.set("step", String(STEPS.findIndex((item) => item.key === step) + 1));
+    }
+    return `/planner/${eventType === "WEDDING" ? "wedding" : "funeral"}?${params.toString()}`;
+  }
+
   function navigateStep(next: StepKey) {
     const currentIdx = STEPS.findIndex((s) => s.key === activeStep);
     const nextIdx = STEPS.findIndex((s) => s.key === next);
     setDirection(nextIdx >= currentIdx ? 'forward' : 'back');
     setActiveStep(next);
+    if (selectedPlanId) {
+      router.push(getWorkspaceHref(selectedPlanId, next));
+    }
   }
+
+  useEffect(() => {
+    if (!pendingPlanDraft) return;
+    if (plans.some((item) => item.id === pendingPlanDraft.id)) {
+      setPendingPlanDraft(null);
+    }
+  }, [pendingPlanDraft, plans]);
   // Load real VendorServiceModule records for the selected vendor
   useEffect(() => {
     if (!selectedVendorId) { setVendorModules(null); setVendorModuleError(false); return; }
@@ -386,14 +437,18 @@ export function EventPlanningWorkspace({
       ]),
     [planReservations, quoteRequestsData]
   );
-  const selectedVendorRequestState = useMemo(() => {
+  const selectedVendorActiveRequest = useMemo(() => {
     if (!selectedVendorId) return null;
 
-    const activeRequest =
+    return (
       (quoteRequestsData ?? []).find(
         (request) => request.vendorId === selectedVendorId && request.status !== "CANCELED"
-      ) ?? null;
+      ) ?? null
+    );
+  }, [quoteRequestsData, selectedVendorId]);
 
+  const selectedVendorRequestState = useMemo(() => {
+    const activeRequest = selectedVendorActiveRequest;
     if (!activeRequest) return null;
 
     const reservationStatus = activeRequest.reservation?.status ?? null;
@@ -428,7 +483,7 @@ export function EventPlanningWorkspace({
       label: "업체 응답 대기",
       description: "업체 응답을 기다리는 중입니다.",
     };
-  }, [quoteRequestsData, selectedVendorId]);
+  }, [selectedVendorActiveRequest]);
   const comparisonQuotes = useMemo(
     () => mapQuoteRequestsToVendorQuotes(quoteRequestsData ?? []),
     [quoteRequestsData]
@@ -436,7 +491,6 @@ export function EventPlanningWorkspace({
   const requestStatusItems = useMemo<QuoteRequestStatusItem[]>(() => {
     if (quoteRequestsData !== null) {
       return quoteRequestsData
-        .filter((request) => request.status !== "CANCELED")
         .map((request) => {
           const latestResponse = request.responses[0] ?? null;
           const moduleNames = request.selectedModuleDetails?.map((module) => module.name) ?? [];
@@ -446,6 +500,19 @@ export function EventPlanningWorkspace({
               : moduleNames[0] ?? request.requirements;
           const reservationStatus = request.reservation?.status ?? null;
           const isConfirmed = reservationStatus === "CONFIRMED" || reservationStatus === "COMPLETED";
+
+          if (request.status === "CANCELED") {
+            return {
+              id: request.id,
+              vendorName: request.vendor?.companyName ?? "업체",
+              serviceLabel,
+              statusLabel: "일정 불가",
+              statusTone: "bg-slate-100 text-slate-700",
+              helperText: "업체가 일정 불가로 회신했습니다. 같은 업체에는 새 요청을 다시 보낼 수 있습니다.",
+              amount: null,
+              canReview: false
+            };
+          }
 
           if (isConfirmed) {
             return {
@@ -552,18 +619,19 @@ export function EventPlanningWorkspace({
     planId: plan?.id ?? "",
     title: plan?.title ?? "",
     type: eventType,
-    region: plan?.region ?? "서울",
+    region: plan?.region ?? "",
     scheduledAt: asDateInput(plan?.scheduledAt ?? null),
-    guestTarget: plan?.guestTarget ? String(plan.guestTarget) : "",
-    budget: plan?.budget ? String(plan.budget) : "",
+    guestTarget: numberInputValue(plan?.guestTarget),
+    budget: numberInputValue(plan?.budget),
     description: plan?.description ?? "",
   });
 
-  const [requestForm, setRequestForm] = useState({
+  const [requestForm, setRequestForm] = useState<RequestFormState>({
     eventPlanId: plan?.id ?? "",
     vendorId: vendors[0]?.id ?? "",
-    serviceDate: "",
-    guestCount: plan?.guestTarget ? String(plan.guestTarget) : "",
+    serviceDate: asDateInput(plan?.scheduledAt ?? null),
+    guestCount: numberInputValue(plan?.guestTarget),
+    budget: numberInputValue(plan?.budget),
     notes: "",
   });
 
@@ -574,8 +642,35 @@ export function EventPlanningWorkspace({
     setTimeout(() => setNotice(null), 4500);
   }
 
+  useEffect(() => {
+    const nextEventPlanId = plan?.id ?? "";
+    const prefill = getRequestFormPrefill(plan, selectedVendorActiveRequest);
+
+    setRequestForm((current) => {
+      const targetChanged =
+        current.eventPlanId !== nextEventPlanId || current.vendorId !== selectedVendorId;
+      const nextState: RequestFormState = {
+        ...current,
+        eventPlanId: nextEventPlanId,
+        vendorId: selectedVendorId,
+        serviceDate:
+          targetChanged || selectedVendorActiveRequest?.preferredDate
+            ? prefill.serviceDate
+            : current.serviceDate || prefill.serviceDate,
+        guestCount: targetChanged ? prefill.guestCount : current.guestCount || prefill.guestCount,
+        budget:
+          targetChanged || selectedVendorActiveRequest?.budget != null
+            ? prefill.budget
+            : current.budget || prefill.budget
+      };
+
+      return JSON.stringify(nextState) === JSON.stringify(current) ? current : nextState;
+    });
+  }, [plan, selectedVendorActiveRequest, selectedVendorId]);
+
   function handleSelectPlan(nextPlanId: string) {
     setSelectedPlanId(nextPlanId);
+    setPendingPlanDraft(null);
     const nextPlan = plans.find((item) => item.id === nextPlanId) ?? null;
 
     if (!nextPlan) {
@@ -587,19 +682,21 @@ export function EventPlanningWorkspace({
       planId: nextPlan.id,
       title: nextPlan.title,
       type: eventType,
-      region: nextPlan.region ?? "서울",
+      region: nextPlan.region ?? "",
       scheduledAt: asDateInput(nextPlan.scheduledAt),
-      guestTarget: nextPlan.guestTarget ? String(nextPlan.guestTarget) : "",
-      budget: nextPlan.budget ? String(nextPlan.budget) : "",
+      guestTarget: numberInputValue(nextPlan.guestTarget),
+      budget: numberInputValue(nextPlan.budget),
       description: nextPlan.description ?? "",
     });
     setRequestForm((current) => ({
       ...current,
       eventPlanId: nextPlan.id,
-      guestCount: nextPlan.guestTarget ? String(nextPlan.guestTarget) : "",
+      serviceDate: asDateInput(nextPlan.scheduledAt),
+      guestCount: numberInputValue(nextPlan.guestTarget),
+      budget: numberInputValue(nextPlan.budget),
     }));
     setIsEditingPlan(false);
-    router.push(`/planner/${eventType === "WEDDING" ? "wedding" : "funeral"}?planId=${nextPlan.id}`);
+    router.push(getWorkspaceHref(nextPlan.id, activeStep));
   }
 
   async function handleSavePlan(e: FormEvent<HTMLFormElement>) {
@@ -609,12 +706,39 @@ export function EventPlanningWorkspace({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...planForm, type: eventType }),
     });
-    const data = (await res.json()) as { error?: string; planId?: string };
+    const data = (await res.json()) as {
+      error?: string;
+      planId?: string;
+      recommendation?: PlanOption["aiRecommendation"];
+    };
     if (!res.ok) { showNotice("error", data.error ?? "저장에 실패했습니다."); return; }
     if (data.planId) {
+      const nextScheduledAt = planForm.scheduledAt
+        ? new Date(`${planForm.scheduledAt}T12:00:00+09:00`).toISOString()
+        : null;
+      setPendingPlanDraft({
+        id: data.planId,
+        title: planForm.title,
+        type: eventType,
+        region: planForm.region.trim(),
+        scheduledAt: nextScheduledAt,
+        guestTarget: Number.parseInt(planForm.guestTarget, 10) || null,
+        budget: Number.parseInt(planForm.budget, 10) || null,
+        description: planForm.description || null,
+        aiRecommendation: data.recommendation ?? null,
+      });
       setSelectedPlanId(data.planId);
       setPlanForm((c) => ({ ...c, planId: data.planId! }));
-      setRequestForm((c) => ({ ...c, eventPlanId: data.planId! }));
+      setRequestForm((c) => ({
+        ...c,
+        eventPlanId: data.planId!,
+        serviceDate: planForm.scheduledAt || c.serviceDate,
+        guestCount: planForm.guestTarget || c.guestCount,
+        budget: planForm.budget || c.budget,
+      }));
+      setDirection("forward");
+      setActiveStep("ai");
+      router.push(getWorkspaceHref(data.planId, "ai"));
     }
     showNotice("success", "행사 정보와 AI 추천을 저장했습니다.");
     setIsEditingPlan(false);
@@ -685,6 +809,7 @@ export function EventPlanningWorkspace({
       return;
     }
     const guestCount = Math.max(1, Number.parseInt(requestForm.guestCount, 10) || 1);
+    const requestedBudget = parseOptionalPositiveInt(requestForm.budget);
     quoteActionLockedRef.current = true;
     setIsQuoteActionPending(true);
     try {
@@ -695,7 +820,7 @@ export function EventPlanningWorkspace({
         selectedModuleIds,
         guestCount,
         preferredDate: requestForm.serviceDate || undefined,
-        budget: plan.budget || undefined,
+        budget: requestedBudget,
       });
       if (!result.success) { showNotice("error", result.error); return; }
       showNotice("success", "견적 요청을 보냈습니다. 업체 응답이 오면 제안서 확인 화면에서 확인할 수 있습니다.");
@@ -976,9 +1101,10 @@ export function EventPlanningWorkspace({
                     </FieldGroup>
                     <FieldGroup label="지역">
                       <Input
-                        placeholder="서울"
+                        placeholder="예: 서울 / 인천 / 수도권"
                         value={planForm.region}
                         onChange={(e) => setPlanForm((c) => ({ ...c, region: e.target.value }))}
+                        required
                       />
                     </FieldGroup>
                   </div>
@@ -1232,33 +1358,32 @@ export function EventPlanningWorkspace({
 
         {/* ══ STEP 3: 견적 요청 ══════════════════════════════════════ */}
         {activeStep === "vendors" && (
-          <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-            <div className="space-y-4">
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1.16fr)_minmax(320px,0.84fr)]">
+            <div className="space-y-3">
               <div>
                 <h2 className="font-[var(--font-serif)] text-base font-bold text-[#2c3455] tracking-tight">{theme.vendorTitle}</h2>
                 <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed break-keep">
                   {eventType === "WEDDING"
-                    ? "yeON이 추천 구성을 준비했습니다. 파트너사를 선택하고 필요한 패키지를 확인해보세요."
-                    : "yeON이 기본적인 의례 절차를 정리했습니다. 배웅을 신뢰하고 맡길 파트너사를 확인해 주세요."}
+                    ? "업체 기본 패키지와 추가 선택 항목을 확인한 뒤 바로 견적 요청을 보낼 수 있습니다."
+                    : "업체 기본 구성과 추가 선택 항목을 확인한 뒤 바로 상담 요청을 보낼 수 있습니다."}
                 </p>
               </div>
 
               {vendors.length > 0 ? (
-                <div className="flex flex-col border border-[#ebdccf]/40 bg-white rounded-2xl p-4 divide-y divide-[#f2ece4]/40">
+                <div className="flex flex-col rounded-2xl border border-[#ebdccf]/40 bg-white p-3 divide-y divide-[#f2ece4]/40">
                   {vendors.map((vendor) => {
                     const isSelected = selectedVendorId === vendor.id;
                     const VIcon = vendorIcon(vendor.companyName, vendor.name);
                     return (
                       <button
                         key={vendor.id}
-                        className="w-full text-left py-4.5 transition-all duration-150 flex items-center justify-between gap-4 px-2 hover:bg-[#faf9f5]/50 group"
+                        className="group flex w-full items-center justify-between gap-4 px-2 py-3.5 text-left transition-all duration-150 hover:bg-[#faf9f5]/50"
                         onClick={() => {
                           setSelectedVendorId(vendor.id);
                           setCheckedServiceIds(new Set());
                           setRequestForm((c) => ({
                             ...c,
                             vendorId: vendor.id,
-                            guestCount: plan?.guestTarget ? String(plan.guestTarget) : c.guestCount,
                           }));
                         }}
                         type="button"
@@ -1283,18 +1408,6 @@ export function EventPlanningWorkspace({
                         </div>
 
                         <div className="flex items-center gap-3.5 shrink-0 ml-auto">
-                          {(() => {
-                            const vendorSvcs = (vendor.services ?? []).filter(
-                              (s) => s.eventType === eventType && s.isActive
-                            );
-                            if (vendorSvcs.length === 0) return null;
-                            const minPrice = Math.min(...vendorSvcs.map((s) => s.basePrice));
-                            return (
-                              <span className="text-xs font-bold font-mono tracking-tight" style={{ color: isSelected ? theme.accentText : "#8c8275" }}>
-                                {minPrice.toLocaleString()}원~
-                              </span>
-                            );
-                          })()}
                           <div className="flex shrink-0 items-center gap-1.5">
                             {requestedVendorIds.has(vendor.id) && (
                               <span className="rounded bg-amber-50 text-amber-700 px-2 py-0.5 text-[9px] font-bold border border-amber-100 whitespace-nowrap">
@@ -1318,54 +1431,67 @@ export function EventPlanningWorkspace({
 
               {selectedVendorId && plan && (
                 <div className={`rounded-[2rem] border p-6 shadow-sm ${theme.cardHighlight}`}>
-                  <p className="mb-5 font-[var(--font-display)] text-sm font-bold text-foreground">
-                    견적 요청 →{" "}
-                    <span className={theme.accentText}>
-                      {vendors.find((v) => v.id === selectedVendorId)?.companyName ?? "선택된 업체"}
-                    </span>
-                  </p>
-
-                  {/* Progressive Disclosure Toggle */}
-                  <div className="mb-5">
-                    <button
-                      type="button"
-                      onClick={() => setIsDetailOpen(!isDetailOpen)}
-                      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-border/40 bg-white/50 hover:bg-white hover:text-foreground transition-all duration-150 ${theme.accentText}`}
-                    >
-                      <span>{isDetailOpen ? "일정 및 상세 조건 접기" : "일정 및 상세 조건 설정 (선택)"}</span>
-                      <span className="text-[9px] transition-transform duration-200">{isDetailOpen ? "▲" : "▼"}</span>
-                    </button>
-
-                    {isDetailOpen && (
-                      <div className="mt-4 space-y-4 border-t border-dashed border-border/50 pt-4 animate-fade-in">
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <FieldGroup label="희망 날짜">
-                            <Input
-                              type="date"
-                              value={requestForm.serviceDate}
-                              onChange={(e) => setRequestForm((c) => ({ ...c, serviceDate: e.target.value }))}
-                            />
-                          </FieldGroup>
-                          <FieldGroup label={`${theme.guestLabel} 수`}>
-                            <Input
-                              inputMode="numeric"
-                              value={requestForm.guestCount}
-                              onChange={(e) => setRequestForm((c) => ({ ...c, guestCount: e.target.value }))}
-                            />
-                          </FieldGroup>
-                        </div>
-                        <div>
-                          <FieldGroup label="요청 메모">
-                            <Textarea
-                              placeholder="현장 분위기, 필요 조건, 상담 요청 사항"
-                              value={requestForm.notes}
-                              onChange={(e) => setRequestForm((c) => ({ ...c, notes: e.target.value }))}
-                            />
-                          </FieldGroup>
-                        </div>
-                      </div>
-                    )}
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-[var(--font-display)] text-sm font-bold text-foreground">
+                      견적 요청 →{" "}
+                      <span className={theme.accentText}>
+                        {vendors.find((v) => v.id === selectedVendorId)?.companyName ?? "선택된 업체"}
+                      </span>
+                    </p>
+                    <span className="text-[10px] text-muted-foreground/60">요청 조건은 바로 업체에 전달됩니다.</span>
                   </div>
+
+                  <div className="mb-5 grid gap-3 rounded-2xl border border-[#ebdccf]/35 bg-white/75 p-4 sm:grid-cols-2">
+                    <FieldGroup label="희망 날짜">
+                      <Input
+                        type="date"
+                        value={requestForm.serviceDate}
+                        onChange={(e) => setRequestForm((c) => ({ ...c, serviceDate: e.target.value }))}
+                      />
+                    </FieldGroup>
+                    <FieldGroup label={`${theme.guestLabel} 수`}>
+                      <Input
+                        inputMode="numeric"
+                        placeholder="플랜 기준 인원"
+                        value={requestForm.guestCount}
+                        onChange={(e) => setRequestForm((c) => ({ ...c, guestCount: e.target.value }))}
+                      />
+                    </FieldGroup>
+                    <FieldGroup label="희망 예산">
+                      <Input
+                        inputMode="numeric"
+                        placeholder="플랜 기준 예산"
+                        value={requestForm.budget}
+                        onChange={(e) => setRequestForm((c) => ({ ...c, budget: e.target.value }))}
+                      />
+                    </FieldGroup>
+                    <FieldGroup label="행사 지역">
+                      <Input
+                        value={plan.region ?? "미정"}
+                        readOnly
+                        aria-readonly="true"
+                        className="bg-muted/30 text-muted-foreground"
+                      />
+                    </FieldGroup>
+                    <div className="sm:col-span-2">
+                      <FieldGroup label="요청 메모">
+                        <Textarea
+                          placeholder="현장 분위기, 필수 조건, 상담 요청 사항"
+                          value={requestForm.notes}
+                          onChange={(e) => setRequestForm((c) => ({ ...c, notes: e.target.value }))}
+                          className="min-h-[92px]"
+                        />
+                      </FieldGroup>
+                    </div>
+                  </div>
+
+                  {requestStatusItems.length > 0 && (
+                    <SentRequestStatusStrip
+                      items={requestStatusItems}
+                      themeAccentText={theme.accentText}
+                      onReview={() => navigateStep("booking")}
+                    />
+                  )}
 
                   {/* Module picker: real data → ModularQuoteBuilder, loading → skeleton, error → retry, fallback → old checklist */}
                   {vendorModules === null ? (
@@ -1524,7 +1650,7 @@ export function EventPlanningWorkspace({
                         })()}
 
                         <button
-                          className={`flex items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-semibold ${theme.btnAccent}`}
+                          className={`flex items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-semibold whitespace-nowrap break-keep ${theme.btnAccent}`}
                           disabled={
                             isQuoteActionPending ||
                             isPending ||
@@ -1558,13 +1684,20 @@ export function EventPlanningWorkspace({
             </div>
 
             {/* Sent requests sidebar */}
-            <div ref={requestStatusPanelRef} tabIndex={-1} className="space-y-3 outline-none">
-              <h3 className="font-[var(--font-display)] text-sm font-bold text-foreground">보낸 요청 현황</h3>
+            <div
+              ref={requestStatusPanelRef}
+              tabIndex={-1}
+              className="h-fit space-y-4 rounded-[2rem] border border-[#ebdccf]/40 bg-white/90 p-5 shadow-sm outline-none xl:sticky xl:top-4"
+            >
+              <div className="space-y-1">
+                <h3 className="font-[var(--font-display)] text-sm font-bold text-foreground">보낸 요청 현황</h3>
+                <p className="text-[11px] leading-5 text-muted-foreground">업체 응답 대기, 일정 불가, 제안 도착 상태를 여기에서 이어서 확인합니다.</p>
+              </div>
               {requestStatusItems.length > 0 ? (
                 requestStatusItems.map((item) => (
                   <div
                     key={item.id}
-                    className="rounded-[1.75rem] border border-border/60 bg-white/90 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm"
+                    className="rounded-[1.5rem] border border-border/60 bg-white/90 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
@@ -1580,7 +1713,7 @@ export function EventPlanningWorkspace({
                           {item.amount != null ? formatCurrency(item.amount) : "상세 확인"}
                         </span>
                         <button
-                          className={`text-xs font-semibold underline-offset-2 hover:underline ${theme.accentText}`}
+                          className={`text-xs font-semibold underline-offset-2 hover:underline whitespace-nowrap break-keep ${theme.accentText}`}
                           onClick={() => navigateStep("booking")}
                           type="button"
                         >
@@ -1596,7 +1729,7 @@ export function EventPlanningWorkspace({
 
               {comparisonQuotes.length > 0 && (
                 <button
-                  className={`flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-semibold ${theme.btnAccent}`}
+                  className={`flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-semibold whitespace-nowrap break-keep ${theme.btnAccent}`}
                   onClick={() => navigateStep("booking")}
                   type="button"
                 >
@@ -1634,6 +1767,63 @@ function FieldGroup({ label, children }: { label: string; children: ReactNode })
       <Label className="text-sm font-medium text-foreground">{label}</Label>
       {children}
     </div>
+  );
+}
+
+function SentRequestStatusStrip({
+  items,
+  themeAccentText,
+  onReview
+}: {
+  items: QuoteRequestStatusItem[];
+  themeAccentText: string;
+  onReview: () => void;
+}) {
+  const visibleItems = items.slice(0, 3);
+
+  return (
+    <section
+      className="mb-5 rounded-2xl border border-[#ebdccf]/45 bg-white/80 p-4"
+      aria-label="보낸 요청 현황"
+    >
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="font-[var(--font-display)] text-sm font-bold text-foreground">보낸 요청 현황</h3>
+          <p className="mt-0.5 text-[11px] leading-5 text-muted-foreground">
+            요청한 업체의 응답 상태와 제안 도착 여부를 바로 확인합니다.
+          </p>
+        </div>
+        <button
+          className={`text-xs font-semibold underline-offset-2 hover:underline whitespace-nowrap ${themeAccentText}`}
+          onClick={onReview}
+          type="button"
+        >
+          전체 진행 상태 확인 →
+        </button>
+      </div>
+      <div className="grid gap-2 lg:grid-cols-3">
+        {visibleItems.map((item) => (
+          <article key={item.id} className="rounded-xl border border-border/50 bg-[#fcfaf7] px-3.5 py-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold text-foreground">{item.vendorName}</p>
+                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{item.serviceLabel}</p>
+              </div>
+              <Badge className={`${item.statusTone} shrink-0 text-[9px]`}>{item.statusLabel}</Badge>
+            </div>
+            <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-muted-foreground">{item.helperText}</p>
+            {item.amount != null && (
+              <p className={`mt-2 text-xs font-bold ${themeAccentText}`}>{formatCurrency(item.amount)}</p>
+            )}
+          </article>
+        ))}
+      </div>
+      {items.length > visibleItems.length && (
+        <p className="mt-2 text-[10px] text-muted-foreground">
+          그 외 {items.length - visibleItems.length}건은 진행 상태 화면에서 확인할 수 있습니다.
+        </p>
+      )}
+    </section>
   );
 }
 

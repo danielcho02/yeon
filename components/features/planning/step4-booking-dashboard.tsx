@@ -66,12 +66,8 @@ function isVendorSpecificModule(
   return "catalogKey" in module && module.catalogKey === null;
 }
 
-function moduleScopeLabel(module: VendorServiceModuleData) {
-  if (module.catalogKey === null) {
-    return module.isBaseIncluded ? "업체 전용 포함" : "업체 전용 추가";
-  }
-
-  return module.isBaseIncluded ? "패키지 포함" : "추가 선택";
+function moduleSelectionLabel(module: VendorServiceModuleData) {
+  return module.isBaseIncluded ? "기본 포함" : "추가 선택";
 }
 
 function getLatestResponse(request: QuoteRequestWithResponses) {
@@ -218,7 +214,7 @@ function ModuleWorkflowDetail({
   return (
     <div className="rounded-2xl border border-[#e5e2da] bg-white p-5 shadow-sm">
       <div className="mb-4 space-y-1">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">모듈 진행 상세</p>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">요청 범위 진행 상세</p>
         <p className="text-sm font-bold text-[#2c3455]">요청 범위부터 예약 확정까지 한 화면에서 확인합니다.</p>
       </div>
 
@@ -271,8 +267,13 @@ function ModuleWorkflowDetail({
                                 {categoryLabel(module.category)}
                               </span>
                               <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-                                {moduleScopeLabel(module)}
+                                {moduleSelectionLabel(module)}
                               </span>
+                              {module.catalogKey === null && (
+                                <span className="rounded-full border border-[#ebdccf]/60 bg-white px-2 py-0.5 text-[9px] font-semibold text-[#8c8275]">
+                                  업체 전용
+                                </span>
+                              )}
                             </div>
                             {module.description && (
                               <p className="text-[11px] leading-5 text-muted-foreground">{module.description}</p>
@@ -474,12 +475,12 @@ export function Step4BookingDashboard({
                       </p>
                       <button
                         disabled={isQuoteActionPending}
-                        className={`flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-semibold ${theme.btnAccent}`}
+                        className={`flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-semibold whitespace-nowrap break-keep min-w-[8.5rem] ${theme.btnAccent}`}
                         onClick={() => handleAcceptQuote(response.id)}
                         type="button"
                       >
                         <CheckCheck className="h-3.5 w-3.5" />
-                        {isQuoteActionPending ? "수락 중..." : "이 제안 수락하기"}
+                        {isQuoteActionPending ? "수락 중..." : "제안 수락"}
                       </button>
                     </div>
                   </>

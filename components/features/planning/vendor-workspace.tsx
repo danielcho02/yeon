@@ -26,7 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { confirmReservation } from "@/app/actions/reservation";
-import { submitQuoteResponse } from "@/app/actions/quote";
+import { declineQuoteRequest, submitQuoteResponse } from "@/app/actions/quote";
 import { formatCurrency, formatDate } from "@/lib/format";
 import {
   getEventTypeLabel,
@@ -83,6 +83,88 @@ const PANELS: Array<{ key: PanelKey; label: string; description: string; icon: E
 
 const selectClassName =
   "h-11 w-full rounded-xl border border-[#e5e2da] bg-white px-4 text-xs text-[#2c3455] shadow-sm transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#c4977a]";
+
+type FinalConfirmTone = {
+  banner: string;
+  bannerIconWrap: string;
+  bannerEyebrow: string;
+  bannerCopy: string;
+  bannerButton: string;
+  metricActive: string;
+  emphasisCard: string;
+  emphasisDot: string;
+  emphasisBadge: string;
+  emphasisText: string;
+  emphasisDivider: string;
+  emphasisTitle: string;
+  emphasisEmpty: string;
+  infoCard: string;
+  infoTitle: string;
+  infoButton: string;
+};
+
+const FINAL_CONFIRM_TONES: Record<"WEDDING" | "FUNERAL" | "DEFAULT", FinalConfirmTone> = {
+  WEDDING: {
+    banner: "border-[#ebdccf] bg-[#fcf7f1]",
+    bannerIconWrap: "bg-[#fcf1e7] text-[#c4977a]",
+    bannerEyebrow: "text-[#9b6b4f]",
+    bannerCopy: "text-[#8c8275]",
+    bannerButton: "bg-[#c4977a] hover:bg-[#b08569]",
+    metricActive: "bg-[#fcf7f1] border-[#ebdccf] text-[#9b6b4f] font-bold",
+    emphasisCard: "border-[#ebdccf] bg-[#fcfbf8]",
+    emphasisDot: "bg-[#c4977a]",
+    emphasisBadge: "bg-[#fcf7f1] text-[#9b6b4f] border border-[#ebdccf]",
+    emphasisText: "text-[#9b6b4f]",
+    emphasisDivider: "divide-[#f0e6da]",
+    emphasisTitle: "text-[#7d5d47]",
+    emphasisEmpty: "text-[#9b6b4f]/60",
+    infoCard: "border-[#ebdccf] bg-[#fcf7f1]/70 text-[#7d5d47]",
+    infoTitle: "text-[#7d5d47]",
+    infoButton: "bg-[#c4977a] text-white hover:bg-[#b08569]"
+  },
+  FUNERAL: {
+    banner: "border-[#cbd3e0] bg-[#f4f6fa]",
+    bannerIconWrap: "bg-[#e6ebf3] text-[#2c3455]",
+    bannerEyebrow: "text-[#2c3455]",
+    bannerCopy: "text-[#475569]",
+    bannerButton: "bg-[#2c3455] hover:bg-[#1e2645]",
+    metricActive: "bg-[#eef2f6] border-[#cbd3e0] text-[#2c3455] font-bold",
+    emphasisCard: "border-[#cbd3e0] bg-[#f7f8fb]",
+    emphasisDot: "bg-[#2c3455]",
+    emphasisBadge: "bg-[#eef2f6] text-[#2c3455] border border-[#cbd3e0]",
+    emphasisText: "text-[#2c3455]",
+    emphasisDivider: "divide-[#dbe2ec]",
+    emphasisTitle: "text-[#2c3455]",
+    emphasisEmpty: "text-[#475569]/60",
+    infoCard: "border-[#cbd3e0] bg-[#eef2f6]/60 text-[#2c3455]",
+    infoTitle: "text-[#2c3455]",
+    infoButton: "bg-[#2c3455] text-white hover:bg-[#1e2645]"
+  },
+  DEFAULT: {
+    banner: "border-[#cbd3e0] bg-[#f4f6fa]",
+    bannerIconWrap: "bg-[#e6ebf3] text-[#2c3455]",
+    bannerEyebrow: "text-[#2c3455]",
+    bannerCopy: "text-[#475569]",
+    bannerButton: "bg-[#2c3455] hover:bg-[#1e2645]",
+    metricActive: "bg-[#eef2f6] border-[#cbd3e0] text-[#2c3455] font-bold",
+    emphasisCard: "border-[#cbd3e0] bg-[#f7f8fb]",
+    emphasisDot: "bg-[#2c3455]",
+    emphasisBadge: "bg-[#eef2f6] text-[#2c3455] border border-[#cbd3e0]",
+    emphasisText: "text-[#2c3455]",
+    emphasisDivider: "divide-[#dbe2ec]",
+    emphasisTitle: "text-[#2c3455]",
+    emphasisEmpty: "text-[#475569]/60",
+    infoCard: "border-[#cbd3e0] bg-[#eef2f6]/60 text-[#2c3455]",
+    infoTitle: "text-[#2c3455]",
+    infoButton: "bg-[#2c3455] text-white hover:bg-[#1e2645]"
+  }
+};
+
+function getFinalConfirmTone(eventType?: string | null) {
+  if (eventType === "WEDDING") return FINAL_CONFIRM_TONES.WEDDING;
+  if (eventType === "FUNERAL") return FINAL_CONFIRM_TONES.FUNERAL;
+  return FINAL_CONFIRM_TONES.DEFAULT;
+}
 
 function getServiceLabel(r: ReservationItem) {
   const isBundle = r.eventPlan.type === "FUNERAL" && 
@@ -164,6 +246,11 @@ function ModuleRequestScope({
                     <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
                       {module.isBaseIncluded ? "기본 포함" : "추가 선택"}
                     </span>
+                    {module.catalogKey === null && (
+                      <span className="rounded-full border border-[#ebdccf]/60 bg-white px-2 py-0.5 text-[9px] font-semibold text-[#8c8275]">
+                        업체 전용
+                      </span>
+                    )}
                   </div>
                   {module.description && (
                     <p className="text-[11px] leading-5 text-muted-foreground">{module.description}</p>
@@ -291,6 +378,9 @@ export function VendorWorkspace({
   const theme = getWorkspaceTheme(
     selectedReservation?.eventPlan.type ?? vendorPrimaryType
   );
+  const finalConfirmTone = getFinalConfirmTone(
+    selectedReservation?.eventPlan.type ?? vendorPrimaryType
+  );
   const ThemeIcon = theme.toneIcon;
   const inboxEmptyText =
     vendorPrimaryType === "WEDDING"
@@ -375,7 +465,31 @@ export function VendorWorkspace({
     // Canonical path: QuoteRequest without Reservation
     if (activeQuoteRequestId && !activeReservationId) {
       if (action === "decline") {
-        setError("취소는 예약 확정 후 가능합니다.");
+        if (busyReservationId === activeQuoteRequestId) return;
+        setBusyReservationId(activeQuoteRequestId);
+        setMessage(null);
+        setError(null);
+        try {
+          const result = await declineQuoteRequest(
+            activeQuoteRequestId,
+            proposalForm.notes || undefined
+          );
+          if (!result.success) {
+            setError(result.error);
+            return;
+          }
+          setMessage("일정 불가로 회신했습니다.");
+          setProposalForm({
+            reservationId: "",
+            quoteRequestId: "",
+            serviceDate: "",
+            proposalAmount: "",
+            notes: ""
+          });
+          startTransition(() => router.refresh());
+        } finally {
+          setBusyReservationId(null);
+        }
         return;
       }
       if (!proposalForm.serviceDate || !proposalForm.proposalAmount) {
@@ -535,26 +649,29 @@ export function VendorWorkspace({
     : getRequestMemo(selectedProposalReservation);
 
   function scrollToPendingConfirmations() {
-    pendingConfirmationsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setActivePanel("final_confirm");
+    window.setTimeout(() => {
+      pendingConfirmationsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
   }
 
   return (
     <div className="grid gap-6">
       {/* ── Priority Banner for Pending Confirmations ──────────────────────────────────── */}
       {pendingConfirmationReservations.length > 0 && (
-        <div className="relative overflow-hidden rounded-2xl border border-violet-200 bg-violet-50/50 p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-fade-in">
+        <div className={`relative overflow-hidden rounded-2xl border p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-fade-in ${finalConfirmTone.banner}`}>
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-violet-100 text-violet-700">
-              <Clock className="h-5 w-5 text-violet-700" />
+            <div className={`p-2 rounded-xl ${finalConfirmTone.bannerIconWrap}`}>
+              <Clock className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs font-bold text-violet-800">예약 최종 확정 필요 (우선 작업 권장)</p>
-              <p className="text-[11px] text-violet-700/80">고객이 견적을 최종 수락했습니다. 일정을 최종 승인해 예약 확정서를 완성해 주세요.</p>
+              <p className={`text-xs font-bold ${finalConfirmTone.bannerEyebrow}`}>예약 최종 확정 필요</p>
+              <p className={`text-[11px] ${finalConfirmTone.bannerCopy}`}>고객이 견적을 최종 수락했습니다. 일정을 최종 승인해 예약 확정서를 완성해 주세요.</p>
             </div>
           </div>
           <button
             onClick={scrollToPendingConfirmations}
-            className="px-4 h-9 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl transition-all shadow-sm"
+            className={`px-4 h-9 text-xs font-bold text-white rounded-xl transition-all shadow-sm whitespace-nowrap break-keep ${finalConfirmTone.bannerButton}`}
           >
             대기 건 {pendingConfirmationReservations.length}개 확인하기
           </button>
@@ -588,7 +705,7 @@ export function VendorWorkspace({
           </div>
           <div className={`flex items-center gap-1.5 border px-3 py-1.5 rounded-lg shadow-sm transition-all ${
             pendingConfirmationReservations.length > 0
-              ? "bg-violet-50 border-violet-200 text-violet-700 font-bold"
+              ? finalConfirmTone.metricActive
               : "bg-white border-[#ebdccf]/40 text-[#2c3455]"
           }`}>
             <span className="text-[10px]">최종 확정 필요</span>
@@ -619,17 +736,16 @@ export function VendorWorkspace({
       )}
 
       {/* ── Pending Confirmations (Priority Task Queue List) ─────────────────── */}
-      {pendingConfirmationReservations.length > 0 && (
+      {pendingConfirmationReservations.length > 0 && activePanel !== "final_confirm" && (
         <section
-          ref={pendingConfirmationsRef}
-          className="scroll-mt-6 rounded-2xl border border-[#ebdccf] bg-[#faf9f5]/55 p-6"
+          className={`scroll-mt-6 rounded-2xl border p-6 ${finalConfirmTone.emphasisCard}`}
         >
           <div className="mb-5 flex items-center justify-between border-b border-[#f2ece4] pb-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-violet-500" />
+                <span className={`h-2 w-2 rounded-full ${finalConfirmTone.emphasisDot}`} />
                 <h2 className="font-[var(--font-serif)] text-base font-bold text-[#2c3455]">오늘 처리할 일: 예약 최종 확정</h2>
-                <Badge className="bg-violet-50 text-violet-700 border border-violet-100 hover:bg-violet-50 text-[10px]">
+                <Badge className={`${finalConfirmTone.emphasisBadge} hover:bg-transparent text-[10px]`}>
                   {pendingConfirmationReservations.length}건 대기
                 </Badge>
               </div>
@@ -652,7 +768,7 @@ export function VendorWorkspace({
                   <div className="space-y-3 flex-1">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center gap-1 rounded bg-violet-50 text-violet-700 px-2 py-0.5 text-[9px] font-bold border border-violet-100">
+                        <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[9px] font-bold border ${finalConfirmTone.emphasisBadge}`}>
                           수락 완료 · 최종 확정 필요
                         </span>
                         <p className="font-[var(--font-serif)] text-sm font-bold text-[#2c3455]">
@@ -686,7 +802,7 @@ export function VendorWorkspace({
                     </div>
 
                     {r.vendorConfirmationDueAt && (
-                      <div className="flex items-center gap-1.5 text-xs text-violet-700 font-semibold">
+                      <div className={`flex items-center gap-1.5 text-xs font-semibold ${finalConfirmTone.emphasisText}`}>
                         <Clock className="h-3.5 w-3.5" />
                         <span>확정 기한: {formatDate(r.vendorConfirmationDueAt)} 까지 (SLA 3일)</span>
                       </div>
@@ -702,13 +818,13 @@ export function VendorWorkspace({
 
                   <div className="flex shrink-0">
                     <Button
-                      disabled={isPending || busyReservationId === r.id}
-                      onClick={() => confirmAcceptedReservation(r.id)}
+                      onClick={() => setActivePanel("final_confirm")}
                       size="sm"
-                      className="bg-[#2c3455] text-white hover:bg-[#1e2645] transition-colors duration-150 rounded-xl h-9 text-xs font-semibold px-4"
+                      variant="outline"
+                      className="rounded-xl border-[#e5e2da] bg-white text-xs font-semibold text-[#2c3455] hover:bg-[#faf9f5] h-9 px-4 whitespace-nowrap break-keep"
                     >
                       <BadgeCheck className="mr-1 h-3.5 w-3.5" />
-                      {busyReservationId === r.id ? "승인 중..." : "예약 최종 확정"}
+                      최종 확정 탭에서 처리
                     </Button>
                   </div>
                 </article>
@@ -750,41 +866,41 @@ export function VendorWorkspace({
       {activePanel === "home" && (
         <section className="animate-fade-in space-y-6">
           {/* Priority Task: Pending Final Confirmations */}
-          <div className="rounded-2xl border border-violet-100 bg-[#fbfaff]/60 p-6 shadow-sm">
-            <div className="mb-4 flex items-center justify-between border-b border-violet-100 pb-3">
+          <div className={`rounded-2xl border p-6 shadow-sm ${finalConfirmTone.emphasisCard}`}>
+            <div className={`mb-4 flex items-center justify-between border-b pb-3 ${finalConfirmTone.emphasisDivider}`}>
               <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-violet-500 shrink-0" />
-                <h3 className="font-[var(--font-serif)] text-sm font-bold text-violet-950">최종 확정 대기 목록 (우선 조치 필요)</h3>
+                <span className={`h-2 w-2 rounded-full shrink-0 ${finalConfirmTone.emphasisDot}`} />
+                <h3 className={`font-[var(--font-serif)] text-sm font-bold ${finalConfirmTone.emphasisTitle}`}>최종 확정 대기 목록</h3>
               </div>
-              <Badge className="bg-violet-50 text-violet-700 border border-violet-100 text-[10px] rounded-full shadow-none font-bold">
+              <Badge className={`${finalConfirmTone.emphasisBadge} text-[10px] rounded-full shadow-none font-bold`}>
                 {pendingConfirmationReservations.length}건 대기
               </Badge>
             </div>
 
             {pendingConfirmationReservations.length ? (
-              <div className="divide-y divide-violet-100">
+              <div className={`divide-y ${finalConfirmTone.emphasisDivider}`}>
                 {pendingConfirmationReservations.map((r) => (
                   <div key={r.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="space-y-1">
-                      <p className="font-[var(--font-serif)] text-xs font-bold text-violet-900">{r.eventPlan.title}</p>
-                      <p className="text-[10px] text-violet-700/70">
+                      <p className={`font-[var(--font-serif)] text-xs font-bold ${finalConfirmTone.emphasisTitle}`}>{r.eventPlan.title}</p>
+                      <p className={`text-[10px] ${finalConfirmTone.bannerCopy}`}>
                         {getServiceLabel(r)} · {formatDate(r.serviceDate)} · {formatCurrency(r.confirmedAmount ?? r.quotedAmount)}
                       </p>
                     </div>
                     <Button
-                      disabled={isPending || busyReservationId === r.id}
-                      onClick={() => confirmAcceptedReservation(r.id)}
+                      onClick={() => setActivePanel("final_confirm")}
                       size="sm"
-                      className="bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-[10px] h-8 font-semibold shadow-sm shrink-0 px-3.5"
+                      variant="outline"
+                      className="rounded-xl text-[10px] h-8 font-semibold shadow-sm shrink-0 px-3.5 whitespace-nowrap break-keep border-[#e5e2da] bg-white text-[#2c3455] hover:bg-[#faf9f5]"
                     >
                       <BadgeCheck className="mr-1 h-3.5 w-3.5" />
-                      {busyReservationId === r.id ? "확정 중..." : "최종 확정 승인"}
+                      최종 확정 탭으로
                     </Button>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="py-6 text-center text-xs text-violet-600/60 font-medium">오늘 최종 확정이 필요한 대기 건이 없습니다.</p>
+              <p className={`py-6 text-center text-xs font-medium ${finalConfirmTone.emphasisEmpty}`}>오늘 최종 확정이 필요한 대기 건이 없습니다.</p>
             )}
           </div>
 
@@ -1074,24 +1190,24 @@ export function VendorWorkspace({
               </div>
 
               {isSelectedAcceptedProposal && selectedProposalReservation && (
-                <div className="rounded-xl border border-violet-100 bg-violet-50/40 p-4 text-xs text-violet-800 space-y-2">
+                <div className={`rounded-xl border p-4 text-xs space-y-2 ${finalConfirmTone.infoCard}`}>
                   <p className="font-bold">사용자가 이 견적을 최종 수락했습니다.</p>
                   <p className="text-muted-foreground leading-relaxed">
                     견적 금액이나 상세 정보의 수정은 불가능하며, 이제 예약 최종 확정을 진행할 수 있습니다.
                   </p>
                   {selectedProposalReservation.vendorConfirmationDueAt && (
-                    <p className="font-semibold text-violet-800">
+                    <p className={`font-semibold ${finalConfirmTone.infoTitle}`}>
                       예약 확정 기한: {formatDate(selectedProposalReservation.vendorConfirmationDueAt)} 까지
                     </p>
                   )}
                   <Button
-                    className="mt-2 bg-violet-600 text-white hover:bg-violet-700 transition-all rounded-xl text-xs h-9 font-semibold"
-                    disabled={busyReservationId === selectedProposalReservation.id}
-                    onClick={() => confirmAcceptedReservation(selectedProposalReservation.id)}
+                    className="mt-2 rounded-xl text-xs h-9 font-semibold whitespace-nowrap break-keep border-[#e5e2da] bg-white text-[#2c3455] hover:bg-[#faf9f5]"
+                    onClick={() => setActivePanel("final_confirm")}
+                    variant="outline"
                     size="sm"
                   >
                     <BadgeCheck className="mr-1 h-3.5 w-3.5" />
-                    {busyReservationId === selectedProposalReservation.id ? "확정 중..." : "예약 최종 확정"}
+                    최종 확정 탭으로 이동
                   </Button>
                 </div>
               )}
@@ -1171,7 +1287,7 @@ export function VendorWorkspace({
                 <Button
                   disabled={isPending || isSelectedAcceptedProposal || isSelectedRespondedQuoteRequest || busyReservationId === (proposalForm.quoteRequestId || proposalForm.reservationId)}
                   onClick={() => updateReservation("quote")}
-                  className="flex-1 bg-[#2c3455] text-white hover:bg-[#1e2645] transition-all rounded-xl h-10 text-xs font-semibold"
+                  className="flex-1 bg-[#2c3455] text-white hover:bg-[#1e2645] transition-all rounded-xl h-10 text-xs font-semibold whitespace-nowrap break-keep min-w-[10rem]"
                 >
                   <MessageSquareQuote className="mr-1.5 h-4 w-4" />
                   {busyReservationId === (proposalForm.quoteRequestId || proposalForm.reservationId)
@@ -1186,7 +1302,7 @@ export function VendorWorkspace({
                   disabled={isPending || isSelectedAcceptedProposal || isSelectedRespondedQuoteRequest || busyReservationId === (proposalForm.quoteRequestId || proposalForm.reservationId)}
                   onClick={() => updateReservation("decline")}
                   variant="destructive"
-                  className="rounded-xl h-10 text-xs font-semibold"
+                  className="rounded-xl h-10 text-xs font-semibold whitespace-nowrap break-keep min-w-[9rem]"
                 >
                   <XCircle className="mr-1.5 h-4 w-4" />
                   일정 불가 회신
@@ -1210,16 +1326,16 @@ export function VendorWorkspace({
                           </p>
                           <p className="text-[11px] text-muted-foreground">{r.eventPlan.title}</p>
                         </div>
-                        <Badge className={r.quoteRequestStatus === "ACCEPTED" ? "bg-violet-50 text-violet-700 border border-violet-100 text-[9px] font-bold" : "bg-[#faf6f2] text-[#c4977a] border border-[#ebdccf]/50 text-[9px] font-bold"}>
+                        <Badge className={r.quoteRequestStatus === "ACCEPTED" ? `${finalConfirmTone.emphasisBadge} text-[9px] font-bold` : "bg-[#faf6f2] text-[#c4977a] border border-[#ebdccf]/50 text-[9px] font-bold"}>
                           {r.quoteRequestStatus === "ACCEPTED" ? "사용자 수락 완료" : "제안 발송 완료"}
                         </Badge>
                       </div>
 
-                      <div className="mt-3.5 grid gap-1.5 text-xs text-[#8c8275] border-t border-[#f2ece4]/40 pt-3">
-                        <div className="flex items-center gap-2 text-[#2c3455]"><CalendarDays className="h-3.5 w-3.5 text-muted-foreground/60" />{formatDate(r.serviceDate)}</div>
-                        <div className="flex items-center gap-2 text-[#2c3455]"><Wallet className="h-3.5 w-3.5 text-muted-foreground/60" />{formatCurrency(r.confirmedAmount ?? r.quotedAmount)}</div>
-                        {r.quoteRequestStatus === "ACCEPTED" && r.vendorConfirmationDueAt && (
-                          <div className="flex items-center gap-2 font-semibold text-violet-700">
+                        <div className="mt-3.5 grid gap-1.5 text-xs text-[#8c8275] border-t border-[#f2ece4]/40 pt-3">
+                          <div className="flex items-center gap-2 text-[#2c3455]"><CalendarDays className="h-3.5 w-3.5 text-muted-foreground/60" />{formatDate(r.serviceDate)}</div>
+                          <div className="flex items-center gap-2 text-[#2c3455]"><Wallet className="h-3.5 w-3.5 text-muted-foreground/60" />{formatCurrency(r.confirmedAmount ?? r.quotedAmount)}</div>
+                          {r.quoteRequestStatus === "ACCEPTED" && r.vendorConfirmationDueAt && (
+                          <div className={`flex items-center gap-2 font-semibold ${finalConfirmTone.emphasisText}`}>
                             <Clock className="h-3.5 w-3.5" />
                             확정 요청 기한: {formatDate(r.vendorConfirmationDueAt)}
                           </div>
@@ -1229,13 +1345,13 @@ export function VendorWorkspace({
                       <div className="mt-4 pt-1 flex items-center justify-between">
                         {r.quoteRequestStatus === "ACCEPTED" ? (
                           <Button
-                            disabled={isPending || busyReservationId === r.id}
-                            onClick={() => confirmAcceptedReservation(r.id)}
+                            onClick={() => setActivePanel("final_confirm")}
                             size="sm"
-                            className="bg-[#2c3455] text-white hover:bg-[#1e2645] transition-all rounded-xl text-xs h-8 font-semibold px-3"
+                            variant="outline"
+                            className="rounded-xl text-xs h-8 font-semibold px-3 whitespace-nowrap break-keep border-[#e5e2da] bg-white text-[#2c3455] hover:bg-[#faf9f5]"
                           >
                             <BadgeCheck className="mr-1 h-3.5 w-3.5" />
-                            {busyReservationId === r.id ? "확정 중..." : "예약 최종 확정"}
+                            최종 확정 탭으로
                           </Button>
                         ) : (
                           <span className="text-[10px] text-[#8c8275]/60">사용자의 수락 및 피드백 대기 중</span>
@@ -1291,7 +1407,10 @@ export function VendorWorkspace({
 
       {/* ── 4. Final Confirm Panel (최종 확정 대기 목록) ────────────────────── */}
       {activePanel === "final_confirm" && (
-        <section className="animate-fade-in rounded-2xl border border-[#ebdccf] bg-[#faf9f5]/55 p-6 space-y-6">
+        <section
+          ref={pendingConfirmationsRef}
+          className={`scroll-mt-6 animate-fade-in rounded-2xl border p-6 space-y-6 ${finalConfirmTone.emphasisCard}`}
+        >
           <div className="border-b border-[#f2ece4] pb-4">
             <h2 className="font-[var(--font-serif)] text-base font-bold text-[#2c3455]">예약 최종 승인 대기 목록</h2>
             <p className="text-xs text-[#8c8275] mt-1">
@@ -1310,7 +1429,7 @@ export function VendorWorkspace({
                     <div className="space-y-3 flex-1">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <span className="inline-flex items-center gap-1 rounded bg-violet-50 text-violet-700 px-2 py-0.5 text-[9px] font-bold border border-violet-100">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-bold border rounded ${finalConfirmTone.emphasisBadge}`}>
                             최종 확정 승인 대기
                           </span>
                           <p className="font-[var(--font-serif)] text-sm font-bold text-[#2c3455]">{r.eventPlan.title}</p>
@@ -1352,7 +1471,7 @@ export function VendorWorkspace({
                         disabled={isPending || busyReservationId === r.id}
                         onClick={() => confirmAcceptedReservation(r.id)}
                         size="sm"
-                        className="bg-violet-600 hover:bg-violet-700 text-white rounded-xl h-9 text-xs font-semibold px-4 transition-all"
+                        className={`text-white rounded-xl h-9 text-xs font-semibold px-4 transition-all whitespace-nowrap break-keep ${finalConfirmTone.infoButton}`}
                       >
                         <BadgeCheck className="mr-1 h-3.5 w-3.5" />
                         {busyReservationId === r.id ? "승인 중..." : "최종 예약 승인"}

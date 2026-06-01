@@ -468,18 +468,23 @@ async function main() {
   const weddingCustomOptionalModule = weddingSeedModules.find(
     (module) => module.name === "야외 버진로드 런너 추가"
   );
-  const weddingCustomIncludedModule = weddingSeedModules.find(
+  const weddingCustomOptionalSignboardModule = weddingSeedModules.find(
     (module) => module.name === "웰컴 사인보드 커스텀 제작"
+  );
+  const weddingStandardIncludedModule = weddingSeedModules.find(
+    (module) => module.name === "신부 대기실"
   );
   const funeralCustomModule = funeralSeedModules.find(
     (module) => module.name === "추모 동선 안내 사인물"
   );
 
   assert.ok(weddingCustomOptionalModule, "wedding custom optional module must exist after seed");
-  assert.ok(weddingCustomIncludedModule, "wedding custom included module must exist after seed");
+  assert.ok(weddingCustomOptionalSignboardModule, "wedding custom signboard module must exist after seed");
+  assert.ok(weddingStandardIncludedModule, "wedding standard included module must exist after seed");
   assert.ok(funeralCustomModule, "funeral custom module must exist after seed");
   assert.equal(weddingCustomOptionalModule.isBaseIncluded, false);
-  assert.equal(weddingCustomIncludedModule.isBaseIncluded, true);
+  assert.equal(weddingCustomOptionalSignboardModule.isBaseIncluded, false);
+  assert.equal(weddingStandardIncludedModule.isBaseIncluded, true);
   assert.equal(funeralCustomModule.isBaseIncluded, false);
   checks.custom_vendor_modules_seeded = true;
 
@@ -516,17 +521,21 @@ async function main() {
     weddingSeedModules.filter((module) => !module.isBaseIncluded).map((module) => module.id)
   );
   assert.ok(
-    weddingBaseIncludedModuleIds.has(weddingCustomIncludedModule.id),
-    "base-included custom wedding module must remain in the included package set"
+    weddingBaseIncludedModuleIds.has(weddingStandardIncludedModule.id),
+    "standard wedding base module must remain in the included package set"
   );
   assert.equal(
-    weddingAdjustableModuleIds.has(weddingCustomIncludedModule.id),
+    weddingAdjustableModuleIds.has(weddingStandardIncludedModule.id),
     false,
-    "base-included custom wedding module must not appear in adjustable module selections"
+    "base-included standard wedding module must not appear in adjustable module selections"
   );
   assert.ok(
     weddingAdjustableModuleIds.has(weddingCustomOptionalModule.id),
     "optional custom wedding module must stay selectable"
+  );
+  assert.ok(
+    weddingAdjustableModuleIds.has(weddingCustomOptionalSignboardModule.id),
+    "vendor-specific wedding signboard must stay selectable as an optional add-on"
   );
   checks.base_included_custom_module_not_double_counted = true;
 
@@ -586,9 +595,9 @@ async function main() {
 
   assert.ok(modules.length > 0, "vendor modules must exist; run npx prisma db seed first");
   assert.ok(
-    modules.some((module) => module.id === weddingCustomIncludedModule.id) ||
-    weddingSeedModules.some((module) => module.id === weddingCustomIncludedModule.id),
-    "wedding custom included module must be readable from vendor module queries"
+    modules.some((module) => module.id === weddingStandardIncludedModule.id) ||
+    weddingSeedModules.some((module) => module.id === weddingStandardIncludedModule.id),
+    "wedding standard included module must be readable from vendor module queries"
   );
 
   const selectedModules = [

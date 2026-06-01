@@ -94,17 +94,14 @@ function ModuleRow({
     : `${displayPrice.toLocaleString('ko-KR')}원`
 
   return (
-    <motion.button
-      layout
+    <button
       type="button"
       onClick={onToggle}
-      className="group relative flex w-full items-center justify-between gap-4 border-b border-[#e5e2da]/70 py-3 text-left transition-all duration-150 hover:bg-[#faf9f5]/50 px-2"
+      className="group relative flex w-full items-center justify-between gap-4 border-b border-[#e5e2da]/70 px-2 py-2.5 text-left transition-all duration-150 hover:bg-[#faf9f5]/50"
       style={{
         borderBottomColor: isSelected ? config.primary : '#ebdccf/40',
       }}
-      whileTap={{ scale: 0.99 }}
     >
-      {/* Left: Name & Category Label */}
       <div className="flex flex-col min-w-0 pr-2">
         <span 
           className="text-xs font-semibold leading-tight text-[#2c3455] group-hover:text-foreground transition-colors break-keep"
@@ -118,14 +115,13 @@ function ModuleRow({
         <span className="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground/60 font-normal">
           <span>{module.categoryLabel}</span>
           {module.isVendorSpecific && (
-            <span className="rounded-full bg-[#faf8f4] px-1.5 py-0.5 font-semibold text-[#9b6b4f]">
-              업체 전용 추가
+            <span className="rounded-full border border-[#ebdccf]/60 bg-white px-1.5 py-0.5 text-[9px] font-semibold text-[#8c8275]">
+              업체 전용
             </span>
           )}
         </span>
       </div>
 
-      {/* Right: Price & Checkbox */}
       <div className="flex items-center gap-3.5 shrink-0 ml-auto">
         <span 
           className="text-xs font-bold font-mono tracking-tight whitespace-nowrap" 
@@ -143,7 +139,7 @@ function ModuleRow({
           {isSelected && <Check size={10} color="white" strokeWidth={3.5} />}
         </div>
       </div>
-    </motion.button>
+    </button>
   )
 }
 
@@ -254,8 +250,12 @@ function SummaryPanel({
             <PriceCountUp value={totalPrice} />
           </div>
         </div>
-        <p className="mt-1 text-[10px] text-muted-foreground/60 leading-normal break-keep">상세 조율 결과에 따라 금액이 유연하게 다듬어집니다.</p>
+        <p className="mt-1 text-[10px] text-muted-foreground/60 leading-normal break-keep">상세 조율 결과에 따라 금액이 달라질 수 있습니다.</p>
       </div>
+
+      <p className="rounded-xl border border-[#e5e2da] bg-[#fcfaf7] px-3.5 py-2.5 text-[10px] leading-normal text-[#8c8275] break-keep">
+        승인된 파트너에게만 요청이 전달되며, 견적 요청 단계에서는 결제가 진행되지 않습니다.
+      </p>
 
       <button
         type="button"
@@ -502,10 +502,9 @@ export function ModularQuoteBuilder({
   }
 
   return (
-    <div className="relative space-y-6">
-      {/* ── 1. Package Proposal Board ── */}
+    <div className="relative space-y-5">
       {basePackages.length > 0 && (
-        <div className="space-y-3.5">
+        <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e5e2da] pb-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[#2c3455]">
               {usesVendorModules
@@ -516,7 +515,7 @@ export function ModularQuoteBuilder({
             </h3>
             <span className="text-[10px] text-muted-foreground/60 leading-normal">
               {usesVendorModules
-                ? '업체가 기본 포함으로 등록한 항목을 하나의 패키지로 계산합니다.'
+                ? '업체가 기본 포함으로 등록한 항목을 하나의 구성으로 묶어 보여드립니다.'
                 : isWedding
                   ? '번거로운 구성 조립 없이, 검증된 세트로 아름답고 확실하게 준비합니다.'
                   : '갑작스러운 슬픔 속에서, 경건하고 품격 있게 배웅을 보좌할 필수 구성 절차안입니다.'}
@@ -561,13 +560,12 @@ export function ModularQuoteBuilder({
         </div>
       )}
 
-      {/* ── 2. Included Spec Board (현재 구성안에 무엇이 꼼꼼하게 다 포함되어 있는지 요약) ── */}
       {basePackage && baseIncludedModules.length > 0 && (
-        <div className="rounded-2xl border border-dashed border-[#e5e2da] p-5 bg-[#faf9f5]/30 space-y-3">
+        <div className="rounded-2xl border border-dashed border-[#e5e2da] bg-[#faf9f5]/30 p-4 space-y-3">
           <div className="flex items-center gap-2">
             <ClipboardList size={13} style={{ color: config.primary }} />
             <h4 className="text-xs font-bold text-[#2c3455]">
-              {basePackage.name} 포함 품목 상세 스펙 리포트
+              {basePackage.name} 포함 항목
             </h4>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -580,33 +578,28 @@ export function ModularQuoteBuilder({
                 <span>{m.name}</span>
                 <span className="text-[9px] text-[#8c8275]/50">({m.categoryLabel})</span>
                 {m.isVendorSpecific && (
-                  <span className="rounded-full bg-[#faf8f4] px-1.5 py-0.5 text-[9px] font-semibold text-[#9b6b4f]">
-                    업체 전용 포함
+                  <span className="rounded-full border border-[#ebdccf]/60 bg-white px-1.5 py-0.5 text-[9px] font-semibold text-[#8c8275]">
+                    업체 전용
                   </span>
                 )}
               </div>
             ))}
           </div>
           <p className="text-[10px] text-muted-foreground/60 leading-normal">
-            {isWedding 
-              ? '위 항목이 권장 구성에 포함되어 제공됩니다. 세부 항목 조정을 원하시면 하단 개별 조정을 펼치세요.' 
-              : '장례 절차에 필요한 필수 의전 품목이 모두 사전 매핑되었습니다.'}
+            기본 포함 항목은 아래 추가 선택 목록에 다시 나타나지 않습니다.
           </p>
         </div>
       )}
 
-      {/* ── 3. Progressive Disclosure: Optional Customization (세부 항목 개별 조절) ── */}
-      <div className="border-t border-[#ebdccf]/40 pt-5">
+      <div className="border-t border-[#ebdccf]/40 pt-4">
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-0.5">
             <h4 className="text-xs font-bold text-[#2c3455] flex items-center gap-1">
-              <span>{isWedding ? "웨딩 세부 품목 개별 조정" : "장례 준비 항목 개별 조정"}</span>
+              <span>추가 선택 항목</span>
               <span className="text-[9px] font-normal text-muted-foreground/50">(선택 사항)</span>
             </h4>
             <p className="text-[10px] text-muted-foreground/60 leading-normal break-keep">
-              {isWedding 
-                ? "패키지 외 표준 추가 항목과 업체 전용 추가 옵션을 선택할 수 있습니다."
-                : "패키지 외 표준 준비 항목과 업체 전용 추가 옵션을 선택할 수 있습니다."}
+              업체 기본 패키지 외에 필요한 표준 항목과 업체 전용 옵션만 더 선택할 수 있습니다.
             </p>
           </div>
           <button
@@ -615,14 +608,13 @@ export function ModularQuoteBuilder({
             className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e5e2da] bg-white hover:bg-[#faf9f5]/50 text-xs font-semibold transition-all duration-150`}
             style={{ color: config.primary }}
           >
-            <span>{showCustomizer ? "개별 조정 접기" : "개별 조정 펼치기"}</span>
+            <span>{showCustomizer ? "추가 선택 접기" : "추가 선택 열기"}</span>
             <span className="text-[9px]">{showCustomizer ? "▲" : "▼"}</span>
           </button>
         </div>
 
         {showCustomizer && (
-          <div className="mt-5 space-y-4 animate-fade-in">
-            {/* Category Tabs */}
+          <div className="mt-4 space-y-4 animate-fade-in">
             <div className="flex gap-1.5 overflow-x-auto pb-1.5 border-b border-[#e5e2da] scrollbar-none">
               <button
                 type="button"
@@ -653,66 +645,46 @@ export function ModularQuoteBuilder({
               ))}
             </div>
 
-            {/* Module Row List */}
             <div className="flex-1">
               {allModules.length === 0 ? (
                 <p className="py-8 text-center text-xs text-muted-foreground/60">등록된 서비스 모듈이 없습니다.</p>
               ) : (
-                <motion.div layout className="flex flex-col border border-[#ebdccf]/40 bg-white rounded-xl p-3 divide-y divide-[#f2ece4]/40">
-                  <AnimatePresence>
-                    {adjustableModules.map((m) => (
-                      <ModuleRow
-                        key={m.key}
-                        module={m}
-                        isSelected={builder.isSelected(m.key)}
-                        onToggle={() => builder.toggleModule(m)}
-                        theme={theme}
-                        guestCount={guestCount}
-                      />
-                    ))}
-                  </AnimatePresence>
+                <div className="flex flex-col rounded-xl border border-[#ebdccf]/40 bg-white p-3 divide-y divide-[#f2ece4]/40">
+                  {adjustableModules.map((m) => (
+                    <ModuleRow
+                      key={m.key}
+                      module={m}
+                      isSelected={builder.isSelected(m.key)}
+                      onToggle={() => builder.toggleModule(m)}
+                      theme={theme}
+                      guestCount={guestCount}
+                    />
+                  ))}
                   {adjustableModules.length === 0 && (
                     <div className="px-3 py-8 text-center text-xs leading-relaxed text-muted-foreground/70">
                       기본 패키지에 포함된 항목은 위 포함 품목에서 확인됩니다.
                     </div>
                   )}
-                </motion.div>
+                </div>
               )}
             </div>
           </div>
         )}
       </div>
 
-      {/* Desktop: 2-col layout */}
-      <div className="flex flex-col lg:flex-row gap-6 border-t border-[#e5e2da] pt-5">
-        <div className="flex-1">
-          <div className="rounded-xl border border-dashed border-[#e5e2da] p-5 bg-white space-y-3">
-            <h4 className="text-xs font-bold text-[#2c3455]">
-              {isWedding ? "의례 대행 플래닝 안전 보증" : "차분하고 격조 높은 장례 안전 서약"}
-            </h4>
-            <p className="text-[11px] text-muted-foreground leading-relaxed break-keep">
-              {isWedding 
-                ? "yeON은 심사 기준을 거친 검증된 의전/웨딩 파트너와만 소통하여 격식 있고 무결한 서비스를 안심하고 제안받습니다. 견적 전송 단계에서는 파트너사에 어떠한 비용도 발생하지 않으며 안전하게 상담이 가능합니다."
-                : "yeON은 경황 없는 유족 분들의 아픔을 보좌하기 위해 허례허식을 배제하고 국가 표준 의전 사양에 부합하는 정직한 파트너사들과만 협력하여 차분한 추모에만 전념하실 수 있도록 안전 서약을 운영합니다."}
-            </p>
-          </div>
-        </div>
-
-        {/* Desktop Summary Panel */}
-        <div className="hidden w-72 shrink-0 lg:block">
-          <div className="sticky top-4 rounded-2xl border border-[#e5e2da] p-5 bg-white shadow-sm">
-            <SummaryPanel
-              builder={builder}
-              theme={theme}
-              guestCount={guestCount}
-              isSubmitting={isSubmitting}
-              isAlreadyRequested={isAlreadyRequested}
-              onRequestQuote={handleRequestQuote}
-              validationMessage={selectionValidationMessage}
-              requestStatusLabel={requestStatusLabel}
-              requestStatusDescription={requestStatusDescription}
-            />
-          </div>
+      <div className="hidden border-t border-[#e5e2da] pt-4 lg:block">
+        <div className="rounded-2xl border border-[#e5e2da] bg-white p-4 shadow-sm sm:p-5">
+          <SummaryPanel
+            builder={builder}
+            theme={theme}
+            guestCount={guestCount}
+            isSubmitting={isSubmitting}
+            isAlreadyRequested={isAlreadyRequested}
+            onRequestQuote={handleRequestQuote}
+            validationMessage={selectionValidationMessage}
+            requestStatusLabel={requestStatusLabel}
+            requestStatusDescription={requestStatusDescription}
+          />
         </div>
       </div>
 
