@@ -551,7 +551,9 @@ export function ModularQuoteBuilder({
                   </div>
                   <p className="mt-1.5 text-[10px] text-[#8c8275] leading-relaxed break-keep">{pkg.description}</p>
                   <p className="mt-3.5 text-xs font-extrabold font-mono" style={{ color: config.primary }}>
-                    {pkg.price.toLocaleString('ko-KR')}원~
+                    {usesVendorModules
+                      ? `${pkg.price.toLocaleString('ko-KR')}원`
+                      : `${pkg.price.toLocaleString('ko-KR')}원~`}
                   </p>
                 </button>
               )

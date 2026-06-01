@@ -12,7 +12,7 @@ The **Post-QA Phase 1 follow-up pass** is now included in the working tree:
 
 - New plan creation no longer silently defaults the region to `서울`; the region field starts empty and must be entered explicitly.
 - Step 3 preloads request date, guest count, and budget from the selected plan, and reuses active QuoteRequest preferred date/budget when a vendor already has an active request.
-- Step 3 now shows `보낸 요청 현황` inline above the quote builder, with the sidebar kept as secondary detail.
+- Step 3 now shows `보낸 요청 현황` inline above the quote builder, including the clean-seed empty state.
 - The modular quote summary now uses the same full-width card system as the surrounding Step 3 content instead of a narrow detached desktop rail.
 - Vendor final confirmation is actioned from the `최종 확정` panel; home/proposal surfaces route there instead of rendering duplicate confirmation CTAs.
 - Vendor service management now explains the current single derived base package model and separates standard modules, base included items, optional add-ons, and vendor-specific items.

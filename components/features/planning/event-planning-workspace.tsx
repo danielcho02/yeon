@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { type FormEvent, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   ArrowRight,
   BadgeCheck,
@@ -41,7 +41,6 @@ import {
 } from "@/app/actions/quote";
 import { ModularQuoteBuilder } from "./modular-quote-builder";
 import { Step4BookingDashboard } from "./step4-booking-dashboard";
-import { mapQuoteRequestsToVendorQuotes } from "./quote-comparison";
 import type { VendorServiceModuleData } from "@/types/vendor-module";
 import type { QuoteRequestWithResponses, Step4CategoryStatusDTO } from "@/types/quote";
 import type { BasePackage, QuoteModule } from "@/hooks/use-quote-builder";
@@ -484,10 +483,6 @@ export function EventPlanningWorkspace({
       description: "업체 응답을 기다리는 중입니다.",
     };
   }, [selectedVendorActiveRequest]);
-  const comparisonQuotes = useMemo(
-    () => mapQuoteRequestsToVendorQuotes(quoteRequestsData ?? []),
-    [quoteRequestsData]
-  );
   const requestStatusItems = useMemo<QuoteRequestStatusItem[]>(() => {
     if (quoteRequestsData !== null) {
       return quoteRequestsData
@@ -1358,7 +1353,7 @@ export function EventPlanningWorkspace({
 
         {/* ══ STEP 3: 견적 요청 ══════════════════════════════════════ */}
         {activeStep === "vendors" && (
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1.16fr)_minmax(320px,0.84fr)]">
+          <div className="grid gap-5">
             <div className="space-y-3">
               <div>
                 <h2 className="font-[var(--font-serif)] text-base font-bold text-[#2c3455] tracking-tight">{theme.vendorTitle}</h2>
@@ -1485,13 +1480,12 @@ export function EventPlanningWorkspace({
                     </div>
                   </div>
 
-                  {requestStatusItems.length > 0 && (
-                    <SentRequestStatusStrip
-                      items={requestStatusItems}
-                      themeAccentText={theme.accentText}
-                      onReview={() => navigateStep("booking")}
-                    />
-                  )}
+                  <SentRequestStatusStrip
+                    items={requestStatusItems}
+                    themeAccentText={theme.accentText}
+                    onReview={() => navigateStep("booking")}
+                    statusRef={requestStatusPanelRef}
+                  />
 
                   {/* Module picker: real data → ModularQuoteBuilder, loading → skeleton, error → retry, fallback → old checklist */}
                   {vendorModules === null ? (
@@ -1683,61 +1677,6 @@ export function EventPlanningWorkspace({
               )}
             </div>
 
-            {/* Sent requests sidebar */}
-            <div
-              ref={requestStatusPanelRef}
-              tabIndex={-1}
-              className="h-fit space-y-4 rounded-[2rem] border border-[#ebdccf]/40 bg-white/90 p-5 shadow-sm outline-none xl:sticky xl:top-4"
-            >
-              <div className="space-y-1">
-                <h3 className="font-[var(--font-display)] text-sm font-bold text-foreground">보낸 요청 현황</h3>
-                <p className="text-[11px] leading-5 text-muted-foreground">업체 응답 대기, 일정 불가, 제안 도착 상태를 여기에서 이어서 확인합니다.</p>
-              </div>
-              {requestStatusItems.length > 0 ? (
-                requestStatusItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="rounded-[1.5rem] border border-border/60 bg-white/90 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">{item.serviceLabel}</p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">{item.vendorName}</p>
-                      </div>
-                      <Badge className={item.statusTone}>{item.statusLabel}</Badge>
-                    </div>
-                    <p className="mt-2 text-xs leading-5 text-muted-foreground">{item.helperText}</p>
-                    {(item.amount != null || item.canReview) && (
-                      <div className="mt-3 flex items-center justify-between gap-3">
-                        <span className={`text-sm font-bold ${theme.accentText}`}>
-                          {item.amount != null ? formatCurrency(item.amount) : "상세 확인"}
-                        </span>
-                        <button
-                          className={`text-xs font-semibold underline-offset-2 hover:underline whitespace-nowrap break-keep ${theme.accentText}`}
-                          onClick={() => navigateStep("booking")}
-                          type="button"
-                        >
-                          {item.canReview ? "진행 상태 확인 →" : "제안서 확인 →"}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))
-              ) : (
-                <EmptyState icon={ClipboardList} title="아직 요청이 없습니다." description="업체를 선택해 견적 요청을 보내세요." />
-              )}
-
-              {comparisonQuotes.length > 0 && (
-                <button
-                  className={`flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-semibold whitespace-nowrap break-keep ${theme.btnAccent}`}
-                  onClick={() => navigateStep("booking")}
-                  type="button"
-                >
-                  제안서 확인 및 상태 확인 ({comparisonQuotes.length}건)
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              )}
-            </div>
           </div>
         )}
 
@@ -1773,16 +1712,20 @@ function FieldGroup({ label, children }: { label: string; children: ReactNode })
 function SentRequestStatusStrip({
   items,
   themeAccentText,
-  onReview
+  onReview,
+  statusRef
 }: {
   items: QuoteRequestStatusItem[];
   themeAccentText: string;
   onReview: () => void;
+  statusRef: RefObject<HTMLDivElement>;
 }) {
   const visibleItems = items.slice(0, 3);
 
   return (
     <section
+      ref={statusRef}
+      tabIndex={-1}
       className="mb-5 rounded-2xl border border-[#ebdccf]/45 bg-white/80 p-4"
       aria-label="보낸 요청 현황"
     >
@@ -1793,35 +1736,53 @@ function SentRequestStatusStrip({
             요청한 업체의 응답 상태와 제안 도착 여부를 바로 확인합니다.
           </p>
         </div>
-        <button
-          className={`text-xs font-semibold underline-offset-2 hover:underline whitespace-nowrap ${themeAccentText}`}
-          onClick={onReview}
-          type="button"
-        >
-          전체 진행 상태 확인 →
-        </button>
+        {items.length > 0 && (
+          <button
+            className={`text-xs font-semibold underline-offset-2 hover:underline whitespace-nowrap ${themeAccentText}`}
+            onClick={onReview}
+            type="button"
+          >
+            전체 진행 상태 확인 →
+          </button>
+        )}
       </div>
-      <div className="grid gap-2 lg:grid-cols-3">
-        {visibleItems.map((item) => (
-          <article key={item.id} className="rounded-xl border border-border/50 bg-[#fcfaf7] px-3.5 py-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="truncate text-xs font-semibold text-foreground">{item.vendorName}</p>
-                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{item.serviceLabel}</p>
-              </div>
-              <Badge className={`${item.statusTone} shrink-0 text-[9px]`}>{item.statusLabel}</Badge>
+      {items.length > 0 ? (
+        <>
+          <div className="grid gap-2 lg:grid-cols-3">
+            {visibleItems.map((item) => (
+              <article key={item.id} className="rounded-xl border border-border/50 bg-[#fcfaf7] px-3.5 py-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold text-foreground">{item.vendorName}</p>
+                    <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{item.serviceLabel}</p>
+                  </div>
+                  <Badge className={`${item.statusTone} shrink-0 text-[9px]`}>{item.statusLabel}</Badge>
+                </div>
+                <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-muted-foreground">{item.helperText}</p>
+                {item.amount != null && (
+                  <p className={`mt-2 text-xs font-bold ${themeAccentText}`}>{formatCurrency(item.amount)}</p>
+                )}
+              </article>
+            ))}
+          </div>
+          {items.length > visibleItems.length && (
+            <p className="mt-2 text-[10px] text-muted-foreground">
+              그 외 {items.length - visibleItems.length}건은 진행 상태 화면에서 확인할 수 있습니다.
+            </p>
+          )}
+        </>
+      ) : (
+        <div className="rounded-xl border border-dashed border-border/50 bg-[#fcfaf7] px-3.5 py-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold text-foreground">아직 보낸 요청이 없습니다.</p>
+              <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+                아래 조건과 구성 항목을 확인한 뒤 업체에 첫 견적 요청을 보낼 수 있습니다.
+              </p>
             </div>
-            <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-muted-foreground">{item.helperText}</p>
-            {item.amount != null && (
-              <p className={`mt-2 text-xs font-bold ${themeAccentText}`}>{formatCurrency(item.amount)}</p>
-            )}
-          </article>
-        ))}
-      </div>
-      {items.length > visibleItems.length && (
-        <p className="mt-2 text-[10px] text-muted-foreground">
-          그 외 {items.length - visibleItems.length}건은 진행 상태 화면에서 확인할 수 있습니다.
-        </p>
+            <ClipboardList className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+          </div>
+        </div>
       )}
     </section>
   );

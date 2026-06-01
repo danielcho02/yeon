@@ -87,7 +87,7 @@ function StandardItemRow({
               min={1}
               defaultValue={existing?.basePrice ?? ""}
               placeholder="가격 입력"
-            className="w-28 rounded-xl border border-input bg-white px-2.5 py-1.5 text-right text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-28 rounded-xl border border-input bg-white px-2.5 py-1.5 text-right text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <span className="text-xs text-muted-foreground">원{item.pricingType === "PER_GUEST" ? "/인" : ""}</span>
           </div>
