@@ -25,10 +25,12 @@ import {
   getVendorConfirmationDueAt,
   getVendorDashboardHref
 } from "@/lib/workflow-events";
+import { declinePendingQuoteRequest } from "@/lib/quote-request-decline";
 import {
   vendorServiceModuleCategoryMatchesEventType,
   vendorSupportsEventType
 } from "@/lib/step3.shared";
+import { getCatalogKeyForVendorModule } from "@/lib/vendor-service-modules";
 
 import type { ActionResult } from "@/types/common";
 import type {
@@ -236,6 +238,15 @@ function getReservationServiceCategory(modules: QuoteResponseModules) {
   return modules.includedModules[0]?.category ?? modules.optionalModules[0]?.category ?? null;
 }
 
+function getReservationSelectedServiceOptions(modules: QuoteResponseModules) {
+  return [...modules.includedModules, ...modules.optionalModules].map((module) => ({
+    catalogKey: module.id,
+    name: module.name,
+    price: module.price,
+    pricingType: "FLAT"
+  }));
+}
+
 
 function mapVendorServiceModuleData(module: {
   id: string;
@@ -249,9 +260,12 @@ function mapVendorServiceModuleData(module: {
   isActive: boolean;
   sortOrder: number;
 }): VendorServiceModuleData {
+  const catalogKey = getCatalogKeyForVendorModule(module);
+
   return {
     id: module.id,
     vendorId: module.vendorId,
+    catalogKey,
     name: module.name,
     category: module.category as VendorServiceModuleData["category"],
     price: module.price,
@@ -736,7 +750,7 @@ export async function acceptQuoteResponse(
               quotedAmount: response.totalPrice,
               confirmedAmount: null,
               vendorConfirmationDueAt,
-              selectedServiceOptions: response.modules as Prisma.InputJsonValue,
+              selectedServiceOptions: getReservationSelectedServiceOptions(modules) as Prisma.InputJsonValue,
               status: PrismaReservationStatus.PENDING,
               notes:
                 existingReservation.notes ??
@@ -764,7 +778,7 @@ export async function acceptQuoteResponse(
               quotedAmount: response.totalPrice,
               confirmedAmount: null,
               vendorConfirmationDueAt,
-              selectedServiceOptions: response.modules as Prisma.InputJsonValue,
+              selectedServiceOptions: getReservationSelectedServiceOptions(modules) as Prisma.InputJsonValue,
               status: PrismaReservationStatus.PENDING,
               notes: "견적 응답 수락으로 생성된 예약입니다. 업체 확정 대기 중입니다."
             },
@@ -864,6 +878,32 @@ export async function acceptQuote(requestId: string): Promise<ActionResult<Quote
     return actionSuccess(accepted.data.quoteRequest);
   } catch (error) {
     return actionError(getActionError(error), "ACCEPT_QUOTE_FAILED");
+  }
+}
+
+export async function declineQuoteRequest(
+  requestId: string,
+  reason?: string
+): Promise<ActionResult<QuoteRequestData>> {
+  try {
+    const vendor = await requireVendorUser();
+
+    if (!requestId) {
+      return actionError("견적 요청 ID가 필요합니다.", "VALIDATION_ERROR");
+    }
+
+    const declined = await prisma.$transaction((tx) =>
+      declinePendingQuoteRequest(tx, {
+        requestId,
+        vendorId: vendor.id,
+        reason
+      })
+    );
+
+    revalidateQuoteViews(declined.planId, declined.vendorId);
+    return actionSuccess(mapQuoteRequest(declined.request));
+  } catch (error) {
+    return actionError(getActionError(error), "DECLINE_QUOTE_REQUEST_FAILED");
   }
 }
 
@@ -1399,4 +1439,3 @@ export async function getStep4DashboardData(
     return actionError(getActionError(error), "GET_STEP4_DASHBOARD_DATA_FAILED");
   }
 }
-

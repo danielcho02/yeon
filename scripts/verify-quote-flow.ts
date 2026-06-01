@@ -465,6 +465,29 @@ async function main() {
   assert.ok(funeralSeedModules.length > 0, "funeral vendor modules must exist");
   assert.ok(weddingSeedModules.length > 0, "wedding vendor modules must exist");
 
+  const weddingCustomOptionalModule = weddingSeedModules.find(
+    (module) => module.name === "야외 버진로드 런너 추가"
+  );
+  const weddingCustomOptionalSignboardModule = weddingSeedModules.find(
+    (module) => module.name === "웰컴 사인보드 커스텀 제작"
+  );
+  const weddingStandardIncludedModule = weddingSeedModules.find(
+    (module) => module.name === "신부 대기실"
+  );
+  const funeralCustomModule = funeralSeedModules.find(
+    (module) => module.name === "추모 동선 안내 사인물"
+  );
+
+  assert.ok(weddingCustomOptionalModule, "wedding custom optional module must exist after seed");
+  assert.ok(weddingCustomOptionalSignboardModule, "wedding custom signboard module must exist after seed");
+  assert.ok(weddingStandardIncludedModule, "wedding standard included module must exist after seed");
+  assert.ok(funeralCustomModule, "funeral custom module must exist after seed");
+  assert.equal(weddingCustomOptionalModule.isBaseIncluded, false);
+  assert.equal(weddingCustomOptionalSignboardModule.isBaseIncluded, false);
+  assert.equal(weddingStandardIncludedModule.isBaseIncluded, true);
+  assert.equal(funeralCustomModule.isBaseIncluded, false);
+  checks.custom_vendor_modules_seeded = true;
+
   for (const module of funeralSeedModules) {
     assert.ok(
       moduleCategoryMatchesEventType("FUNERAL", module.category),
@@ -490,6 +513,31 @@ async function main() {
     );
   }
   checks.wedding_modules_are_event_specific = true;
+
+  const weddingBaseIncludedModuleIds = new Set(
+    weddingSeedModules.filter((module) => module.isBaseIncluded).map((module) => module.id)
+  );
+  const weddingAdjustableModuleIds = new Set(
+    weddingSeedModules.filter((module) => !module.isBaseIncluded).map((module) => module.id)
+  );
+  assert.ok(
+    weddingBaseIncludedModuleIds.has(weddingStandardIncludedModule.id),
+    "standard wedding base module must remain in the included package set"
+  );
+  assert.equal(
+    weddingAdjustableModuleIds.has(weddingStandardIncludedModule.id),
+    false,
+    "base-included standard wedding module must not appear in adjustable module selections"
+  );
+  assert.ok(
+    weddingAdjustableModuleIds.has(weddingCustomOptionalModule.id),
+    "optional custom wedding module must stay selectable"
+  );
+  assert.ok(
+    weddingAdjustableModuleIds.has(weddingCustomOptionalSignboardModule.id),
+    "vendor-specific wedding signboard must stay selectable as an optional add-on"
+  );
+  checks.base_included_custom_module_not_double_counted = true;
 
   assert.equal(
     floristModules.some((module) => module.category === "CATERING" || module.category === "MEAL"),
@@ -546,8 +594,27 @@ async function main() {
   });
 
   assert.ok(modules.length > 0, "vendor modules must exist; run npx prisma db seed first");
+  assert.ok(
+    modules.some((module) => module.id === weddingStandardIncludedModule.id) ||
+    weddingSeedModules.some((module) => module.id === weddingStandardIncludedModule.id),
+    "wedding standard included module must be readable from vendor module queries"
+  );
 
-  const selectedModules = modules.map((module) => module.id);
+  const selectedModules = [
+    weddingCustomOptionalModule.id,
+    modules[0]?.id
+  ].filter((id, index, list): id is string => Boolean(id) && list.indexOf(id) === index);
+  const selectedModuleRecords = weddingSeedModules.filter((module) => selectedModules.includes(module.id));
+  assert.ok(
+    selectedModules.includes(weddingCustomOptionalModule.id),
+    "custom optional wedding module must be selectable into selectedModuleIds"
+  );
+  assert.equal(
+    selectedModuleRecords.length,
+    selectedModules.length,
+    "selected custom wedding modules must resolve back to real VendorServiceModule rows"
+  );
+  checks.custom_module_selectable_into_selected_module_ids = true;
   await expectReject("empty selected modules", async () => {
     await validateQuoteRequestContract({
       ownerId: planner.id,
@@ -621,7 +688,7 @@ async function main() {
   checks.valid_quote_request_contract_passed = true;
 
   const guestCount = plan.guestTarget ?? 80;
-  const quotedAmount = modules.reduce(
+  const quotedAmount = selectedModuleRecords.reduce(
     (sum, module) =>
       sum + (module.pricingType === "PER_GUEST" ? module.price * guestCount : module.price),
     0
@@ -787,7 +854,13 @@ async function main() {
             price: quotedAmount,
             description: "Backend smoke verification response"
           },
-          includedModules: [],
+          includedModules: selectedModuleRecords.map((module) => ({
+            id: module.id,
+            name: module.name,
+            category: module.category,
+            price: 0,
+            description: module.description ?? undefined
+          })),
           optionalModules: [],
           excludedModules: []
         },
@@ -832,6 +905,23 @@ async function main() {
   created.notificationIds.push(quoteResponseResult.notification.id);
   created.activityLogIds.push(quoteResponseResult.activity.id);
 
+  const responseModules = quoteResponseResult.response.modules as {
+    includedModules?: Array<{ id?: string; name?: string; category?: string; price?: number }>;
+  };
+  const includedModuleIds = (responseModules.includedModules ?? [])
+    .map((module) => module.id)
+    .filter((id): id is string => typeof id === "string");
+  assert.deepEqual(
+    new Set(includedModuleIds),
+    new Set(selectedModules),
+    "QuoteResponse must preserve selected module identity in includedModules"
+  );
+  assert.ok(
+    (responseModules.includedModules ?? []).every((module) => module.price === 0),
+    "QuoteResponse includedModules should stay as identity markers with zero prices"
+  );
+  checks.quote_response_preserves_selected_module_identity = true;
+
   const afterVendorResponse = await prisma.quoteRequest.findUniqueOrThrow({
     where: { id: created.requestId },
     include: {
@@ -864,6 +954,15 @@ async function main() {
     submittedResponse?.note === "Backend smoke verification response";
   assert.equal(respondedRequest.requirements, "Backend smoke verification request");
   assert.equal(submittedResponse?.note, "Backend smoke verification response");
+  const submittedResponseModules = submittedResponse?.modules as unknown as {
+    includedModules?: Array<{ id: string; name: string; category: string; price: number }>;
+  };
+  assert.equal(
+    submittedResponseModules.includedModules?.length,
+    selectedModuleRecords.length,
+    "QuoteResponse.modules must preserve selected module identity for planner Step 4 and vendor confirmation"
+  );
+  checks.quote_response_preserves_selected_module_identity = true;
 
   await expectReject("non-owner quote response accept", async () => {
     await validateQuoteAcceptContract({
@@ -900,7 +999,13 @@ async function main() {
             price: quotedAmount,
             description: "Duplicate response should fail"
           },
-          includedModules: [],
+          includedModules: selectedModuleRecords.map((module) => ({
+            id: module.id,
+            name: module.name,
+            category: module.category,
+            price: 0,
+            description: module.description ?? undefined
+          })),
           optionalModules: [],
           excludedModules: []
         },
@@ -923,6 +1028,20 @@ async function main() {
   checks.get_quotes_by_plan_has_responded_quote =
     getQuotesByPlanShape[0]?.status === QuoteStatus.RESPONDED &&
     getQuotesByPlanShape[0]?.responses[0]?.id === created.responseId;
+  const selectedModuleDetailsForPlan = await prisma.vendorServiceModule.findMany({
+    where: { id: { in: selectedModules } },
+    select: { id: true, name: true, category: true, price: true, pricingType: true }
+  });
+  assert.equal(
+    selectedModuleDetailsForPlan.length,
+    selectedModules.length,
+    "getQuotesByPlan selectedModuleDetails source records must be available for Step 4"
+  );
+  assert.ok(
+    selectedModuleDetailsForPlan.every((module) => module.name.length > 0 && module.price >= 0),
+    "selectedModuleDetails should expose names and prices for Step 4 and vendor detail views"
+  );
+  checks.get_quotes_by_plan_selected_module_details_visible = true;
 
   const planDashboardShapeBeforeAccept = await prisma.eventPlan.findFirstOrThrow({
     where: { id: plan.id, ownerId: planner.id },
@@ -962,20 +1081,17 @@ async function main() {
         quoteRequestId: created.requestId,
         quoteResponseId: created.responseId,
         serviceName: "Backend smoke verification",
-        serviceCategory: String(modules[0].category),
+        serviceCategory: String(selectedModuleRecords[0]?.category ?? weddingCustomOptionalModule.category),
         serviceDate: plan.scheduledAt,
         guestCount,
         quotedAmount,
         confirmedAmount: null,
         vendorConfirmationDueAt,
-        selectedServiceOptions: modules.map((module) => ({
+        selectedServiceOptions: selectedModuleRecords.map((module) => ({
           catalogKey: module.id,
           name: module.name,
-          price: module.price,
-          pricingType: module.pricingType,
-          ...(module.pricingType === "PER_GUEST"
-            ? { quantity: guestCount, subtotal: module.price * guestCount }
-            : {})
+          price: 0,
+          pricingType: "FLAT"
         })) as Prisma.InputJsonValue,
         status: ReservationStatus.PENDING,
         notes: "견적 응답 수락으로 생성된 예약입니다. 업체 확정 대기 중입니다."
@@ -1021,6 +1137,13 @@ async function main() {
   assert.equal(newReservation!.quoteResponseId, created.responseId, "Reservation must link to QuoteResponse");
   assert.equal(newReservation!.status, "PENDING", "Reservation status must be PENDING after accept");
   assert.ok(newReservation!.vendorConfirmationDueAt, "vendorConfirmationDueAt must be set");
+  const acceptedSelectedOptions = selectedOptionsFromJson(newReservation!.selectedServiceOptions);
+  assert.equal(
+    acceptedSelectedOptions?.length,
+    selectedModuleRecords.length,
+    "Real accept-compatible Reservation must preserve selected module identity for vendor confirmation"
+  );
+  checks.real_accept_reservation_preserves_selected_modules = true;
 
   const reservationCountAfterAccept = await prisma.reservation.count({
     where: { quoteRequestId: created.requestId }

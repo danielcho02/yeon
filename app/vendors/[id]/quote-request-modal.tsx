@@ -72,7 +72,9 @@ export function QuoteRequestModal({
   );
   const total = calcTotal(checkedIds, filteredServices, guestCount);
 
-  const createPlanHref = `/plans/new${fallbackEventType ? `?type=${fallbackEventType}` : ""}`;
+  const createPlanHref = fallbackEventType
+    ? `/planner/${fallbackEventType.toLowerCase()}?create=1`
+    : "/planner?create=1";
 
   function handlePlanChange(planId: string) {
     const plan = plans.find((p) => p.id === planId) ?? null;

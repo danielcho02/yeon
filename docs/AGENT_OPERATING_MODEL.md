@@ -1,7 +1,7 @@
 # yeON Agent Operating Model
 
 > Effective from: 2026-05-31
-> Branch: codex/step3-main-logic-rewrite
+> Branch: codex/next-product-stabilization
 
 ## Core Principle
 
@@ -27,6 +27,14 @@ The prior split (Claude=frontend, Codex=backend) caused incomplete fixes.
 5. **No push without user approval.** Always stop before push and ask.
 6. **No specialist vendors in core demo.** Only core 3-role model unless product fully supports multi-vendor flows.
 7. **No Reservation before accept.** The canonical workflow is the law.
+8. **Step 4 is proposal/reservation first.** General users should see selected modules,
+   vendor proposal, accept action, pending vendor confirmation, and confirmed reservation
+   as the primary IA. Category status can remain internal or collapsed detail only.
+9. **Base package items are included-only.** Modules already included in the active base
+   package belong in the included summary and must not appear again as optional adjustment rows.
+10. **Vendor quote responses are scope totals.** The vendor-facing form should be framed as
+    confirming the planner-selected event date and submitting one final total across the selected
+    module scope, not line-by-line repricing.
 
 ---
 

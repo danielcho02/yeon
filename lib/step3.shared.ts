@@ -65,7 +65,8 @@ export const serviceCatalog: Record<MvpQuoteEventType, Record<string, CatalogIte
       { key: "venue_bridal",   name: "신부 대기실 이용",   pricingType: "FLAT"      },
       { key: "catering_meal",  name: "기본 식대",          pricingType: "PER_GUEST" },
       { key: "catering_drink", name: "음료 패키지",        pricingType: "PER_GUEST" },
-      { key: "catering_cake",  name: "웨딩 케이크",        pricingType: "FLAT"      }
+      { key: "catering_cake",  name: "웨딩 케이크",        pricingType: "FLAT"      },
+      { key: "mobile_invitation_basic", name: "모바일 청첩장 기본형", pricingType: "FLAT" }
     ],
     studio: [
       { key: "studio_snap", name: "본식 스냅 (기본)", pricingType: "FLAT" },
@@ -221,7 +222,7 @@ export const quoteWorkflowStatusMeta: Record<
   },
   ACCEPTED: {
     label: "확정 대기",
-    tone: "bg-violet-100 text-violet-700"
+    tone: "bg-[#faf8f4] text-[#8c8275]"
   },
   CONFIRMED: {
     label: "확정됨",

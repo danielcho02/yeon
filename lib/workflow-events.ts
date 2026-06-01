@@ -1,5 +1,3 @@
-import "server-only";
-
 import { Prisma } from "@/generated/prisma/client";
 
 export const VENDOR_CONFIRMATION_SLA_DAYS = 3;

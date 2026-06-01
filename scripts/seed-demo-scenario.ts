@@ -80,13 +80,13 @@ async function main() {
       basePrice: 2_500_000,
       modules: asJson({
         basePackage: { name: "모먼트 가든 웨딩 패키지", price: 2_500_000, description: "가든 예식홀 대관, 음향·조명 패키지, 신부 대기실 포함" },
-        includedModules: [
-          { id: venueModules[0].id, name: venueModules[0].name, category: venueModules[0].category, price: venueModules[0].price },
-          { id: venueModules[2].id, name: venueModules[2].name, category: venueModules[2].category, price: venueModules[2].price }
-        ],
-        optionalModules: [
-          { id: venueModules[1].id, name: venueModules[1].name, category: venueModules[1].category, price: venueModules[1].price }
-        ],
+        includedModules: venueModules.slice(0, 3).map((module) => ({
+          id: module.id,
+          name: module.name,
+          category: module.category,
+          price: 0
+        })),
+        optionalModules: [],
         excludedModules: []
       }),
       totalPrice: 2_500_000,
@@ -101,12 +101,13 @@ async function main() {
       basePrice: 1_250_000,
       modules: asJson({
         basePackage: { name: "한결 의전 기본 패키지", price: 1_250_000, description: "빈소 기본 3일 + 문상객 식사 50인" },
-        includedModules: [
-          { id: funeralModules[0].id, name: funeralModules[0].name, category: funeralModules[0].category, price: funeralModules[0].price }
-        ],
-        optionalModules: [
-          { id: funeralModules[1].id, name: funeralModules[1].name, category: funeralModules[1].category, price: funeralModules[1].price }
-        ],
+        includedModules: funeralModules.slice(0, 2).map((module) => ({
+          id: module.id,
+          name: module.name,
+          category: module.category,
+          price: 0
+        })),
+        optionalModules: [],
         excludedModules: []
       }),
       totalPrice: 1_250_000,

@@ -283,7 +283,7 @@ export function QuoteComparison({
                   {q.totalPrice.toLocaleString('ko-KR')}원
                 </div>
                 {q.isAccepted ? (
-                  <span className="mt-1.5 inline-flex rounded border border-violet-100 bg-violet-50/50 px-2 py-0.5 text-[9px] font-bold text-violet-700 whitespace-nowrap">
+                  <span className="mt-1.5 inline-flex rounded border border-[#ebdccf]/60 bg-[#faf8f4] px-2 py-0.5 text-[9px] font-bold text-[#8c8275] whitespace-nowrap">
                     선택 수락 완료
                   </span>
                 ) : onAccept && q.canAccept ? (

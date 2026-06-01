@@ -22,7 +22,7 @@ function revalidatePlanViews(id?: string) {
 
 export async function createPlan(formData: FormData) {
   const session = await getServerAuthSession();
-  if (!session?.user?.id) redirect("/login?callbackUrl=/plans/new");
+  if (!session?.user?.id) redirect("/login?callbackUrl=/planner?create=1");
   if (session.user.role !== UserRole.GENERAL) {
     redirect(session.user.role === UserRole.VENDOR ? "/vendor/dashboard" : "/account");
   }
@@ -30,7 +30,7 @@ export async function createPlan(formData: FormData) {
   const title = formData.get("title")?.toString().trim() ?? "";
   const type  = formData.get("type")?.toString() ?? "";
   const parsedType = parseMvpEventType(type);
-  if (!title || !parsedType) redirect("/plans/new");
+  if (!title || !parsedType) redirect("/planner?create=1");
 
   const budget      = normalizePositiveInt(formData.get("budget"));
   const guestTarget = normalizePositiveInt(formData.get("guestTarget"));
@@ -64,7 +64,7 @@ export async function createPlan(formData: FormData) {
   });
 
   revalidatePlanViews(plan.id);
-  redirect(`/plans/${plan.id}`);
+  redirect(`/planner/${parsedType === "WEDDING" ? "wedding" : "funeral"}?planId=${plan.id}`);
 }
 
 export async function updatePlan(id: string, formData: FormData) {

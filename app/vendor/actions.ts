@@ -21,6 +21,12 @@ import {
   getVendorSupportedServiceModules,
   quoteServiceModuleValues
 } from "@/lib/step3.shared";
+import {
+  getCatalogKeyForVendorModule,
+  getVendorModuleCategoryForCatalogItem,
+  getVendorModuleCategoryForCustomSection,
+  isStandardVendorModule
+} from "@/lib/vendor-service-modules";
 
 async function requireVendor() {
   const session = await getServerAuthSession();
@@ -254,11 +260,9 @@ export async function setStandardItemPrice(formData: FormData) {
 
   const catalogKey = (formData.get("catalogKey") as string | null)?.trim() || "";
   const basePriceRaw = (formData.get("basePrice") as string | null)?.trim() || "";
-  const maxGuestsRaw = (formData.get("maxGuests") as string | null)?.trim() || "";
 
   const catalogItem = getCatalogItem(catalogKey);
   const basePrice = Number.parseInt(basePriceRaw, 10);
-  const maxGuests = maxGuestsRaw ? Number.parseInt(maxGuestsRaw, 10) : null;
 
   if (!catalogItem || !Number.isFinite(basePrice) || basePrice <= 0) {
     redirect("/vendor/dashboard");
@@ -271,33 +275,50 @@ export async function setStandardItemPrice(formData: FormData) {
     redirect("/vendor/dashboard");
   }
 
-  const existing = await prisma.vendorService.findFirst({
-    where: { vendorId, catalogKey },
-    select: { id: true }
+  const category = getVendorModuleCategoryForCatalogItem(catalogKey, serviceModule);
+
+  if (!category) {
+    redirect("/vendor/dashboard");
+  }
+
+  const standardCandidates = await prisma.vendorServiceModule.findMany({
+    where: {
+      vendorId,
+      category,
+      pricingType: catalogItem.pricingType
+    },
+    select: { id: true, name: true, category: true, pricingType: true }
   });
+  const existing = standardCandidates.find(
+    (module) => getCatalogKeyForVendorModule(module) === catalogKey
+  );
 
   if (existing) {
-    await prisma.vendorService.update({
+    await prisma.vendorServiceModule.update({
       where: { id: existing.id },
       data: {
-        basePrice,
-        maxGuests: catalogItem.pricingType === "PER_GUEST" && maxGuests && maxGuests > 0 ? maxGuests : null,
+        price: basePrice,
         isActive: true
       }
     });
   } else {
-    await prisma.vendorService.create({
+    const highestSortOrder = await prisma.vendorServiceModule.findFirst({
+      where: { vendorId, category },
+      orderBy: { sortOrder: "desc" },
+      select: { sortOrder: true }
+    });
+
+    await prisma.vendorServiceModule.create({
       data: {
         vendorId,
-        eventType,
-        module: serviceModule,
-        catalogKey,
-        pricingType: catalogItem.pricingType,
         name: catalogItem.name,
+        category,
+        price: basePrice,
+        pricingType: catalogItem.pricingType,
         description: null,
-        basePrice,
-        maxGuests: catalogItem.pricingType === "PER_GUEST" && maxGuests && maxGuests > 0 ? maxGuests : null,
-        isActive: true
+        isBaseIncluded: false,
+        isActive: true,
+        sortOrder: (highestSortOrder?.sortOrder ?? 0) + 1
       }
     });
   }
@@ -318,10 +339,8 @@ export async function addCustomItem(formData: FormData) {
   const description = (formData.get("description") as string | null)?.trim() || null;
   const pricingType = (formData.get("pricingType") as string | null)?.trim() || "FLAT";
   const basePriceRaw = (formData.get("basePrice") as string | null)?.trim() || "";
-  const maxGuestsRaw = (formData.get("maxGuests") as string | null)?.trim() || "";
 
   const basePrice = Number.parseInt(basePriceRaw, 10);
-  const maxGuests = maxGuestsRaw ? Number.parseInt(maxGuestsRaw, 10) : null;
 
   const expectedEventType = getQuoteServiceModuleEventType(serviceModule);
 
@@ -337,8 +356,15 @@ export async function addCustomItem(formData: FormData) {
     redirect("/vendor/dashboard");
   }
 
-  const duplicate = await prisma.vendorService.findFirst({
-    where: { vendorId, eventType, module: serviceModule, name, catalogKey: null },
+  const category = getVendorModuleCategoryForCustomSection(serviceModule);
+  const isBaseIncluded = formData.get("isBaseIncluded") === "on";
+
+  if (!category) {
+    redirect("/vendor/dashboard");
+  }
+
+  const duplicate = await prisma.vendorServiceModule.findFirst({
+    where: { vendorId, category, name },
     select: { id: true }
   });
 
@@ -346,18 +372,23 @@ export async function addCustomItem(formData: FormData) {
     redirect("/vendor/dashboard");
   }
 
-  await prisma.vendorService.create({
+  const highestSortOrder = await prisma.vendorServiceModule.findFirst({
+    where: { vendorId, category },
+    orderBy: { sortOrder: "desc" },
+    select: { sortOrder: true }
+  });
+
+  await prisma.vendorServiceModule.create({
     data: {
       vendorId,
-      eventType,
-      module: serviceModule,
-      catalogKey: null,
-      pricingType: pricingType === "PER_GUEST" ? "PER_GUEST" : "FLAT",
       name,
+      category,
+      price: basePrice,
+      pricingType: pricingType === "PER_GUEST" ? "PER_GUEST" : "FLAT",
       description,
-      basePrice,
-      maxGuests: pricingType === "PER_GUEST" && maxGuests && maxGuests > 0 ? maxGuests : null,
-      isActive: true
+      isBaseIncluded,
+      isActive: true,
+      sortOrder: (highestSortOrder?.sortOrder ?? 0) + 1
     }
   });
 
@@ -371,14 +402,17 @@ export async function addCustomItem(formData: FormData) {
 export async function deleteCustomItem(serviceId: string) {
   const vendorId = await requireVendor();
 
-  const service = await prisma.vendorService.findFirst({
-    where: { id: serviceId, vendorId, catalogKey: null },
-    select: { id: true }
+  const service = await prisma.vendorServiceModule.findFirst({
+    where: { id: serviceId, vendorId },
+    select: { id: true, name: true, category: true, pricingType: true }
   });
 
   if (!service) throw new Error("권한 없음 또는 표준 항목은 삭제할 수 없습니다.");
+  if (isStandardVendorModule(service)) {
+    throw new Error("표준 항목은 삭제할 수 없습니다.");
+  }
 
-  await prisma.vendorService.delete({ where: { id: serviceId } });
+  await prisma.vendorServiceModule.delete({ where: { id: serviceId } });
 
   revalidatePath("/vendor/dashboard");
   revalidatePath("/vendors");
@@ -390,14 +424,14 @@ export async function deleteCustomItem(serviceId: string) {
 export async function toggleVendorService(serviceId: string, isActive: boolean) {
   const vendorId = await requireVendor();
 
-  const service = await prisma.vendorService.findFirst({
+  const service = await prisma.vendorServiceModule.findFirst({
     where: { id: serviceId, vendorId },
     select: { id: true }
   });
 
   if (!service) throw new Error("권한 없음");
 
-  await prisma.vendorService.update({
+  await prisma.vendorServiceModule.update({
     where: { id: serviceId },
     data: { isActive }
   });

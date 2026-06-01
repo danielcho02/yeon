@@ -227,7 +227,7 @@ export default async function PlanDetailPage({
                         </p>
                       )}
                       {vendorConfirmationDueAt && (
-                        <p className="mt-0.5 text-xs font-semibold text-violet-700">
+                        <p className="mt-0.5 text-xs font-semibold text-[#8c8275]">
                           업체 확정 요청 기한: {formatDate(vendorConfirmationDueAt)}
                         </p>
                       )}

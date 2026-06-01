@@ -29,9 +29,11 @@ function getNextActionMeta(nextAction: PlanDashboardNextAction, eventType: strin
         description: isWedding
           ? "yeON이 추천 구성을 준비했습니다. 파트너를 선택해 보세요."
           : "yeON이 장례 절차의 정밀 기본 구성을 정돈했습니다. 상담 파트너사를 확인하세요.",
-        badge: "bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/60",
+        badge: isWedding
+          ? "bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/60"
+          : "bg-[#eef2f6] text-[#475569] border border-[#cbd3e0]",
         cta: "파트너 선택하기",
-        ctaVariant: "weddingGold",
+        ctaVariant: isWedding ? "weddingWarm" : "funeralPrimary",
         Icon: ArrowRight,
       } as const;
     case "waiting_for_vendor":
@@ -40,9 +42,11 @@ function getNextActionMeta(nextAction: PlanDashboardNextAction, eventType: strin
         description: isWedding
           ? "견적 요청이 파트너사로 전달되었습니다. 회신을 기다리는 중입니다."
           : "의전 상담 요청이 파트너사로 전달되었습니다. 회신을 대기하고 있습니다.",
-        badge: "bg-[#faf8f4] text-[#8c8275] border border-[#e5e2da]",
+        badge: isWedding
+          ? "bg-[#faf8f4] text-[#8c8275] border border-[#e5e2da]"
+          : "bg-[#f4f5f8] text-[#475569] border border-[#d8dee8]",
         cta: "견적 현황 보기",
-        ctaVariant: "outlineDark",
+        ctaVariant: isWedding ? "weddingOutline" : "funeralOutline",
         Icon: Clock,
       } as const;
     case "compare_quotes":
@@ -52,9 +56,11 @@ function getNextActionMeta(nextAction: PlanDashboardNextAction, eventType: strin
         description: isWedding
           ? "도도하게 정비된 견적서가 도착했습니다. 지금 항목을 확인해 보세요."
           : "장례 준비 항목에 대한 정중한 제안서가 도착했습니다. 지금 항목을 확인해 보세요.",
-        badge: "bg-[#eafaf1] text-[#0f9652] border border-emerald-100",
+        badge: isWedding
+          ? "bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/60"
+          : "bg-[#eef2f6] text-[#2c3455] border border-[#cbd3e0]",
         cta: "제안서 확인하기",
-        ctaVariant: "emerald",
+        ctaVariant: isWedding ? "weddingWarm" : "funeralPrimary",
         Icon: Scale,
       } as const;
     case "reservation_pending":
@@ -63,9 +69,11 @@ function getNextActionMeta(nextAction: PlanDashboardNextAction, eventType: strin
         description: isWedding
           ? "고객 승인이 완료되어 파트너사의 최종 스케줄 승인을 대기하고 있습니다."
           : "의전 승인이 완료되어 파트너사의 최종 승인을 대기하고 있습니다.",
-        badge: "bg-[#f5f3ff] text-[#6d28d9] border border-purple-100",
+        badge: isWedding
+          ? "bg-[#fbf4ee] text-[#9b6b4f] border border-[#e7d2c4]"
+          : "bg-[#eef2f6] text-[#475569] border border-[#cbd3e0]",
         cta: "예약 대기 확인",
-        ctaVariant: "purple",
+        ctaVariant: isWedding ? "weddingPending" : "funeralOutlineStrong",
         Icon: Clock,
       } as const;
     case "confirmed":
@@ -74,9 +82,11 @@ function getNextActionMeta(nextAction: PlanDashboardNextAction, eventType: strin
         description: isWedding
           ? "예약 조율 및 스케줄이 완벽하게 확정되었습니다."
           : "예약 조율 및 장례 준비 일정이 최종 확정되었습니다.",
-        badge: "bg-[#eafaf1] text-[#0f9652] border border-emerald-200",
+        badge: isWedding
+          ? "bg-[#eafaf1] text-[#0f9652] border border-emerald-200"
+          : "bg-[#eef2f6] text-[#2c3455] border border-[#cbd3e0]",
         cta: "확정 예약서 보기",
-        ctaVariant: "emerald",
+        ctaVariant: isWedding ? "weddingConfirmed" : "funeralPrimary",
         Icon: CheckCircle2,
       } as const;
     default:
@@ -92,10 +102,13 @@ function getNextActionMeta(nextAction: PlanDashboardNextAction, eventType: strin
 }
 
 const ctaStyles = {
-  weddingGold: "bg-[#c4977a] hover:bg-[#b08569] text-white",
-  outlineDark: "border border-[#2c3455] text-[#2c3455] hover:bg-[#faf9f5]",
-  emerald: "bg-[#2c3455] hover:bg-[#1e2645] text-white",
-  purple: "bg-[#6d28d9] hover:bg-[#5b21b6] text-white",
+  weddingWarm: "bg-[#c4977a] hover:bg-[#b08569] text-white",
+  weddingOutline: "border border-[#c4977a] text-[#c4977a] hover:bg-[#fcf8f2]",
+  weddingPending: "bg-[#a86f4c] hover:bg-[#8f5f43] text-white",
+  weddingConfirmed: "bg-[#c4977a] hover:bg-[#b08569] text-white",
+  funeralPrimary: "bg-[#2c3455] hover:bg-[#1e2645] text-white",
+  funeralOutline: "border border-[#2c3455] text-[#2c3455] hover:bg-[#f4f5f8]",
+  funeralOutlineStrong: "border border-[#475569] bg-[#f4f5f8] text-[#334155] hover:bg-[#e8edf3]",
   gray: "border border-[#e5e2da] bg-white text-muted-foreground hover:bg-[#faf9f5]",
 } as const;
 
@@ -145,7 +158,7 @@ export default async function PlansPage() {
               진행 중인 의례 설계 및 파트너 조율 현황을 차분하게 검토하세요.
             </p>
           </div>
-          <Link href="/plans/new" className="inline-flex h-9 items-center justify-center rounded-xl bg-[#2c3455] px-4 text-xs font-semibold text-white transition-all duration-150 hover:bg-[#1e2645] active:scale-[0.98]">
+          <Link href="/planner?create=1" className="inline-flex h-9 items-center justify-center rounded-xl bg-[#2c3455] px-4 text-xs font-semibold text-white transition-all duration-150 hover:bg-[#1e2645] active:scale-[0.98]">
             <Plus className="mr-1.5 h-3.5 w-3.5" />
             새 행사 만들기
           </Link>
@@ -161,7 +174,7 @@ export default async function PlansPage() {
             <p className="mb-6 max-w-xs text-xs text-[#8c8275] leading-relaxed">
               결혼이나 장례 행사를 준비 중이라면 새 플랜을 만들어 보세요. yeON이 기본 구성을 정돈하여 품격 있게 보좌하겠습니다.
             </p>
-            <Link href="/plans/new" className="inline-flex h-9 items-center justify-center rounded-xl bg-[#2c3455] px-4 text-xs font-semibold text-white transition-all hover:bg-[#1e2645]">
+            <Link href="/planner?create=1" className="inline-flex h-9 items-center justify-center rounded-xl bg-[#2c3455] px-4 text-xs font-semibold text-white transition-all hover:bg-[#1e2645]">
               <Plus className="mr-1.5 h-3.5 w-3.5" />
               첫 행사 만들기
             </Link>
@@ -235,18 +248,36 @@ export default async function PlansPage() {
                           </span>
                         )}
                         {plan.summary.respondedQuotes > 0 && (
-                          <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-100 bg-[#eafaf1]/40 px-2.5 py-1 text-[10px] font-bold text-emerald-800">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold ${
+                              isWedding
+                                ? "border border-[#ebdccf]/60 bg-[#fcf8f2] text-[#c4977a]"
+                                : "border border-[#cbd3e0] bg-[#eef2f6] text-[#2c3455]"
+                            }`}
+                          >
                             <Scale className="h-3 w-3" />
                             도착한 제안 {plan.summary.respondedQuotes}건
                           </span>
                         )}
                         {plan.summary.acceptedQuotes > 0 && (
-                          <span className="inline-flex items-center gap-1 rounded-lg border border-purple-100 bg-[#f5f3ff]/40 px-2.5 py-1 text-[10px] font-medium text-purple-700">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-medium ${
+                              isWedding
+                                ? "border border-[#e7d2c4] bg-[#fbf4ee]/70 text-[#9b6b4f]"
+                                : "border border-[#cbd3e0] bg-[#f4f5f8] text-[#475569]"
+                            }`}
+                          >
                             수락 완료 {plan.summary.acceptedQuotes}건
                           </span>
                         )}
                         {plan.summary.reservationsConfirmed > 0 && (
-                          <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-[#eafaf1] px-2.5 py-1 text-[10px] font-extrabold text-emerald-800">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-extrabold ${
+                              isWedding
+                                ? "border border-emerald-200 bg-[#eafaf1] text-emerald-800"
+                                : "border border-[#cbd3e0] bg-[#eef2f6] text-[#2c3455]"
+                            }`}
+                          >
                             <CheckCircle2 className="h-3 w-3" />
                             예약 확정 완료 {plan.summary.reservationsConfirmed}건
                           </span>
