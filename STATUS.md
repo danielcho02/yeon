@@ -15,7 +15,7 @@ The **Post-QA Phase 1 follow-up pass** is now included in the working tree:
 - Step 3 now shows `보낸 요청 현황` inline above the quote builder, including the clean-seed empty state.
 - The modular quote summary now uses the same full-width card system as the surrounding Step 3 content instead of a narrow detached desktop rail.
 - Vendor final confirmation is actioned from the `최종 확정` panel; home/proposal surfaces route there instead of rendering duplicate confirmation CTAs.
-- Vendor service management now explains the current single derived base package model and separates standard modules, base included items, optional add-ons, and vendor-specific items.
+- Vendor service management now uses internal views (`현재 구성`, `표준 항목 불러오기`, `업체 전용 항목`) so the current active configuration is the default view, standard catalog import is secondary, and vendor-specific creation has one clear entry point.
 - `VendorPackage`, `PackageModule`, multiple packages, package price overrides, discount/negotiable pricing, full module price editor, and notification center remain deferred.
 
 ---

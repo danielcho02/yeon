@@ -32,79 +32,30 @@ type ServiceRow = {
   isBaseIncluded: boolean;
 };
 
-// ── Standard catalog item row ─────────────────────────────────────────────
+type ManagerView = "current" | "catalog" | "custom";
 
-function StandardItemRow({
-  item,
-  eventType,
-  module,
-  existing,
-}: {
-  item: CatalogItem;
-  eventType: string;
-  module: string;
-  existing?: ServiceRow;
-}) {
-  return (
-    <form action={setStandardItemPrice} className="flex items-center gap-3">
-      <input type="hidden" name="catalogKey" value={item.key} />
-      <input type="hidden" name="eventType" value={eventType} />
-      <input type="hidden" name="module" value={module} />
+const managerViews: Array<{
+  key: ManagerView;
+  label: string;
+  description: string;
+}> = [
+  { key: "current", label: "현재 구성", description: "플래너에게 보이는 활성 서비스" },
+  { key: "catalog", label: "표준 항목 불러오기", description: "표준 카탈로그 항목 등록" },
+  { key: "custom", label: "업체 전용 항목", description: "특화 옵션 추가 및 관리" }
+];
 
-      <div className="flex flex-1 items-center justify-between gap-3 rounded-xl border border-border/50 bg-white/80 px-4 py-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <p className="text-sm font-medium text-foreground">{item.name}</p>
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-              표준 항목
-            </span>
-            {existing && (
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                existing.isActive
-                  ? "bg-emerald-50 text-emerald-700"
-                  : "bg-muted text-muted-foreground"
-              }`}>
-                {existing.isActive ? "활성" : "비활성"}
-              </span>
-            )}
-            {existing?.isBaseIncluded && (
-              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                기본 포함
-              </span>
-            )}
-          </div>
-          <p className="mt-0.5 text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wide">
-            {item.pricingType === "PER_GUEST" ? "인당 단가" : "고정가"}
-          </p>
-        </div>
+const actionButtonClass =
+  "inline-flex h-8 w-20 shrink-0 items-center justify-center rounded-xl border text-xs font-semibold transition-colors";
 
-        <div className="flex shrink-0 items-center gap-2">
-          <div className="flex items-center gap-1">
-            <input
-              name="basePrice"
-              type="number"
-              required
-              min={1}
-              defaultValue={existing?.basePrice ?? ""}
-              placeholder="가격 입력"
-              className="w-28 rounded-xl border border-input bg-white px-2.5 py-1.5 text-right text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-            <span className="text-xs text-muted-foreground">원{item.pricingType === "PER_GUEST" ? "/인" : ""}</span>
-          </div>
-          <button
-            type="submit"
-            className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary transition-all hover:bg-primary/10"
-          >
-            {existing ? "가격 저장" : "표준 항목 추가"}
-          </button>
-        </div>
-      </div>
-    </form>
-  );
-}
+const priceInputClass =
+  "h-9 w-28 rounded-xl border border-input bg-white px-2.5 text-right text-sm tabular-nums text-foreground focus:outline-none focus:ring-2 focus:ring-ring";
 
 function formatServicePrice(item: ServiceRow) {
   return `${item.basePrice.toLocaleString()}원${item.pricingType === "PER_GUEST" ? "/인" : ""}`;
+}
+
+function getPricingTypeLabel(pricingType: CatalogItem["pricingType"] | ServiceRow["pricingType"]) {
+  return pricingType === "PER_GUEST" ? "인당" : "고정가";
 }
 
 function getServiceModuleLabel(item: ServiceRow) {
@@ -114,132 +65,119 @@ function getServiceModuleLabel(item: ServiceRow) {
   });
 }
 
-// ── Add custom item form ──────────────────────────────────────────────────
+function getModuleLabel(eventType: MvpQuoteEventType, module: string) {
+  return getQuoteServiceModuleLabel({ eventType, serviceCategory: module });
+}
 
-function AddCustomItemForm({
-  eventType,
-  modules,
+function Badge({
+  children,
+  tone = "neutral"
 }: {
-  eventType: string;
-  modules: string[];
+  children: React.ReactNode;
+  tone?: "neutral" | "success" | "muted" | "warning";
 }) {
-  const [open, setOpen] = useState(false);
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="mt-2 flex items-center gap-1.5 rounded-xl border border-dashed border-muted-foreground/30 bg-transparent px-4 py-2.5 text-xs font-semibold text-muted-foreground transition-all hover:border-primary/40 hover:text-primary"
-      >
-        + 새 항목 입력
-      </button>
-    );
-  }
+  const toneClass = {
+    neutral: "border-border/60 bg-white text-muted-foreground",
+    success: "border-emerald-100 bg-emerald-50 text-emerald-700",
+    muted: "border-border/50 bg-muted text-muted-foreground",
+    warning: "border-amber-100 bg-amber-50 text-amber-700"
+  }[tone];
 
   return (
-    <form
-      action={addCustomItem}
-      onSubmit={() => setOpen(false)}
-      className="mt-2 rounded-xl border border-primary/20 bg-primary/3 p-4"
-    >
-      <input type="hidden" name="eventType" value={eventType} />
-      <p className="mb-3 text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground/55">
-        새 업체 전용 항목
-      </p>
-      <div className="space-y-3">
-        <select
-          name="module"
-          required
-          className="w-full rounded-xl border border-input bg-white px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-          {modules.map((module) => (
-            <option key={module} value={module}>
-              {getQuoteServiceModuleLabel({ eventType: eventType as MvpQuoteEventType, serviceCategory: module })}
-            </option>
-          ))}
-        </select>
-        <input
-          name="name"
-          type="text"
-          required
-          placeholder="항목명 (예: 야외 버진로드 런너 추가)"
-          className="w-full rounded-xl border border-input bg-white px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        />
-        <textarea
-          name="description"
-          rows={2}
-          placeholder="설명 (선택)"
-          className="w-full resize-none rounded-xl border border-input bg-white px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        />
-        <div className="flex gap-2">
-          <select
-            name="pricingType"
-            className="rounded-xl border border-input bg-white px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="FLAT">고정가</option>
-            <option value="PER_GUEST">인당 단가</option>
-          </select>
-          <div className="flex flex-1 items-center gap-1">
-            <input
-              name="basePrice"
-              type="number"
-              required
-              min={1}
-              placeholder="가격"
-              className="flex-1 rounded-xl border border-input bg-white px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-            <span className="text-xs text-muted-foreground">원</span>
-          </div>
-        </div>
-        <label className="flex items-center gap-2 rounded-xl border border-border/50 bg-white px-3 py-2 text-xs font-medium text-foreground">
-          <input
-            name="isBaseIncluded"
-            type="checkbox"
-            className="h-4 w-4 rounded border-input accent-primary"
-          />
-          기본 패키지 포함 항목으로 등록
-        </label>
-      </div>
-      <div className="mt-3 flex gap-2">
-        <button
-          type="submit"
-          className="flex-1 rounded-xl bg-primary py-2 text-xs font-semibold text-primary-foreground"
-        >
-          추가
-        </button>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="rounded-xl border border-border/60 bg-white px-3 py-2 text-xs font-medium text-muted-foreground"
-        >
-          취소
-        </button>
-      </div>
-    </form>
+    <span className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold ${toneClass}`}>
+      {children}
+    </span>
   );
 }
 
-// ── Service model sections ────────────────────────────────────────────────
-
 function SectionHeading({
   title,
-  description
+  description,
+  count
 }: {
   title: string;
   description: string;
+  count?: number;
 }) {
   return (
-    <div className="mb-3">
-      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/55">
-        {title}
-      </p>
-      <p className="mt-1 text-[11px] leading-5 text-muted-foreground">{description}</p>
+    <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/55">
+          {title}
+        </p>
+        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">{description}</p>
+      </div>
+      {typeof count === "number" && (
+        <span className="rounded-full border border-border/60 bg-white px-2.5 py-1 text-[10px] font-semibold tabular-nums text-muted-foreground">
+          {count}개
+        </span>
+      )}
     </div>
   );
 }
 
-function ModuleSummaryList({
+function EmptyPanel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="rounded-xl border border-dashed border-border/50 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+      {children}
+    </p>
+  );
+}
+
+function ServiceSummaryRow({
+  item,
+  secondary = false
+}: {
+  item: ServiceRow;
+  secondary?: boolean;
+}) {
+  return (
+    <div
+      className={`grid gap-3 rounded-xl border px-3.5 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center ${
+        secondary ? "border-border/40 bg-muted/20" : "border-border/60 bg-white"
+      }`}
+    >
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <p className="min-w-0 text-sm font-semibold leading-5 text-foreground">{item.name}</p>
+          <Badge>{item.catalogKey === null ? "업체 전용" : "표준 항목"}</Badge>
+          <Badge>{getServiceModuleLabel(item)}</Badge>
+          <Badge tone={item.isActive ? "success" : "muted"}>{item.isActive ? "활성" : "비활성"}</Badge>
+          {item.isBaseIncluded && <Badge tone="warning">기본 포함</Badge>}
+        </div>
+        {item.description && (
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground/75">{item.description}</p>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-2 md:justify-end">
+        <span className="min-w-24 text-sm font-bold tabular-nums text-primary md:text-right">
+          {formatServicePrice(item)}
+        </span>
+        <form action={toggleVendorService.bind(null, item.id, !item.isActive)}>
+          <button
+            type="submit"
+            className={`${actionButtonClass} border-border/60 bg-white text-muted-foreground hover:bg-muted/30`}
+          >
+            {item.isActive ? "끄기" : "활성화"}
+          </button>
+        </form>
+        {item.catalogKey === null && (
+          <form action={deleteCustomItem.bind(null, item.id)}>
+            <button
+              type="submit"
+              aria-label={`${item.name} 삭제`}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-rose-200 bg-white text-rose-500 transition-colors hover:bg-rose-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ServiceGroup({
   title,
   description,
   services,
@@ -253,8 +191,8 @@ function ModuleSummaryList({
   secondary?: boolean;
 }) {
   return (
-    <div className={`rounded-xl border p-4 ${secondary ? "border-border/40 bg-muted/20" : "border-border/50 bg-white/70"}`}>
-      <SectionHeading title={title} description={description} />
+    <section className={`rounded-2xl border p-4 ${secondary ? "border-border/40 bg-muted/10" : "border-border/60 bg-white/80"}`}>
+      <SectionHeading title={title} description={description} count={services.length} />
       {services.length > 0 ? (
         <div className="grid gap-2">
           {services.map((service) => (
@@ -262,77 +200,149 @@ function ModuleSummaryList({
           ))}
         </div>
       ) : (
-        <p className="rounded-lg border border-dashed border-border/50 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-          {emptyText}
-        </p>
+        <EmptyPanel>{emptyText}</EmptyPanel>
       )}
-    </div>
+    </section>
   );
 }
 
-function ServiceSummaryRow({
-  item,
-  secondary = false
+function CountChip({
+  label,
+  count
 }: {
-  item: ServiceRow;
-  secondary?: boolean;
+  label: string;
+  count: number;
 }) {
   return (
-    <div
-      className={`flex flex-col gap-3 rounded-xl border px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
-        secondary ? "border-border/40 bg-white/70 opacity-80" : "border-border/60 bg-white"
-      }`}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <p className="text-sm font-medium text-foreground">{item.name}</p>
-          <span className="rounded-full border border-border/60 bg-white px-2 py-0.5 text-[9px] font-semibold text-muted-foreground">
-            {item.catalogKey === null ? "업체 전용" : "표준 항목"}
-          </span>
-          <span className="rounded-full border border-border/60 bg-white px-2 py-0.5 text-[9px] font-semibold text-muted-foreground">
-            {getServiceModuleLabel(item)}
-          </span>
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-            item.isActive ? "bg-emerald-50 text-emerald-700" : "bg-muted text-muted-foreground"
-          }`}>
-            {item.isActive ? "활성" : "비활성"}
-          </span>
-          {item.isBaseIncluded && (
-            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-              기본 포함
-            </span>
+    <div className="rounded-2xl border border-border/60 bg-white px-3.5 py-2.5">
+      <p className="text-[10px] font-semibold text-muted-foreground">{label}</p>
+      <p className="mt-0.5 text-base font-extrabold tabular-nums text-foreground">{count}</p>
+    </div>
+  );
+}
+
+function CurrentConfigurationPanel({
+  baseIncludedServices,
+  optionalStandardServices,
+  vendorSpecificServices,
+  inactiveServices
+}: {
+  baseIncludedServices: ServiceRow[];
+  optionalStandardServices: ServiceRow[];
+  vendorSpecificServices: ServiceRow[];
+  inactiveServices: ServiceRow[];
+}) {
+  return (
+    <div className="space-y-4">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <CountChip label="기본 포함" count={baseIncludedServices.length} />
+        <CountChip label="선택 옵션" count={optionalStandardServices.length} />
+        <CountChip label="업체 전용" count={vendorSpecificServices.length} />
+        <CountChip label="비활성" count={inactiveServices.length} />
+      </section>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <ServiceGroup
+          title="기본 패키지 포함 항목"
+          description="플래너에게 업체 기본 패키지로 보이는 단일 묶음입니다."
+          services={baseIncludedServices}
+          emptyText="현재 기본 패키지에 포함되는 활성 항목이 없습니다."
+        />
+        <ServiceGroup
+          title="선택 추가 옵션"
+          description="기본 패키지 외에 플래너가 추가로 선택할 수 있는 표준 옵션입니다."
+          services={optionalStandardServices}
+          emptyText="현재 추가 선택 옵션으로 표시되는 활성 표준 항목이 없습니다."
+        />
+        <ServiceGroup
+          title="업체 전용 항목"
+          description="표준 카탈로그에 없는 이 업체만의 활성 특화 옵션입니다."
+          services={vendorSpecificServices}
+          emptyText="현재 활성 업체 전용 옵션이 없습니다."
+        />
+        <details className="rounded-2xl border border-border/40 bg-muted/10 p-4">
+          <summary className="cursor-pointer list-none">
+            <SectionHeading
+              title="비활성 항목"
+              description="플래너 화면에 노출되지 않으며, 필요할 때 다시 활성화할 수 있습니다."
+              count={inactiveServices.length}
+            />
+          </summary>
+          {inactiveServices.length > 0 ? (
+            <div className="mt-2 grid gap-2">
+              {inactiveServices.map((service) => (
+                <ServiceSummaryRow key={service.id} item={service} secondary />
+              ))}
+            </div>
+          ) : (
+            <EmptyPanel>비활성화된 항목이 없습니다.</EmptyPanel>
           )}
-        </div>
-        {item.description && (
-          <p className="mt-1 text-xs leading-5 text-muted-foreground/70">{item.description}</p>
-        )}
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <span className="text-sm font-semibold text-primary">{formatServicePrice(item)}</span>
-        <form action={toggleVendorService.bind(null, item.id, !item.isActive)}>
-          <button
-            type="submit"
-            className="rounded-xl border border-border/60 bg-white px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/30"
-          >
-            {item.isActive ? "비활성화" : "활성화"}
-          </button>
-        </form>
-        {item.catalogKey === null && (
-          <form action={deleteCustomItem.bind(null, item.id)}>
-            <button
-              type="submit"
-              className="rounded-xl border border-rose-200 bg-white p-1.5 text-rose-500 transition-all hover:bg-rose-50"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </form>
-        )}
+        </details>
       </div>
     </div>
   );
 }
 
-function StandardCatalogSection({
+function StandardItemRow({
+  item,
+  eventType,
+  module,
+  existing
+}: {
+  item: CatalogItem;
+  eventType: string;
+  module: string;
+  existing?: ServiceRow;
+}) {
+  return (
+    <form action={setStandardItemPrice}>
+      <input type="hidden" name="catalogKey" value={item.key} />
+      <input type="hidden" name="eventType" value={eventType} />
+      <input type="hidden" name="module" value={module} />
+
+      <div className="grid gap-3 rounded-xl border border-border/50 bg-white px-3.5 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <p className="text-sm font-semibold text-foreground">{item.name}</p>
+            <Badge>표준 항목</Badge>
+            <Badge>{getPricingTypeLabel(item.pricingType)}</Badge>
+            {existing ? (
+              <Badge tone={existing.isActive ? "success" : "muted"}>{existing.isActive ? "등록됨" : "비활성"}</Badge>
+            ) : (
+              <Badge tone="muted">미등록</Badge>
+            )}
+          </div>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {existing ? "가격을 저장하면 활성 표준 옵션으로 갱신됩니다." : "가격을 입력하면 선택 추가 옵션으로 등록됩니다."}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 md:justify-end">
+          <input
+            name="basePrice"
+            type="number"
+            required
+            min={1}
+            defaultValue={existing?.basePrice ?? ""}
+            placeholder="가격"
+            className={priceInputClass}
+          />
+          <span className="inline-flex h-9 w-12 shrink-0 items-center text-xs text-muted-foreground">
+            원{item.pricingType === "PER_GUEST" ? "/인" : ""}
+          </span>
+          <button
+            type="submit"
+            className={`${actionButtonClass} border-primary/30 bg-primary/5 text-primary hover:bg-primary/10`}
+          >
+            {existing ? "저장" : "추가"}
+          </button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+function StandardImportPanel({
   eventType,
   modules,
   existingServices
@@ -342,35 +352,53 @@ function StandardCatalogSection({
   existingServices: ServiceRow[];
 }) {
   return (
-    <section className="rounded-2xl border border-border/60 bg-muted/10 p-5">
+    <section className="rounded-2xl border border-border/60 bg-white/80 p-5">
       <SectionHeading
         title="표준 항목 불러오기"
-        description="yeON 표준 카탈로그 항목입니다. 가격을 등록하면 활성 표준 옵션으로 추가되고, 이미 등록된 항목은 가격을 수정할 수 있습니다."
+        description="필요한 표준 카탈로그 항목만 가격을 입력해 활성 옵션으로 추가합니다."
       />
-      <div className="space-y-5">
-        {modules.map((module) => {
+      <div className="space-y-3">
+        {modules.map((module, index) => {
           const catalogItems = getCatalogItems(eventType, module);
           if (catalogItems.length === 0) return null;
+          const registeredCount = catalogItems.filter((item) =>
+            existingServices.some((service) => service.catalogKey === item.key && service.eventType === eventType)
+          ).length;
+
           return (
-            <div key={module} className="space-y-2">
-              <p className="text-xs font-bold text-foreground">
-                {getQuoteServiceModuleLabel({ eventType, serviceCategory: module })}
-              </p>
-              {catalogItems.map((item) => {
-                const existing = existingServices.find(
-                  (service) => service.catalogKey === item.key && service.eventType === eventType
-                );
-                return (
-                  <StandardItemRow
-                    key={item.key}
-                    item={item}
-                    eventType={eventType}
-                    module={module}
-                    existing={existing}
-                  />
-                );
-              })}
-            </div>
+            <details
+              key={module}
+              open={index === 0}
+              className="rounded-2xl border border-border/50 bg-muted/10 p-4"
+            >
+              <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-foreground">{getModuleLabel(eventType, module)}</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    등록 {registeredCount}개 · 전체 {catalogItems.length}개
+                  </p>
+                </div>
+                <span className="rounded-full border border-border/60 bg-white px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
+                  펼쳐서 관리
+                </span>
+              </summary>
+              <div className="mt-4 grid gap-2">
+                {catalogItems.map((item) => {
+                  const existing = existingServices.find(
+                    (service) => service.catalogKey === item.key && service.eventType === eventType
+                  );
+                  return (
+                    <StandardItemRow
+                      key={item.key}
+                      item={item}
+                      eventType={eventType}
+                      module={module}
+                      existing={existing}
+                    />
+                  );
+                })}
+              </div>
+            </details>
           );
         })}
       </div>
@@ -378,12 +406,145 @@ function StandardCatalogSection({
   );
 }
 
-// ── Main ServiceManager ───────────────────────────────────────────────────
+function AddCustomItemForm({
+  eventType,
+  modules
+}: {
+  eventType: string;
+  modules: string[];
+}) {
+  const [open, setOpen] = useState(false);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex h-10 items-center justify-center rounded-xl border border-dashed border-primary/35 bg-primary/5 px-4 text-xs font-bold text-primary transition-colors hover:bg-primary/10"
+      >
+        업체 전용 항목 추가
+      </button>
+    );
+  }
+
+  return (
+    <form
+      action={addCustomItem}
+      onSubmit={() => setOpen(false)}
+      className="rounded-2xl border border-primary/20 bg-primary/3 p-4"
+    >
+      <input type="hidden" name="eventType" value={eventType} />
+      <SectionHeading
+        title="업체 전용 항목 추가"
+        description="표준 카탈로그에 없는 특화 옵션을 하나만의 입력 폼에서 추가합니다."
+      />
+      <div className="grid gap-3 md:grid-cols-2">
+        <select
+          name="module"
+          required
+          className="h-10 rounded-xl border border-input bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          {modules.map((module) => (
+            <option key={module} value={module}>
+              {getModuleLabel(eventType as MvpQuoteEventType, module)}
+            </option>
+          ))}
+        </select>
+        <input
+          name="name"
+          type="text"
+          required
+          placeholder="항목명"
+          className="h-10 rounded-xl border border-input bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+        <textarea
+          name="description"
+          rows={2}
+          placeholder="설명 (선택)"
+          className="resize-none rounded-xl border border-input bg-white px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring md:col-span-2"
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            name="pricingType"
+            className="h-9 w-28 rounded-xl border border-input bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="FLAT">고정가</option>
+            <option value="PER_GUEST">인당</option>
+          </select>
+          <input
+            name="basePrice"
+            type="number"
+            required
+            min={1}
+            placeholder="가격"
+            className={priceInputClass}
+          />
+          <span className="inline-flex h-9 w-12 items-center text-xs text-muted-foreground">원</span>
+        </div>
+        <label className="flex h-10 items-center gap-2 rounded-xl border border-border/50 bg-white px-3 text-xs font-medium text-foreground">
+          <input
+            name="isBaseIncluded"
+            type="checkbox"
+            className="h-4 w-4 rounded border-input accent-primary"
+          />
+          기본 패키지 포함 항목으로 등록
+        </label>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="submit"
+          className={`${actionButtonClass} border-primary bg-primary text-primary-foreground hover:bg-primary/90`}
+        >
+          추가
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className={`${actionButtonClass} border-border/60 bg-white text-muted-foreground hover:bg-muted/30`}
+        >
+          취소
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function VendorSpecificPanel({
+  customServices,
+  eventType,
+  modules
+}: {
+  customServices: ServiceRow[];
+  eventType: MvpQuoteEventType;
+  modules: string[];
+}) {
+  return (
+    <section className="space-y-4 rounded-2xl border border-border/60 bg-white/80 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <SectionHeading
+          title="업체 전용 항목"
+          description="표준 카탈로그에 없는 특화 옵션입니다. 추가 진입점은 이 화면 하나만 사용합니다."
+          count={customServices.length}
+        />
+        <AddCustomItemForm eventType={eventType} modules={modules} />
+      </div>
+      {customServices.length > 0 ? (
+        <div className="grid gap-2">
+          {customServices.map((service) => (
+            <ServiceSummaryRow key={service.id} item={service} secondary={!service.isActive} />
+          ))}
+        </div>
+      ) : (
+        <EmptyPanel>등록된 업체 전용 항목이 없습니다.</EmptyPanel>
+      )}
+    </section>
+  );
+}
 
 export function ServiceManager({
   supportedEventTypes,
   supportedModules,
-  existingServices,
+  existingServices
 }: {
   supportedEventTypes: MvpQuoteEventType[];
   supportedModules: string[];
@@ -391,9 +552,10 @@ export function ServiceManager({
 }) {
   const firstTab = supportedEventTypes[0] ?? "WEDDING";
   const [activeTab, setActiveTab] = useState<MvpQuoteEventType>(firstTab);
+  const [activeView, setActiveView] = useState<ManagerView>("current");
 
   const tabModules = supportedModules.filter(
-    (m) => getQuoteServiceModuleEventType(m) === activeTab
+    (module) => getQuoteServiceModuleEventType(module) === activeTab
   );
   const tabServices = existingServices.filter((service) => service.eventType === activeTab);
   const baseIncludedServices = tabServices.filter((service) => service.isActive && service.isBaseIncluded);
@@ -404,11 +566,11 @@ export function ServiceManager({
     (service) => service.isActive && !service.isBaseIncluded && service.catalogKey === null
   );
   const inactiveServices = tabServices.filter((service) => !service.isActive);
+  const customServices = tabServices.filter((service) => service.catalogKey === null);
 
-  // If only one event type, skip tab render
   return (
-    <div>
-      <div className="mb-6 rounded-2xl border border-border/60 bg-white/80 p-5">
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-border/60 bg-white/80 p-5">
         <p className="text-sm font-bold text-foreground">서비스 구성 방식</p>
         <p className="mt-2 text-xs leading-6 text-muted-foreground">
           현재 모델은 여러 패키지를 만들지 않고, 활성화된 기본 포함 항목을 하나의 업체 기본 패키지로 묶어 플래너에게 보여줍니다.
@@ -417,82 +579,74 @@ export function ServiceManager({
       </div>
 
       {supportedEventTypes.length > 1 && (
-        <div className="mb-6 flex gap-2">
-          {supportedEventTypes.map((et) => (
+        <div className="flex flex-wrap gap-2">
+          {supportedEventTypes.map((eventType) => (
             <button
-              key={et}
+              key={eventType}
               type="button"
-              onClick={() => setActiveTab(et)}
-              className={`rounded-2xl border px-5 py-2 text-sm font-semibold transition-all ${
-                activeTab === et
+              onClick={() => setActiveTab(eventType)}
+              className={`h-10 rounded-2xl border px-5 text-sm font-semibold transition-colors ${
+                activeTab === eventType
                   ? "border-primary bg-primary text-primary-foreground shadow-sm"
                   : "border-border/60 bg-white text-foreground hover:bg-muted/20"
               }`}
             >
-              {getEventTypeLabel(et)}
+              {getEventTypeLabel(eventType)}
             </button>
           ))}
         </div>
       )}
 
       {supportedEventTypes.length === 1 && (
-        <div className="mb-4">
-          <span className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-            {getEventTypeLabel(activeTab)}
-          </span>
-        </div>
+        <span className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+          {getEventTypeLabel(activeTab)}
+        </span>
       )}
 
+      <div className="grid gap-2 rounded-2xl border border-border/60 bg-muted/10 p-1.5 md:grid-cols-3">
+        {managerViews.map((view) => {
+          const isActive = activeView === view.key;
+          return (
+            <button
+              key={view.key}
+              type="button"
+              onClick={() => setActiveView(view.key)}
+              className={`rounded-xl px-4 py-3 text-left transition-colors ${
+                isActive ? "bg-white shadow-sm" : "hover:bg-white/60"
+              }`}
+            >
+              <span className={`block text-xs font-bold ${isActive ? "text-foreground" : "text-muted-foreground"}`}>
+                {view.label}
+              </span>
+              <span className="mt-0.5 block text-[10px] leading-4 text-muted-foreground">
+                {view.description}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {tabModules.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          지원 서비스 모듈이 설정되지 않았습니다. 프로필 편집에서 설정해 주세요.
-        </p>
+        <EmptyPanel>지원 서비스 모듈이 설정되지 않았습니다. 프로필 편집에서 설정해 주세요.</EmptyPanel>
+      ) : activeView === "current" ? (
+        <CurrentConfigurationPanel
+          baseIncludedServices={baseIncludedServices}
+          optionalStandardServices={optionalStandardServices}
+          vendorSpecificServices={vendorSpecificServices}
+          inactiveServices={inactiveServices}
+        />
+      ) : activeView === "catalog" ? (
+        <StandardImportPanel
+          eventType={activeTab}
+          modules={tabModules}
+          existingServices={existingServices}
+        />
       ) : (
-        <div className="space-y-8">
-          <section className="grid gap-4 xl:grid-cols-2">
-            <ModuleSummaryList
-              title="기본 패키지 포함 항목"
-              description="활성 상태의 기본 포함 항목입니다. 플래너에게 업체 기본 패키지로 보이는 단일 묶음에 포함됩니다."
-              services={baseIncludedServices}
-              emptyText="현재 기본 패키지에 포함되는 활성 항목이 없습니다."
-            />
-            <ModuleSummaryList
-              title="추가 선택 옵션"
-              description="활성 상태의 표준 항목 중 기본 패키지 외에 플래너가 추가로 선택할 수 있는 옵션입니다."
-              services={optionalStandardServices}
-              emptyText="현재 추가 선택 옵션으로 표시되는 활성 표준 항목이 없습니다."
-            />
-            <ModuleSummaryList
-              title="업체 전용 항목"
-              description="표준 카탈로그에 없는 이 업체만의 특화 옵션입니다. 기본 포함으로 등록한 업체 전용 항목은 위 기본 패키지 포함 항목에 표시됩니다."
-              services={vendorSpecificServices}
-              emptyText="현재 활성 업체 전용 옵션이 없습니다."
-            />
-            <ModuleSummaryList
-              title="비활성 항목"
-              description="플래너 화면에 노출되지 않는 항목입니다. 다시 활성화하면 현재 모델의 기본 포함 또는 선택 옵션 규칙에 따라 표시됩니다."
-              services={inactiveServices}
-              emptyText="비활성화된 항목이 없습니다."
-              secondary
-            />
-          </section>
-
-          <section className="rounded-2xl border border-border/60 bg-white/80 p-5">
-            <div className="mb-3">
-              <p className="text-sm font-bold text-foreground">업체 전용 항목 추가</p>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                표준 카탈로그에 없는 특화 옵션을 한 곳에서 추가합니다. 기본 패키지 포함을 선택하면 현재 단일 업체 기본 패키지에 들어갑니다.
-              </p>
-            </div>
-            <AddCustomItemForm eventType={activeTab} modules={tabModules} />
-          </section>
-
-          <StandardCatalogSection
-            eventType={activeTab}
-            modules={tabModules}
-            existingServices={existingServices}
-          />
-        </div>
+        <VendorSpecificPanel
+          customServices={customServices}
+          eventType={activeTab}
+          modules={tabModules}
+        />
       )}
     </div>
   );
