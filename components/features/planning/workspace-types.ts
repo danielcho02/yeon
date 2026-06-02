@@ -1,4 +1,5 @@
 import { Heart, Shield, Sparkles, type LucideIcon } from "lucide-react";
+import type { VendorPackagePriceSnapshot, VendorPackageSnapshot } from "@/types/vendor-package";
 
 export type Recommendation = {
   conceptTitle: string;
@@ -79,6 +80,8 @@ export type ReservationItem = {
   quoteRequestId?: string | null;
   quoteResponseId?: string | null;
   quoteRequestStatus?: "PENDING" | "RESPONDED" | "ACCEPTED" | "CANCELED" | null;
+  selectedPackageSnapshot?: VendorPackageSnapshot | null;
+  priceSnapshot?: VendorPackagePriceSnapshot | null;
   selectedServiceOptions?: Array<{
     catalogKey: string | null;
     name: string;

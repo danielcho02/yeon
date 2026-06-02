@@ -1,5 +1,6 @@
 import type { QuoteResponseData, QuoteStatus } from "./quote";
 import type { VendorProfileData } from "./user";
+import type { VendorPackagePriceSnapshot, VendorPackageSnapshot } from "./vendor-package";
 
 export type ReservationStatus =
   | "PENDING"
@@ -58,6 +59,8 @@ export interface VendorDashboardReservationDTO {
   quoteRequestId: string | null;
   quoteResponseId: string | null;
   quoteRequestStatus: QuoteStatus | null;
+  selectedPackageSnapshot?: VendorPackageSnapshot | null;
+  priceSnapshot?: VendorPackagePriceSnapshot | null;
   selectedServiceOptions: VendorDashboardSelectedServiceOptionDTO[] | null;
   eventPlan: {
     id: string;

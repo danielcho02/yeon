@@ -1,22 +1,25 @@
 # yeON Project Status
 
-> Last updated: 2026-06-01
-> Branch: `codex/next-product-stabilization`
-> Current focus: planner entry flow + Step 3 request feedback + module-backed custom items
+> Last updated: 2026-06-02
+> Branch: `codex/package-proposal-comparison`
+> Current focus: package proposal comparison + reservation continuity
 
 ---
 
 ## What Was Just Implemented
 
-The **Post-QA Phase 1 follow-up pass** is now included in the working tree:
+The **Package Proposal / Reservation Continuity pass** is now included in the working tree:
 
-- New plan creation no longer silently defaults the region to `서울`; the region field starts empty and must be entered explicitly.
-- Step 3 preloads request date, guest count, and budget from the selected plan, and reuses active QuoteRequest preferred date/budget when a vendor already has an active request.
-- Step 3 now shows `보낸 요청 현황` inline above the quote builder, including the clean-seed empty state.
-- The modular quote summary now uses the same full-width card system as the surrounding Step 3 content instead of a narrow detached desktop rail.
-- Vendor final confirmation is actioned from the `최종 확정` panel; home/proposal surfaces route there instead of rendering duplicate confirmation CTAs.
-- Vendor service management now uses internal views (`현재 구성`, `표준 항목 불러오기`, `업체 전용 항목`) so the current active configuration is the default view, standard catalog import is secondary, and vendor-specific creation has one clear entry point.
-- `VendorPackage`, `PackageModule`, multiple packages, package price overrides, discount/negotiable pricing, full module price editor, and notification center remain deferred.
+- Planner Step 4 shows package snapshot context, package price snapshot rows, and request-estimate vs vendor-final-proposal comparison.
+- Vendor proposal-writing UI shows the original package estimate before final total submission.
+- Vendor proposal memo is labeled and treated as proposal / adjustment memo.
+- Accepted package-backed reservations now carry `selectedPackageSnapshot` and `priceSnapshot` through vendor reservation DTOs.
+- Vendor final confirmation shows accepted package/proposal context: package name, base price, selected add-ons, vendor-specific add-ons, request estimate, final accepted total, event date, guest count, and planner request memo when available.
+- Vendor confirmed reservation cards show a compact accepted package/proposal summary.
+- `verify-vendor-package-contract.ts` now covers package-backed reservation continuity after accept.
+- No Prisma schema changes were made; existing QuoteRequest JSON snapshots are reused.
+
+Deferred for later: negotiation / re-proposal, multiple proposal versions, notification center, broad Step 4 visual polish, and account/profile/vendor info management.
 
 ---
 
@@ -52,6 +55,14 @@ confirmReservation  → Reservation(CONFIRMED) + confirmedAmount set
 Never create a Reservation in `createQuoteRequest`.
 Never skip Reservation creation in `acceptQuoteResponse`.
 Any deviation from this contract is a bug.
+
+Package-backed reservation continuity rules:
+
+- `QuoteRequest.selectedPackageSnapshot` is the source of truth for accepted package name, base price, and included package modules.
+- `QuoteRequest.priceSnapshot` is the source of truth for selected optional add-ons, vendor-specific add-ons, request estimate, guest count, and line-item grouping.
+- Vendor reservation DTOs may expose those existing snapshots through the linked accepted QuoteRequest.
+- Do not add Reservation schema fields for package context unless the existing JSON snapshots become insufficient.
+- Vendor final confirmation must keep one actual final confirmation CTA.
 
 ---
 
@@ -130,14 +141,17 @@ Do not reactivate it unless the specialist-vendor UX is fully built.
 
 ```bash
 npm run db:seed
+npx tsx scripts/verify-vendor-package-contract.ts
 npx tsx scripts/verify-demo-data-integrity.ts
 npx tsx scripts/verify-quote-flow.ts
+npx tsx scripts/verify-quote-decline-contract.ts
 npx tsx scripts/verify-service-category-contract.ts
-npx tsx scripts/verify-planner-auth-redirect.ts
 npx tsx scripts/verify-role-routing-contract.ts
+npx tsx scripts/verify-planner-auth-redirect.ts
 npx tsc --noEmit
 npm run lint
 npm run build
+npm run db:seed
 ```
 
 Scenario seed validation (required after Step 4 routing or planner workflow changes):
@@ -148,20 +162,21 @@ npx tsx scripts/verify-demo-scenario.ts --state=B
 
 ### Last Known Validation Results
 
-2026-06-01 Post-QA Phase 1 pass:
+2026-06-02 Package Proposal / Reservation Continuity pass:
 
 - `npm run db:seed`: PASS, restored 0 QuoteRequests / 0 QuoteResponses / 0 Reservations.
+- Short vendor package continuity smoke: PASS, server-rendered DOM harness confirmed final-confirm and confirmed package summary fields plus one final confirmation CTA.
+- `npx tsx scripts/verify-vendor-package-contract.ts`: PASS.
 - `npx tsx scripts/verify-demo-data-integrity.ts`: PASS.
 - `npx tsx scripts/verify-quote-flow.ts`: PASS.
-- `npx tsx scripts/verify-service-category-contract.ts`: PASS.
-- `npx tsx scripts/verify-planner-auth-redirect.ts`: PASS.
-- `npx tsx scripts/verify-role-routing-contract.ts`: PASS.
 - `npx tsx scripts/verify-quote-decline-contract.ts`: PASS.
-- `npm run db:seed:scenario:B` + `npx tsx scripts/verify-demo-scenario.ts --state=B`: PASS.
-- `lib/workflow-events.ts` and `lib/quote-request-decline.ts` import boundary: PASS, imports are server routes/actions/scripts only, not `use client` components.
+- `npx tsx scripts/verify-service-category-contract.ts`: PASS.
+- `npx tsx scripts/verify-role-routing-contract.ts`: PASS.
+- `npx tsx scripts/verify-planner-auth-redirect.ts`: PASS.
 - `npx tsc --noEmit`: PASS.
 - `npm run lint`: PASS.
 - `npm run build`: PASS.
+- Final `npm run db:seed`: PASS, restored clean 0/0/0 quote baseline.
 
 ---
 

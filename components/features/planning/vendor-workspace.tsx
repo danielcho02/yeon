@@ -339,6 +339,68 @@ function PackageEstimateContext({
   );
 }
 
+function ReservationPackageContext({
+  reservation,
+  compact = false
+}: {
+  reservation: ReservationItem;
+  compact?: boolean;
+}) {
+  const packageSnapshot = reservation.selectedPackageSnapshot;
+  if (!packageSnapshot) return null;
+
+  const priceSnapshot = reservation.priceSnapshot;
+  const selectedOptionalItems = getPackageLineItems(priceSnapshot, "PACKAGE_OPTIONAL");
+  const vendorAddOnItems = getPackageLineItems(priceSnapshot, "VENDOR_ADDON");
+  const finalAmount = reservation.confirmedAmount ?? reservation.quotedAmount ?? 0;
+
+  return (
+    <div className="rounded-xl border border-[#ebdccf]/50 bg-white p-4 text-xs text-[#2c3455] space-y-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <p className="text-[9px] font-bold uppercase tracking-wider text-[#c4977a]">
+            수락된 패키지 / 제안 요약
+          </p>
+          <p className="font-bold">{packageSnapshot.name}</p>
+          {packageSnapshot.description && !compact && (
+            <p className="leading-5 text-muted-foreground">{packageSnapshot.description}</p>
+          )}
+        </div>
+        <div className="text-left sm:text-right">
+          <span className="block text-[9px] text-muted-foreground">최종 수락 총액</span>
+          <span className="font-[var(--font-serif)] text-lg font-bold text-[#c4977a]">
+            {formatCurrency(finalAmount)}
+          </span>
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-3">
+        <DetailRow label="패키지 기본가" value={formatCurrency(priceSnapshot?.packageBasePrice ?? packageSnapshot.basePrice)} />
+        <DetailRow label="선택 추가 항목" value={formatCurrency(priceSnapshot?.selectedAddOnsSubtotal ?? 0)} />
+        <DetailRow label="요청 예상 총액" value={priceSnapshot ? formatCurrency(priceSnapshot.estimatedTotal) : "미정"} />
+      </div>
+
+      {!compact && packageSnapshot.includedItems.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-[9px] font-bold uppercase tracking-wider text-[#8c8275]">패키지 포함 항목</p>
+          <PackageSnapshotItemList
+            items={packageSnapshot.includedItems}
+            emptyText="패키지 포함 항목 정보가 없습니다."
+          />
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <p className="text-[9px] font-bold uppercase tracking-wider text-[#8c8275]">선택한 추가 항목</p>
+        <PackageSnapshotItemList
+          items={[...selectedOptionalItems, ...vendorAddOnItems]}
+          emptyText="추가 선택 항목 없이 패키지 기본 구성으로 수락되었습니다."
+        />
+      </div>
+    </div>
+  );
+}
+
 function ModuleRequestScope({
   modules,
   eventType,
@@ -1510,6 +1572,8 @@ export function VendorWorkspace({
                         </div>
                       </div>
 
+                      <ReservationPackageContext reservation={r} />
+
                       {requestMemo && (
                         <div className="rounded-xl bg-white border border-[#ebdccf]/40 p-3.5 text-xs text-[#2c3455] space-y-1 max-w-2xl">
                           <span className="text-[9px] font-bold text-[#c4977a] uppercase tracking-wider block">사용자 요청사항</span>
@@ -1594,6 +1658,12 @@ export function VendorWorkspace({
                     <div className="flex items-center gap-2"><UsersRound className="h-3.5 w-3.5 text-muted-foreground/50" />{r.guestCount ?? 0}명</div>
                     <div className="flex items-center gap-2"><ShieldCheck className="h-3.5 w-3.5 text-muted-foreground/50" />{formatCurrency(r.confirmedAmount ?? r.quotedAmount)}</div>
                   </div>
+
+                  {r.selectedPackageSnapshot && (
+                    <div className="mt-4">
+                      <ReservationPackageContext reservation={r} compact />
+                    </div>
+                  )}
                 </article>
               ))
             ) : (
