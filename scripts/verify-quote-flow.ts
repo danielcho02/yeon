@@ -18,6 +18,7 @@ import {
   assertQuoteTransition,
   assertReservationTransition
 } from "../lib/state-machine";
+import { resolveQuoteRequestNextAction } from "../lib/plan-dashboard-status";
 import { vendorServiceModuleCategoryMatchesEventType } from "../lib/step3.shared";
 import { buildVendorDashboardReservationContract } from "../lib/vendor-dashboard-contract";
 import type { VendorDashboardReservationDTO } from "../types/reservation";
@@ -34,6 +35,8 @@ type CreatedIds = {
   requestId: string;
   canceledRequestId: string;
   responseId: string;
+  initialRevisionId: string;
+  revisedRevisionId: string;
   reservationId: string;
   duplicateReservationId: string;
   notificationIds: string[];
@@ -45,6 +48,8 @@ const created: CreatedIds = {
   requestId: "",
   canceledRequestId: "",
   responseId: "",
+  initialRevisionId: "",
+  revisedRevisionId: "",
   reservationId: "",
   duplicateReservationId: "",
   notificationIds: [],
@@ -869,6 +874,18 @@ async function main() {
       }
     });
 
+    const initialRevision = await tx.quoteProposalRevision.create({
+      data: {
+        quoteResponseId: response.id,
+        requestId: created.requestId,
+        vendorId: vendor.id,
+        version: 1,
+        totalPrice: quotedAmount,
+        memo: "Backend smoke verification response",
+        status: "SUBMITTED"
+      }
+    });
+
     await tx.quoteRequest.update({
       where: { id: created.requestId },
       data: { status: QuoteStatus.RESPONDED }
@@ -881,7 +898,12 @@ async function main() {
         title: "견적 응답 도착",
         message: `${plan.title}에 대한 업체 견적이 도착했습니다.`,
         href: `/plans/${plan.id}`,
-        metadata: { script: "verify-quote-flow", quoteRequestId: created.requestId, quoteResponseId: response.id }
+        metadata: {
+          script: "verify-quote-flow",
+          quoteRequestId: created.requestId,
+          quoteResponseId: response.id,
+          quoteProposalRevisionId: initialRevision.id
+        }
       }
     });
 
@@ -894,14 +916,15 @@ async function main() {
         quoteResponseId: response.id,
         type: "QUOTE_RESPONSE_SUBMITTED",
         message: "업체가 견적 응답을 제출했습니다.",
-        metadata: { script: "verify-quote-flow" }
+        metadata: { script: "verify-quote-flow", quoteProposalRevisionId: initialRevision.id }
       }
     });
 
-    return { response, notification, activity };
+    return { response, initialRevision, notification, activity };
   });
 
   created.responseId = quoteResponseResult.response.id;
+  created.initialRevisionId = quoteResponseResult.initialRevision.id;
   created.notificationIds.push(quoteResponseResult.notification.id);
   created.activityLogIds.push(quoteResponseResult.activity.id);
 
@@ -1062,6 +1085,204 @@ async function main() {
     planDashboardShapeBeforeAccept.quoteRequests[0]?.reservation === null &&
     planDashboardShapeBeforeAccept.quoteRequests[0]?.status === QuoteStatus.RESPONDED;
 
+  const adjustmentRequestMemo = "예산을 500만원 안으로 맞추고 싶어요.";
+  const plannerRequestedTotalPrice = Math.max(1, quotedAmount - 500_000);
+  const revisedQuotedAmount = Math.max(1, quotedAmount - 500_000);
+
+  const adjustmentResult = await prisma.$transaction(async (tx) => {
+    const updatedRevision = await tx.quoteProposalRevision.update({
+      where: { id: created.initialRevisionId },
+      data: {
+        status: "ADJUSTMENT_REQUESTED",
+        adjustmentRequestMemo,
+        plannerRequestedTotalPrice
+      }
+    });
+
+    const notification = await tx.notification.create({
+      data: {
+        userId: vendor.id,
+        type: "QUOTE_ADJUSTMENT_REQUESTED",
+        title: "조정 요청 도착",
+        message: `${plan.title} 제안에 대한 조정 요청이 도착했습니다.`,
+        href: "/vendor/dashboard",
+        metadata: {
+          script: "verify-quote-flow",
+          quoteRequestId: created.requestId,
+          quoteResponseId: created.responseId,
+          quoteProposalRevisionId: updatedRevision.id,
+          plannerRequestedTotalPrice
+        }
+      }
+    });
+
+    const activity = await tx.activityLog.create({
+      data: {
+        actorId: planner.id,
+        planId: plan.id,
+        vendorId: vendor.id,
+        quoteRequestId: created.requestId,
+        quoteResponseId: created.responseId,
+        type: "QUOTE_ADJUSTMENT_REQUESTED",
+        message: "일반 사용자가 제안 조정을 요청했습니다.",
+        metadata: {
+          script: "verify-quote-flow",
+          quoteProposalRevisionId: updatedRevision.id,
+          adjustmentRequestMemo,
+          plannerRequestedTotalPrice
+        }
+      }
+    });
+
+    return { updatedRevision, notification, activity };
+  });
+
+  created.notificationIds.push(adjustmentResult.notification.id);
+  created.activityLogIds.push(adjustmentResult.activity.id);
+  checks.adjustment_request_created_no_reservation =
+    adjustmentResult.updatedRevision.status === "ADJUSTMENT_REQUESTED" &&
+    (await prisma.reservation.count({ where: { quoteRequestId: created.requestId } })) === 0;
+  assert.equal(adjustmentResult.updatedRevision.adjustmentRequestMemo, adjustmentRequestMemo);
+  assert.equal(adjustmentResult.updatedRevision.plannerRequestedTotalPrice, plannerRequestedTotalPrice);
+  assert.equal(
+    await prisma.reservation.count({ where: { quoteRequestId: created.requestId } }),
+    0,
+    "Planner adjustment request must not create Reservation"
+  );
+  checks.plan_next_action_adjustment_requested =
+    resolveQuoteRequestNextAction({
+      quoteStatus: "RESPONDED",
+      reservationStatus: null,
+      currentRevisionStatus: "ADJUSTMENT_REQUESTED",
+      hasResponse: true
+    }) === "adjustment_requested";
+  assert.equal(
+    resolveQuoteRequestNextAction({
+      quoteStatus: "RESPONDED",
+      reservationStatus: null,
+      currentRevisionStatus: "ADJUSTMENT_REQUESTED",
+      hasResponse: true
+    }),
+    "adjustment_requested",
+    "Plan summary must expose adjustment-requested quotes as waiting for vendor revision"
+  );
+
+  const adjustmentVisibleRequest = await prisma.quoteRequest.findUniqueOrThrow({
+    where: { id: created.requestId },
+    include: {
+      responses: {
+        include: {
+          revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
+        },
+        orderBy: { createdAt: "desc" }
+      }
+    }
+  });
+  const adjustmentCurrentRevision = adjustmentVisibleRequest.responses[0]?.revisions[0];
+  checks.adjustment_requested_revision_visible_to_planner_dto =
+    adjustmentCurrentRevision?.status === "ADJUSTMENT_REQUESTED" &&
+    adjustmentCurrentRevision.adjustmentRequestMemo === adjustmentRequestMemo &&
+    adjustmentCurrentRevision.plannerRequestedTotalPrice === plannerRequestedTotalPrice;
+  assert.equal(adjustmentCurrentRevision?.status, "ADJUSTMENT_REQUESTED");
+  assert.equal(adjustmentCurrentRevision?.adjustmentRequestMemo, adjustmentRequestMemo);
+  assert.equal(adjustmentCurrentRevision?.plannerRequestedTotalPrice, plannerRequestedTotalPrice);
+
+  const revisedProposalResult = await prisma.$transaction(async (tx) => {
+    const revisedRevision = await tx.quoteProposalRevision.create({
+      data: {
+        quoteResponseId: created.responseId,
+        requestId: created.requestId,
+        vendorId: vendor.id,
+        version: 2,
+        totalPrice: revisedQuotedAmount,
+        memo: "요청하신 예산에 맞춰 꽃장식 옵션을 조정했습니다.",
+        status: "REVISED"
+      }
+    });
+
+    const notification = await tx.notification.create({
+      data: {
+        userId: planner.id,
+        type: "QUOTE_REVISION_RECEIVED",
+        title: "수정 제안 도착",
+        message: `${plan.title}에 대한 수정 제안이 도착했습니다.`,
+        href: `/plans/${plan.id}`,
+        metadata: {
+          script: "verify-quote-flow",
+          quoteRequestId: created.requestId,
+          quoteResponseId: created.responseId,
+          quoteProposalRevisionId: revisedRevision.id
+        }
+      }
+    });
+
+    const activity = await tx.activityLog.create({
+      data: {
+        actorId: vendor.id,
+        planId: plan.id,
+        vendorId: vendor.id,
+        quoteRequestId: created.requestId,
+        quoteResponseId: created.responseId,
+        type: "QUOTE_REVISION_SUBMITTED",
+        message: "업체가 수정 제안을 제출했습니다.",
+        metadata: {
+          script: "verify-quote-flow",
+          quoteProposalRevisionId: revisedRevision.id,
+          totalPrice: revisedQuotedAmount
+        }
+      }
+    });
+
+    return { revisedRevision, notification, activity };
+  });
+
+  created.revisedRevisionId = revisedProposalResult.revisedRevision.id;
+  created.notificationIds.push(revisedProposalResult.notification.id);
+  created.activityLogIds.push(revisedProposalResult.activity.id);
+  checks.revised_proposal_created_no_reservation =
+    revisedProposalResult.revisedRevision.status === "REVISED" &&
+    revisedProposalResult.revisedRevision.totalPrice === revisedQuotedAmount &&
+    (await prisma.reservation.count({ where: { quoteRequestId: created.requestId } })) === 0;
+  checks.vendor_target_acceptance_revision_created =
+    revisedProposalResult.revisedRevision.totalPrice === plannerRequestedTotalPrice;
+  assert.equal(
+    revisedProposalResult.revisedRevision.totalPrice,
+    plannerRequestedTotalPrice,
+    "Vendor target acceptance must create a revised proposal using planner requested total"
+  );
+  assert.equal(
+    await prisma.reservation.count({ where: { quoteRequestId: created.requestId } }),
+    0,
+    "Vendor revised proposal must not create Reservation"
+  );
+  checks.plan_next_action_revised_quote_received =
+    resolveQuoteRequestNextAction({
+      quoteStatus: "RESPONDED",
+      reservationStatus: null,
+      currentRevisionStatus: "REVISED",
+      hasResponse: true
+    }) === "revised_quote_received";
+  assert.equal(
+    resolveQuoteRequestNextAction({
+      quoteStatus: "RESPONDED",
+      reservationStatus: null,
+      currentRevisionStatus: "REVISED",
+      hasResponse: true
+    }),
+    "revised_quote_received",
+    "Plan summary must expose revised proposals separately from initial quote review"
+  );
+
+  const revisionHistory = await prisma.quoteProposalRevision.findMany({
+    where: { quoteResponseId: created.responseId },
+    orderBy: [{ version: "asc" }, { createdAt: "asc" }]
+  });
+  checks.revision_history_available_for_step4 =
+    revisionHistory.length === 2 &&
+    revisionHistory[0]?.status === "ADJUSTMENT_REQUESTED" &&
+    revisionHistory[1]?.status === "REVISED";
+  assert.equal(revisionHistory.length, 2, "Step 4 must have compact revision history available");
+
   assertQuoteTransition("RESPONDED", "ACCEPTED");
 
   const vendorConfirmationDueAt = new Date();
@@ -1080,11 +1301,12 @@ async function main() {
         vendorId: vendor.id,
         quoteRequestId: created.requestId,
         quoteResponseId: created.responseId,
+        quoteProposalRevisionId: created.revisedRevisionId,
         serviceName: "Backend smoke verification",
         serviceCategory: String(selectedModuleRecords[0]?.category ?? weddingCustomOptionalModule.category),
         serviceDate: plan.scheduledAt,
         guestCount,
-        quotedAmount,
+        quotedAmount: revisedQuotedAmount,
         confirmedAmount: null,
         vendorConfirmationDueAt,
         selectedServiceOptions: selectedModuleRecords.map((module) => ({
@@ -1119,7 +1341,7 @@ async function main() {
         reservationId: reservation.id,
         type: "QUOTE_RESPONSE_ACCEPTED",
         message: "일반 사용자가 견적 응답을 수락했습니다.",
-        metadata: { script: "verify-quote-flow" }
+        metadata: { script: "verify-quote-flow", acceptedTotalPrice: revisedQuotedAmount }
       }
     });
 
@@ -1135,6 +1357,16 @@ async function main() {
   });
   assert.ok(newReservation, "Reservation must be created at accept time (canonical workflow)");
   assert.equal(newReservation!.quoteResponseId, created.responseId, "Reservation must link to QuoteResponse");
+  assert.equal(
+    newReservation!.quoteProposalRevisionId,
+    created.revisedRevisionId,
+    "Reservation must link to the accepted proposal revision"
+  );
+  assert.equal(
+    newReservation!.quotedAmount,
+    revisedQuotedAmount,
+    "Reservation must use the accepted revised proposal total"
+  );
   assert.equal(newReservation!.status, "PENDING", "Reservation status must be PENDING after accept");
   assert.ok(newReservation!.vendorConfirmationDueAt, "vendorConfirmationDueAt must be set");
   const acceptedSelectedOptions = selectedOptionsFromJson(newReservation!.selectedServiceOptions);

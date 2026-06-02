@@ -161,7 +161,23 @@ export default async function VendorDashboardPage() {
               totalPrice: true,
               note: true,
               createdAt: true,
-              modules: true
+              modules: true,
+              revisions: {
+                orderBy: [{ version: "desc" as const }, { createdAt: "desc" as const }],
+                select: {
+                  id: true,
+                  quoteResponseId: true,
+                  requestId: true,
+                  vendorId: true,
+                  version: true,
+                  totalPrice: true,
+                  memo: true,
+                  adjustmentRequestMemo: true,
+                  plannerRequestedTotalPrice: true,
+                  status: true,
+                  createdAt: true
+                }
+              }
             }
           }
         },
@@ -317,7 +333,35 @@ export default async function VendorDashboardPage() {
       totalPrice: resp.totalPrice,
       note: resp.note,
       responseMessage: resp.note,
-      createdAt: resp.createdAt.toISOString()
+      createdAt: resp.createdAt.toISOString(),
+      revisions: resp.revisions.map((revision) => ({
+        id: revision.id,
+        quoteResponseId: revision.quoteResponseId,
+        requestId: revision.requestId,
+        vendorId: revision.vendorId,
+        version: revision.version,
+        totalPrice: revision.totalPrice,
+        memo: revision.memo,
+        adjustmentRequestMemo: revision.adjustmentRequestMemo,
+        plannerRequestedTotalPrice: revision.plannerRequestedTotalPrice,
+        status: revision.status as import("@/types/quote").QuoteProposalRevisionStatus,
+        createdAt: revision.createdAt.toISOString()
+      })),
+      currentRevision: resp.revisions[0]
+        ? {
+            id: resp.revisions[0].id,
+            quoteResponseId: resp.revisions[0].quoteResponseId,
+            requestId: resp.revisions[0].requestId,
+            vendorId: resp.revisions[0].vendorId,
+            version: resp.revisions[0].version,
+            totalPrice: resp.revisions[0].totalPrice,
+            memo: resp.revisions[0].memo,
+            adjustmentRequestMemo: resp.revisions[0].adjustmentRequestMemo,
+            plannerRequestedTotalPrice: resp.revisions[0].plannerRequestedTotalPrice,
+            status: resp.revisions[0].status as import("@/types/quote").QuoteProposalRevisionStatus,
+            createdAt: resp.revisions[0].createdAt.toISOString()
+          }
+        : null
     })),
     reservation: null
   }));

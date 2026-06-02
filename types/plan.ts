@@ -55,6 +55,8 @@ export type PlanDashboardNextAction =
   | "waiting_for_vendor"
   | "compare_quotes"
   | "accept_quote"
+  | "adjustment_requested"
+  | "revised_quote_received"
   | "reservation_pending"
   | "confirmed"
   | "canceled";

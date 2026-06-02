@@ -8,6 +8,8 @@ import type { EventPlanData, EventType, PlanStatus } from "@/types/plan";
 import type {
   QuoteRequestData,
   QuoteRequestWithResponses,
+  QuoteProposalRevisionData,
+  QuoteProposalRevisionStatus,
   QuoteResponseData,
   QuoteResponseModules,
   QuoteStatus
@@ -86,6 +88,21 @@ type QuoteResponseLike = {
   note: string | null;
   createdAt: Date;
   vendor?: VendorLike;
+  revisions?: QuoteProposalRevisionLike[];
+};
+
+type QuoteProposalRevisionLike = {
+  id: string;
+  quoteResponseId: string;
+  requestId: string;
+  vendorId: string;
+  version: number;
+  totalPrice: number;
+  memo: string | null;
+  adjustmentRequestMemo: string | null;
+  plannerRequestedTotalPrice: number | null;
+  status: string;
+  createdAt: Date;
 };
 
 type ReservationLike = {
@@ -94,6 +111,7 @@ type ReservationLike = {
   vendorId: string;
   quoteRequestId?: string | null;
   quoteResponseId: string | null;
+  quoteProposalRevisionId?: string | null;
   serviceDate: Date | null;
   quotedAmount: number | null;
   confirmedAmount: number | null;
@@ -103,6 +121,7 @@ type ReservationLike = {
   updatedAt: Date;
   vendor?: VendorLike;
   quoteResponse?: QuoteResponseLike | null;
+  quoteProposalRevision?: QuoteProposalRevisionLike | null;
 };
 
 type TransactionLike = {
@@ -187,6 +206,18 @@ export function mapQuoteStatus(status: string): QuoteStatus {
   }
 
   return "PENDING";
+}
+
+export function mapQuoteProposalRevisionStatus(status: string): QuoteProposalRevisionStatus {
+  if (
+    status === "ADJUSTMENT_REQUESTED" ||
+    status === "REVISED" ||
+    status === "ACCEPTED"
+  ) {
+    return status;
+  }
+
+  return "SUBMITTED";
 }
 
 export function mapReservationStatus(status: string): ReservationStatus {
@@ -274,6 +305,8 @@ export function mapQuoteRequest(request: QuoteRequestLike): QuoteRequestData {
 }
 
 export function mapQuoteResponse(response: QuoteResponseLike): QuoteResponseData {
+  const revisions = (response.revisions ?? []).map(mapQuoteProposalRevision);
+
   return {
     id: response.id,
     requestId: response.requestId,
@@ -284,7 +317,27 @@ export function mapQuoteResponse(response: QuoteResponseLike): QuoteResponseData
     note: response.note,
     responseMessage: response.note,
     createdAt: response.createdAt.toISOString(),
-    vendor: response.vendor ? mapVendorProfile(response.vendor) : undefined
+    vendor: response.vendor ? mapVendorProfile(response.vendor) : undefined,
+    revisions,
+    currentRevision: revisions[0] ?? null
+  };
+}
+
+export function mapQuoteProposalRevision(
+  revision: QuoteProposalRevisionLike
+): QuoteProposalRevisionData {
+  return {
+    id: revision.id,
+    quoteResponseId: revision.quoteResponseId,
+    requestId: revision.requestId,
+    vendorId: revision.vendorId,
+    version: revision.version,
+    totalPrice: revision.totalPrice,
+    memo: revision.memo,
+    adjustmentRequestMemo: revision.adjustmentRequestMemo,
+    plannerRequestedTotalPrice: revision.plannerRequestedTotalPrice,
+    status: mapQuoteProposalRevisionStatus(revision.status),
+    createdAt: revision.createdAt.toISOString()
   };
 }
 
@@ -318,6 +371,7 @@ export function mapReservation(reservation: ReservationLike): ReservationData {
     vendorId: reservation.vendorId,
     quoteRequestId: reservation.quoteRequestId ?? null,
     quoteResponseId: reservation.quoteResponseId,
+    quoteProposalRevisionId: reservation.quoteProposalRevisionId ?? null,
     reservedDate: (reservation.serviceDate ?? reservation.createdAt).toISOString(),
     totalAmount: reservation.confirmedAmount ?? reservation.quotedAmount ?? 0,
     vendorConfirmationDueAt: reservation.vendorConfirmationDueAt?.toISOString() ?? null,

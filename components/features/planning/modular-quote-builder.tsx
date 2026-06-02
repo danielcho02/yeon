@@ -549,17 +549,19 @@ export function ModularQuoteBuilder({
 
           <div className={`grid grid-cols-1 gap-3 ${basePackages.length > 1 ? 'sm:grid-cols-3' : ''}`}>
             {basePackages.map((pkg) => {
-              const active = builder.basePackage?.id === pkg.id
+              const activePackageId = builder.basePackage?.id ?? null
+              const active = activePackageId === pkg.id
               return (
                 <button
                   key={pkg.id}
                   type="button"
                   onClick={() => builder.setBasePackage(active && !usesVendorModules && !usesVendorPackages ? null : pkg)}
-                  className="rounded-xl border p-4 text-left transition-all duration-150 hover:bg-[#faf9f5]/30 group relative overflow-hidden animate-fade-in"
-                  style={{
-                    borderColor: active ? config.primary : '#ebdccf/40',
-                    backgroundColor: active ? config.surface : 'white',
-                  }}
+                  className={`group relative overflow-hidden rounded-xl border p-4 text-left transition-all duration-150 animate-fade-in ${
+                    active
+                      ? 'shadow-sm'
+                      : 'border-[#e5e2da] bg-white ring-0 hover:bg-[#faf9f5]/30'
+                  }`}
+                  style={active ? { borderColor: config.primary, backgroundColor: config.surface } : undefined}
                 >
                   {active && (
                     <div 
@@ -575,7 +577,10 @@ export function ModularQuoteBuilder({
                     </p>
                   </div>
                   <p className="mt-1.5 text-[10px] text-[#8c8275] leading-relaxed break-keep">{pkg.description}</p>
-                  <p className="mt-3.5 text-xs font-extrabold font-mono" style={{ color: config.primary }}>
+                  <p
+                    className="mt-3.5 text-xs font-extrabold font-mono"
+                    style={{ color: active ? config.primary : '#8c8275' }}
+                  >
                     {usesVendorModules || usesVendorPackages
                       ? `${pkg.price.toLocaleString('ko-KR')}원`
                       : `${pkg.price.toLocaleString('ko-KR')}원~`}

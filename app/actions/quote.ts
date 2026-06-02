@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import {
   Prisma,
+  QuoteProposalRevisionStatus as PrismaQuoteProposalRevisionStatus,
   QuoteStatus as PrismaQuoteStatus,
   ReservationStatus as PrismaReservationStatus,
   UserRole,
@@ -42,11 +43,13 @@ import type {
   AcceptQuoteResponsePayload,
   AcceptQuoteResult,
   CreateQuoteRequestPayload,
+  RequestQuoteAdjustmentPayload,
   QuoteRequestForVendorDTO,
   QuoteRequestData,
   QuoteRequestWithResponses,
   QuoteResponseData,
   QuoteResponseModules,
+  SubmitQuoteRevisionPayload,
   SubmitQuoteResponsePayload,
   Step3PreparationGroupDTO,
   Step4CategoryStatusDTO
@@ -129,7 +132,20 @@ const submitQuoteResponseSchema = z.object({
 
 const acceptQuoteResponseSchema = z.object({
   quoteResponseId: z.string().min(1),
+  quoteProposalRevisionId: z.string().min(1).optional(),
   reservedDate: z.string().trim().min(1).optional()
+});
+
+const requestQuoteAdjustmentSchema = z.object({
+  quoteResponseId: z.string().min(1),
+  plannerRequestedTotalPrice: z.number().int().positive(),
+  memo: z.string().trim().min(1)
+});
+
+const submitQuoteRevisionSchema = z.object({
+  quoteResponseId: z.string().min(1),
+  totalPrice: z.number().int().positive(),
+  memo: z.string().trim().optional()
 });
 
 const idsSchema = z.array(z.string().min(1)).min(1);
@@ -660,6 +676,18 @@ export async function submitQuoteResponse(
         include: { vendor: true }
       });
 
+      const initialRevision = await tx.quoteProposalRevision.create({
+        data: {
+          quoteResponseId: created.id,
+          requestId: request.id,
+          vendorId: request.vendorId,
+          version: 1,
+          totalPrice,
+          memo: responseMessage,
+          status: PrismaQuoteProposalRevisionStatus.SUBMITTED
+        }
+      });
+
       await tx.quoteRequest.update({
         where: { id: request.id },
         data: { status: PrismaQuoteStatus.RESPONDED }
@@ -689,6 +717,7 @@ export async function submitQuoteResponse(
           vendorId: request.vendorId,
           quoteRequestId: request.id,
           quoteResponseId: created.id,
+          quoteProposalRevisionId: initialRevision.id,
           reservationId: request.reservation?.id ?? "",
           totalPrice
         }
@@ -705,11 +734,18 @@ export async function submitQuoteResponse(
         message: "업체가 견적 응답을 제출했습니다.",
         metadata: {
           totalPrice,
+          quoteProposalRevisionId: initialRevision.id,
           hasNote: Boolean(responseMessage)
         }
       });
 
-      return created;
+      return tx.quoteResponse.findUniqueOrThrow({
+        where: { id: created.id },
+        include: {
+          vendor: true,
+          revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
+        }
+      });
     });
 
     revalidateQuoteViews(request.planId, request.vendorId);
@@ -720,6 +756,222 @@ export async function submitQuoteResponse(
     }
 
     return actionError(getActionError(error), "SUBMIT_QUOTE_RESPONSE_FAILED");
+  }
+}
+
+export async function requestQuoteAdjustment(
+  payload: RequestQuoteAdjustmentPayload
+): Promise<ActionResult<QuoteResponseData>> {
+  try {
+    const user = await requireGeneralUser();
+    const parsed = requestQuoteAdjustmentSchema.safeParse(payload);
+
+    if (!parsed.success) {
+      return actionError("희망 조정 금액과 조정 요청 메모를 입력해 주세요.", "VALIDATION_ERROR");
+    }
+
+    const response = await prisma.quoteResponse.findFirst({
+      where: {
+        id: parsed.data.quoteResponseId,
+        request: { plan: { ownerId: user.id } }
+      },
+      include: {
+        vendor: true,
+        revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] },
+        request: {
+          include: {
+            plan: { select: { id: true, title: true, ownerId: true } },
+            reservation: true
+          }
+        }
+      }
+    });
+
+    if (!response) {
+      return actionError("견적 응답을 찾을 수 없습니다.", "NOT_FOUND");
+    }
+
+    if (mapQuoteStatus(response.request.status) !== "RESPONDED") {
+      return actionError("응답 완료 상태의 제안만 조정 요청할 수 있습니다.", "INVALID_QUOTE_STATUS");
+    }
+
+    if (response.request.reservation) {
+      return actionError("이미 예약 요청이 생성된 제안은 조정 요청할 수 없습니다.", "RESERVATION_ALREADY_EXISTS");
+    }
+
+    const latestRevision = response.revisions[0] ?? null;
+
+    if (!latestRevision) {
+      return actionError("조정 요청할 제안 버전을 찾을 수 없습니다.", "QUOTE_REVISION_NOT_FOUND");
+    }
+
+    if (latestRevision.status === PrismaQuoteProposalRevisionStatus.ADJUSTMENT_REQUESTED) {
+      return actionError("이미 조정 요청을 보냈습니다.", "QUOTE_ADJUSTMENT_ALREADY_REQUESTED");
+    }
+
+    if (
+      latestRevision.status !== PrismaQuoteProposalRevisionStatus.SUBMITTED &&
+      latestRevision.status !== PrismaQuoteProposalRevisionStatus.REVISED
+    ) {
+      return actionError("조정 요청 가능한 제안 상태가 아닙니다.", "INVALID_QUOTE_REVISION_STATUS");
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const revision = await tx.quoteProposalRevision.update({
+        where: { id: latestRevision.id },
+        data: {
+          status: PrismaQuoteProposalRevisionStatus.ADJUSTMENT_REQUESTED,
+          adjustmentRequestMemo: parsed.data.memo,
+          plannerRequestedTotalPrice: parsed.data.plannerRequestedTotalPrice
+        }
+      });
+
+      await createWorkflowNotification(tx, {
+        userId: response.vendorId,
+        type: "QUOTE_ADJUSTMENT_REQUESTED",
+        title: "조정 요청 도착",
+        message: `${response.request.plan.title} 제안에 대한 조정 요청이 도착했습니다.`,
+        href: getVendorDashboardHref(),
+        metadata: {
+          planId: response.request.planId,
+          quoteRequestId: response.requestId,
+          quoteResponseId: response.id,
+          quoteProposalRevisionId: revision.id,
+          plannerRequestedTotalPrice: parsed.data.plannerRequestedTotalPrice
+        }
+      });
+
+      await createWorkflowActivity(tx, {
+        actorId: user.id,
+        planId: response.request.planId,
+        vendorId: response.vendorId,
+        quoteRequestId: response.requestId,
+        quoteResponseId: response.id,
+        type: "QUOTE_ADJUSTMENT_REQUESTED",
+        message: "일반 사용자가 제안 조정을 요청했습니다.",
+        metadata: {
+          quoteProposalRevisionId: revision.id,
+          adjustmentRequestMemo: parsed.data.memo,
+          plannerRequestedTotalPrice: parsed.data.plannerRequestedTotalPrice
+        }
+      });
+
+      return tx.quoteResponse.findUniqueOrThrow({
+        where: { id: response.id },
+        include: {
+          vendor: true,
+          revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
+        }
+      });
+    });
+
+    revalidateQuoteViews(response.request.planId, response.vendorId);
+    return actionSuccess(mapQuoteResponse(updated));
+  } catch (error) {
+    return actionError(getActionError(error), "REQUEST_QUOTE_ADJUSTMENT_FAILED");
+  }
+}
+
+export async function submitQuoteRevision(
+  payload: SubmitQuoteRevisionPayload
+): Promise<ActionResult<QuoteResponseData>> {
+  try {
+    const vendor = await requireVendorUser();
+    const parsed = submitQuoteRevisionSchema.safeParse(payload);
+
+    if (!parsed.success) {
+      return actionError("수정 제안 금액과 메모를 확인해 주세요.", "VALIDATION_ERROR");
+    }
+
+    const response = await prisma.quoteResponse.findFirst({
+      where: { id: parsed.data.quoteResponseId, vendorId: vendor.id },
+      include: {
+        vendor: true,
+        revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] },
+        request: {
+          include: {
+            plan: { select: { id: true, title: true, ownerId: true } },
+            reservation: true
+          }
+        }
+      }
+    });
+
+    if (!response) {
+      return actionError("견적 응답을 찾을 수 없습니다.", "NOT_FOUND");
+    }
+
+    if (mapQuoteStatus(response.request.status) !== "RESPONDED") {
+      return actionError("수정 제안을 제출할 수 있는 요청 상태가 아닙니다.", "INVALID_QUOTE_STATUS");
+    }
+
+    if (response.request.reservation) {
+      return actionError("이미 예약 요청이 생성된 제안은 수정할 수 없습니다.", "RESERVATION_ALREADY_EXISTS");
+    }
+
+    const latestRevision = response.revisions[0] ?? null;
+
+    if (!latestRevision || latestRevision.status !== PrismaQuoteProposalRevisionStatus.ADJUSTMENT_REQUESTED) {
+      return actionError("플래너 조정 요청이 있는 제안만 수정할 수 있습니다.", "QUOTE_ADJUSTMENT_NOT_REQUESTED");
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const revision = await tx.quoteProposalRevision.create({
+        data: {
+          quoteResponseId: response.id,
+          requestId: response.requestId,
+          vendorId: response.vendorId,
+          version: latestRevision.version + 1,
+          totalPrice: parsed.data.totalPrice,
+          memo: parsed.data.memo ?? null,
+          status: PrismaQuoteProposalRevisionStatus.REVISED
+        }
+      });
+
+      await createWorkflowNotification(tx, {
+        userId: response.request.plan.ownerId,
+        type: "QUOTE_REVISION_RECEIVED",
+        title: "수정 제안 도착",
+        message: `${response.request.plan.title}에 대한 수정 제안이 도착했습니다.`,
+        href: getPlanHref(response.request.planId),
+        metadata: {
+          planId: response.request.planId,
+          vendorId: response.vendorId,
+          quoteRequestId: response.requestId,
+          quoteResponseId: response.id,
+          quoteProposalRevisionId: revision.id,
+          totalPrice: revision.totalPrice
+        }
+      });
+
+      await createWorkflowActivity(tx, {
+        actorId: vendor.id,
+        planId: response.request.planId,
+        vendorId: vendor.id,
+        quoteRequestId: response.requestId,
+        quoteResponseId: response.id,
+        type: "QUOTE_REVISION_SUBMITTED",
+        message: "업체가 수정 제안을 제출했습니다.",
+        metadata: {
+          quoteProposalRevisionId: revision.id,
+          totalPrice: revision.totalPrice,
+          hasMemo: Boolean(parsed.data.memo)
+        }
+      });
+
+      return tx.quoteResponse.findUniqueOrThrow({
+        where: { id: response.id },
+        include: {
+          vendor: true,
+          revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
+        }
+      });
+    });
+
+    revalidateQuoteViews(response.request.planId, response.vendorId);
+    return actionSuccess(mapQuoteResponse(updated));
+  } catch (error) {
+    return actionError(getActionError(error), "SUBMIT_QUOTE_REVISION_FAILED");
   }
 }
 
@@ -748,22 +1000,27 @@ export async function acceptQuoteResponse(
         reservation: {
           include: {
             vendor: true,
+            quoteProposalRevision: true,
             quoteResponse: {
               include: {
-                vendor: true
+                vendor: true,
+                revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
               }
             }
           }
         },
+        revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] },
         request: {
           include: {
             plan: true,
             reservation: {
               include: {
                 vendor: true,
+                quoteProposalRevision: true,
                 quoteResponse: {
                   include: {
-                    vendor: true
+                    vendor: true,
+                    revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
                   }
                 }
               }
@@ -792,6 +1049,32 @@ export async function acceptQuoteResponse(
 
     assertQuoteTransition(currentStatus, "ACCEPTED");
 
+    const latestRevision = response.revisions[0] ?? null;
+    const acceptedRevision = parsed.data.quoteProposalRevisionId
+      ? response.revisions.find((revision) => revision.id === parsed.data.quoteProposalRevisionId)
+      : latestRevision;
+
+    if (parsed.data.quoteProposalRevisionId && !acceptedRevision) {
+      return actionError("선택한 수정 제안을 찾을 수 없습니다.", "QUOTE_REVISION_NOT_FOUND");
+    }
+
+    if (latestRevision?.status === PrismaQuoteProposalRevisionStatus.ADJUSTMENT_REQUESTED) {
+      return actionError("업체의 수정 제안이 도착한 뒤 수락할 수 있습니다.", "QUOTE_REVISION_PENDING");
+    }
+
+    if (acceptedRevision && latestRevision && acceptedRevision.id !== latestRevision.id) {
+      return actionError("최신 제안만 수락할 수 있습니다.", "STALE_QUOTE_REVISION");
+    }
+
+    if (
+      acceptedRevision &&
+      acceptedRevision.status !== PrismaQuoteProposalRevisionStatus.SUBMITTED &&
+      acceptedRevision.status !== PrismaQuoteProposalRevisionStatus.REVISED
+    ) {
+      return actionError("수락 가능한 제안 상태가 아닙니다.", "INVALID_QUOTE_REVISION_STATUS");
+    }
+
+    const acceptedTotalPrice = acceptedRevision?.totalPrice ?? response.totalPrice;
     const modules = response.modules as unknown as QuoteResponseModules;
     const serviceDate =
       parseActionDate(parsed.data.reservedDate) ??
@@ -817,8 +1100,9 @@ export async function acceptQuoteResponse(
             data: {
               quoteRequestId: response.requestId,
               quoteResponseId: response.id,
+              quoteProposalRevisionId: acceptedRevision?.id ?? existingReservation.quoteProposalRevisionId,
               serviceDate: existingReservation.serviceDate ?? serviceDate,
-              quotedAmount: response.totalPrice,
+              quotedAmount: acceptedTotalPrice,
               confirmedAmount: null,
               vendorConfirmationDueAt,
               selectedServiceOptions: getReservationSelectedServiceOptions(modules) as Prisma.InputJsonValue,
@@ -829,9 +1113,11 @@ export async function acceptQuoteResponse(
             },
             include: {
               vendor: true,
+              quoteProposalRevision: true,
               quoteResponse: {
                 include: {
-                  vendor: true
+                  vendor: true,
+                  revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
                 }
               }
             }
@@ -842,11 +1128,12 @@ export async function acceptQuoteResponse(
               vendorId: response.vendorId,
               quoteRequestId: response.requestId,
               quoteResponseId: response.id,
+              quoteProposalRevisionId: acceptedRevision?.id ?? null,
               serviceName: getReservationServiceName(modules),
               serviceCategory: getReservationServiceCategory(modules),
               serviceDate,
               guestCount: response.request.plan.guestTarget,
-              quotedAmount: response.totalPrice,
+              quotedAmount: acceptedTotalPrice,
               confirmedAmount: null,
               vendorConfirmationDueAt,
               selectedServiceOptions: getReservationSelectedServiceOptions(modules) as Prisma.InputJsonValue,
@@ -855,13 +1142,22 @@ export async function acceptQuoteResponse(
             },
             include: {
               vendor: true,
+              quoteProposalRevision: true,
               quoteResponse: {
                 include: {
-                  vendor: true
+                  vendor: true,
+                  revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
                 }
               }
             }
           });
+
+      if (acceptedRevision) {
+        await tx.quoteProposalRevision.update({
+          where: { id: acceptedRevision.id },
+          data: { status: PrismaQuoteProposalRevisionStatus.ACCEPTED }
+        });
+      }
 
       const quoteRequest = await tx.quoteRequest.findUniqueOrThrow({
         where: { id: response.requestId }
@@ -877,6 +1173,7 @@ export async function acceptQuoteResponse(
           planId: response.request.planId,
           quoteRequestId: response.requestId,
           quoteResponseId: response.id,
+          quoteProposalRevisionId: acceptedRevision?.id ?? "",
           reservationId: reservation.id,
           vendorConfirmationDueAt: vendorConfirmationDueAt.toISOString()
         }
@@ -892,7 +1189,8 @@ export async function acceptQuoteResponse(
         type: "QUOTE_RESPONSE_ACCEPTED",
         message: "일반 사용자가 견적 응답을 수락했고 업체 최종 확정을 기다립니다.",
         metadata: {
-          totalPrice: response.totalPrice,
+          totalPrice: acceptedTotalPrice,
+          quoteProposalRevisionId: acceptedRevision?.id ?? "",
           vendorConfirmationDueAt: vendorConfirmationDueAt.toISOString()
         }
       });
@@ -1080,19 +1378,28 @@ export async function getQuotesByPlan(
           reservation: {
             include: {
               vendor: true,
+              quoteProposalRevision: true,
               quoteResponse: {
-                include: { vendor: true }
+                include: {
+                  vendor: true,
+                  revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
+                }
               }
             }
           },
           responses: {
             include: {
               vendor: true,
+              revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] },
               reservation: {
                 include: {
                   vendor: true,
+                  quoteProposalRevision: true,
                   quoteResponse: {
-                    include: { vendor: true }
+                    include: {
+                      vendor: true,
+                      revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
+                    }
                   }
                 }
               }
@@ -1246,19 +1553,28 @@ export async function getQuoteRequestsForVendor(): Promise<
           reservation: {
             include: {
               vendor: true,
+              quoteProposalRevision: true,
               quoteResponse: {
-                include: { vendor: true }
+                include: {
+                  vendor: true,
+                  revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
+                }
               }
             }
           },
           responses: {
             include: {
               vendor: true,
+              revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] },
               reservation: {
                 include: {
                   vendor: true,
+                  quoteProposalRevision: true,
                   quoteResponse: {
-                    include: { vendor: true }
+                    include: {
+                      vendor: true,
+                      revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
+                    }
                   }
                 }
               }
@@ -1397,9 +1713,12 @@ export async function getStep4DashboardData(
         include: {
           vendor: true,
           responses: {
-            include: { vendor: true }
+            include: {
+              vendor: true,
+              revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
+            }
           },
-          reservation: true
+          reservation: { include: { quoteProposalRevision: true } }
         }
       });
 
@@ -1475,6 +1794,12 @@ export async function getStep4DashboardData(
       const hasConfirmed = matchedReservations.some(r => r.status === "CONFIRMED" || r.status === "COMPLETED");
       const hasAccepted = matchedRequests.some(req => req.status === "ACCEPTED") || 
                           matchedReservations.some(r => r.status === "PENDING" && r.quoteRequest?.status === "ACCEPTED");
+      const hasAdjustmentRequested = matchedRequests.some(
+        req => req.status === "RESPONDED" && req.responses[0]?.revisions[0]?.status === "ADJUSTMENT_REQUESTED"
+      );
+      const hasRevised = matchedRequests.some(
+        req => req.status === "RESPONDED" && req.responses[0]?.revisions[0]?.status === "REVISED"
+      );
       const hasResponded = matchedRequests.some(req => req.status === "RESPONDED");
       const hasPending = matchedRequests.some(req => req.status === "PENDING");
 
@@ -1482,6 +1807,10 @@ export async function getStep4DashboardData(
         status = "CONFIRMED";
       } else if (hasAccepted) {
         status = "ACCEPTED_WAITING_VENDOR";
+      } else if (hasRevised) {
+        status = "REVISED";
+      } else if (hasAdjustmentRequested) {
+        status = "ADJUSTMENT_REQUESTED";
       } else if (hasResponded) {
         status = "RESPONDED";
       } else if (hasPending) {
@@ -1493,6 +1822,7 @@ export async function getStep4DashboardData(
       for (const req of matchedRequests) {
         const { role } = resolveVendorRoleAndGroup(req.vendor.companyName ?? req.vendor.name, eventType);
         const resp = req.responses[0];
+        const currentRevision = resp?.revisions[0] ?? null;
         const res = matchedReservations.find(r => r.quoteRequestId === req.id || r.vendorId === req.vendorId);
         
         vendorSummariesMap.set(req.vendorId, {
@@ -1502,8 +1832,8 @@ export async function getStep4DashboardData(
           quoteRequestId: req.id,
           quoteResponseId: resp?.id,
           reservationId: res?.id,
-          totalPrice: resp?.totalPrice ?? res?.quotedAmount ?? undefined,
-          status: req.status
+          totalPrice: currentRevision?.totalPrice ?? resp?.totalPrice ?? res?.quotedAmount ?? undefined,
+          status: currentRevision?.status ?? req.status
         });
       }
 
@@ -1529,14 +1859,16 @@ export async function getStep4DashboardData(
         : `${eventType.toLowerCase()}_generic`;
 
       const respondedSameGroup = vendorSummaries.filter(v => 
-        v.status === "RESPONDED" && 
+        (v.status === "RESPONDED" || v.status === "REVISED") &&
         resolveVendorRoleAndGroup(v.vendorName, eventType).comparableGroupKey === comparableGroupKey
       );
       const canCompare = respondedSameGroup.length >= 2;
-      const canAccept = status === "RESPONDED";
+      const canAccept = status === "RESPONDED" || status === "REVISED";
 
       let nextActionLabel = "견적 요청하기";
       if (status === "REQUESTED") nextActionLabel = "응답 대기 중";
+      else if (status === "ADJUSTMENT_REQUESTED") nextActionLabel = "업체 수정 제안 대기";
+      else if (status === "REVISED") nextActionLabel = "수정 제안 확인 및 수락";
       else if (status === "RESPONDED") nextActionLabel = "제안서 검토 및 수락";
       else if (status === "ACCEPTED_WAITING_VENDOR") nextActionLabel = "업체 확정 대기 중";
       else if (status === "CONFIRMED") nextActionLabel = "예약 확정 완료";

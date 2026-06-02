@@ -39,6 +39,8 @@ const nextActionMeta: Record<PlanDashboardNextAction, { label: string; badge: st
   waiting_for_vendor: { label: "응답 대기", badge: "bg-amber-100 text-amber-700" },
   compare_quotes: { label: "견적 비교", badge: "bg-blue-100 text-blue-700" },
   accept_quote: { label: "견적 비교", badge: "bg-blue-100 text-blue-700" },
+  adjustment_requested: { label: "조정 요청 중", badge: "bg-amber-100 text-amber-700" },
+  revised_quote_received: { label: "수정 제안 도착", badge: "bg-blue-100 text-blue-700" },
   reservation_pending: { label: "업체 확정 대기", badge: "bg-[#faf8f4] text-[#8c8275]" },
   confirmed: { label: "예약 확정", badge: "bg-emerald-100 text-emerald-700" },
   canceled: { label: "취소됨", badge: "bg-gray-100 text-gray-500" },

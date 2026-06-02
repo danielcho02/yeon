@@ -1,12 +1,43 @@
 # yeON Project Status
 
-> Last updated: 2026-06-02
-> Branch: `codex/package-proposal-comparison`
-> Current focus: package proposal comparison + reservation continuity
+> Last updated: 2026-06-03
+> Branch: `codex/proposal-adjustment-flow`
+> Current focus: U09 simple proposal adjustment MVP
 
 ---
 
 ## What Was Just Implemented
+
+The **U09 Proposal Adjustment Flow** is now included in the working tree:
+
+- Planner Step 4 can request a simple adjustment after a vendor proposal arrives.
+- Step 3 package cards now use only the active package id for selected styling, so inactive vendor packages stay neutral after package switches.
+- Planner Step 4 now presents proposal decisions as two clear paths: `이 제안 수락` and `조정 요청하기`.
+- Planner Step 4 opens the adjustment form only after the planner intentionally clicks `조정 요청하기`.
+- Planner adjustment requests now capture both `희망 조정 금액` and `조정 요청 메모`.
+- After adjustment submit, Planner Step 4 shows `조정 요청 보냄` / `업체 수정 제안 대기 중` with the submitted target price and memo, and hides the accept CTA until a revised proposal arrives.
+- Planner Step 4 separates `제안 요약`, `조율 내역`, and `예약 진행` into internal panels; `조율 내역` renders the timeline directly without a nested disclosure.
+- Planner Step 4 no longer renders the duplicated `요청 범위 진행 상세` side section.
+- Planner adjustment requests store target price + memo on the current proposal revision and create no Reservation.
+- Vendor dashboard quote cards are state summaries only; selecting a quote opens the proposal detail panel.
+- Vendor dashboard keeps initial proposal writing in `새 요청` for pending quote requests only.
+- Vendor `견적 응답` is now state/detail monitoring plus adjustment response actions, not a persistent 신규 견적 form.
+- Vendor dashboard can either accept the planner requested total or submit a different revised proposal total.
+- Vendor dashboard shows adjustment requests with the original package estimate, previous proposal amount, planner requested total, difference, planner memo, and revision fields.
+- Vendor dashboard switches submitted/revised quotes to `플래너 수락 대기 중` read-only state instead of leaving an active proposal form visible.
+- Vendor `일정 불가 회신` is shown only for pending quote requests before proposal negotiation starts.
+- Vendor final confirmation keeps `최종 예약 승인` only in each final-confirmation card footer; confirmed reservations remain compact summaries with optional collapsed package context.
+- Vendor service management is separated from the operational tab row as a secondary management panel.
+- Vendor revised proposals create a new proposal revision and create no Reservation.
+- Planner acceptance uses the accepted/latest proposal revision amount when creating Reservation(PENDING).
+- Reservation links to the accepted `QuoteProposalRevision` while package context still comes from existing `QuoteRequest` snapshots.
+- This is not real-time chat, a notification center, or a complex negotiation thread.
+- `/plans` and account summary states distinguish `ADJUSTMENT_REQUESTED` and `REVISED` from completed proposal review.
+- Wedding/funeral event-date modeling remains a separate planned domain task, not part of this U09 IA branch.
+
+---
+
+## Previous Continuity Baseline
 
 The **Package Proposal / Reservation Continuity pass** is now included in the working tree:
 
@@ -48,6 +79,8 @@ domain contract for the full QuoteRequest → QuoteResponse → Reservation life
 ```
 createQuoteRequest  → QuoteRequest(PENDING) + notification + activity    [NO Reservation]
 submitQuoteResponse → QuoteRequest(RESPONDED) + QuoteResponse            [NO Reservation]
+requestQuoteAdjustment → current QuoteProposalRevision(ADJUSTMENT_REQUESTED) [NO Reservation]
+submitQuoteRevision → new QuoteProposalRevision(REVISED)                 [NO Reservation]
 acceptQuoteResponse → QuoteRequest(ACCEPTED) + Reservation(PENDING)      [Reservation created HERE]
 confirmReservation  → Reservation(CONFIRMED) + confirmedAmount set
 ```
@@ -61,6 +94,9 @@ Package-backed reservation continuity rules:
 - `QuoteRequest.selectedPackageSnapshot` is the source of truth for accepted package name, base price, and included package modules.
 - `QuoteRequest.priceSnapshot` is the source of truth for selected optional add-ons, vendor-specific add-ons, request estimate, guest count, and line-item grouping.
 - Vendor reservation DTOs may expose those existing snapshots through the linked accepted QuoteRequest.
+- `QuoteProposalRevision` is the source of truth for current/revised proposal totals and adjustment memos after the first vendor response.
+- `QuoteProposalRevision.plannerRequestedTotalPrice` stores the planner's requested target total for adjustment requests.
+- `Reservation.quoteProposalRevisionId` identifies the accepted proposal revision when a revision exists.
 - Do not add Reservation schema fields for package context unless the existing JSON snapshots become insufficient.
 - Vendor final confirmation must keep one actual final confirmation CTA.
 
