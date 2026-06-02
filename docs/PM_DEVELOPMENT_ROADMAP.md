@@ -1,7 +1,7 @@
 # yeON PM Development Roadmap
 
 > Last updated: 2026-06-03
-> Current branch: `codex/proposal-adjustment-flow`
+> Current branch: `codex/event-date-domain-model`
 
 ---
 
@@ -18,24 +18,27 @@ yeON currently supports the core demo lifecycle for wedding/funeral planning:
 - Reservation(CONFIRMED) is visible to planner and vendor.
 - Package-backed requests preserve package snapshot, price snapshot, selected package options, vendor-specific add-ons, final proposal total, and proposal memo through the accepted/confirmed reservation surfaces.
 - Planner can request one simple proposal adjustment with a target total and memo before accepting; vendor can accept that target or submit a different revised proposal total/memo without creating a Reservation.
+- Wedding quote requests support either an exact fixed wedding date or a preferred date range.
+- Vendor proposals persist a proposed service date on `QuoteProposalRevision`; accepted reservations copy that date into `Reservation.serviceDate`.
+- Funeral planning uses the occurrence/reception date as the service start date and displays the derived 3-day funeral schedule.
 
 ---
 
 ## Current Branch Scope
 
-`codex/proposal-adjustment-flow` is scoped to U09 simple proposal adjustment:
+`codex/event-date-domain-model` is scoped to wedding/funeral event-date modeling:
 
-- Planner Step 4 adds `제안 수락` and `조정 요청` choices after a vendor proposal arrives.
-- Planner Step 4 keeps the adjustment waiting state visible, separates proposal summary/revision history/reservation progress into internal panels, and renders revision history directly in the `조율 내역` panel.
-- Planner adjustment requests store a target total and memo and create no Reservation.
-- Vendor dashboard writes initial proposals only from `새 요청` pending quote requests; `견적 응답` is limited to state summaries, planner adjustment detail, target acceptance, and alternate revised proposal actions.
-- Vendor dashboard shows the planner adjustment memo, requested total, previous proposal, difference, and package estimate before accepting the requested total or submitting a different revised proposal; submitted/revised quotes then move to a read-only planner-acceptance waiting state.
-- Vendor final confirmation and confirmed reservation panels are separated: final approval lives in pending confirmation card footers, while confirmed reservations stay compact with optional collapsed package context.
-- Revised proposal acceptance creates Reservation(PENDING) using the accepted revision amount.
-- Package snapshots and reservation continuity remain preserved through existing QuoteRequest JSON snapshots.
-- Wedding/funeral event-date domain modeling is deferred to a separate branch.
+- Wedding planner request UX separates exact fixed dates from preferred date ranges.
+- Wedding vendors confirm a fixed date or choose one date inside the requested range; casual fixed-date changes are rejected server-side.
+- Funeral planner UX avoids broad date ranges and defaults new funeral dates to today.
+- Funeral surfaces show Day 1 빈소/접수, Day 2 조문/의전 진행, Day 3 발인/장지 이동 from the reception/start date.
+- `QuoteRequest` stores request-level exact/range date intent.
+- `QuoteProposalRevision` stores vendor proposal-level service date.
+- `Reservation.serviceDate` remains the final accepted service date.
+- Generic `일정 불가 회신` is removed from visible vendor UI, but backend decline verification remains.
+- U09 proposal adjustment, package snapshots, and reservation continuity remain preserved.
 
-Do not expand this branch into real-time chat, complex negotiation threads, broad visual redesign, notification center work, or account/profile management.
+Do not expand this branch into real-time chat, complex negotiation threads, full calendar availability, event-type-specific decline redesign, notification center work, or account/profile management.
 
 ---
 
@@ -64,6 +67,10 @@ These are polish items unless they block a core use case:
 3. **U07 event money ledger / settlement**
    - Track event-related money entries and basic settlement summaries.
    - Avoid payment processing until the ledger use case is validated.
+
+4. **Event-specific availability responses**
+   - Replace the backend-only quote decline path with wedding/funeral-specific availability response UX.
+   - Keep the existing decline contract until the new response model is explicitly verified.
 
 ---
 

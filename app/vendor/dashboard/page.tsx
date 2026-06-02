@@ -174,6 +174,7 @@ export default async function VendorDashboardPage() {
                   memo: true,
                   adjustmentRequestMemo: true,
                   plannerRequestedTotalPrice: true,
+                  proposedServiceDate: true,
                   status: true,
                   createdAt: true
                 }
@@ -312,6 +313,8 @@ export default async function VendorDashboardPage() {
           .filter((module): module is VendorServiceModuleData => Boolean(module))
       : [],
     preferredDate: qr.preferredDate?.toISOString() ?? null,
+    preferredDateStart: qr.preferredDateStart?.toISOString() ?? null,
+    preferredDateEnd: qr.preferredDateEnd?.toISOString() ?? null,
     budget: qr.budget,
     status: qr.status as QuoteStatus,
     createdAt: qr.createdAt.toISOString(),
@@ -344,6 +347,7 @@ export default async function VendorDashboardPage() {
         memo: revision.memo,
         adjustmentRequestMemo: revision.adjustmentRequestMemo,
         plannerRequestedTotalPrice: revision.plannerRequestedTotalPrice,
+        proposedServiceDate: revision.proposedServiceDate?.toISOString() ?? null,
         status: revision.status as import("@/types/quote").QuoteProposalRevisionStatus,
         createdAt: revision.createdAt.toISOString()
       })),
@@ -358,6 +362,7 @@ export default async function VendorDashboardPage() {
             memo: resp.revisions[0].memo,
             adjustmentRequestMemo: resp.revisions[0].adjustmentRequestMemo,
             plannerRequestedTotalPrice: resp.revisions[0].plannerRequestedTotalPrice,
+            proposedServiceDate: resp.revisions[0].proposedServiceDate?.toISOString() ?? null,
             status: resp.revisions[0].status as import("@/types/quote").QuoteProposalRevisionStatus,
             createdAt: resp.revisions[0].createdAt.toISOString()
           }

@@ -13,8 +13,7 @@ import {
   ShieldCheck,
   TrendingUp,
   UsersRound,
-  Wallet,
-  XCircle
+  Wallet
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -245,6 +244,32 @@ function formatPackageSnapshotItemPrice(item: VendorPackageSnapshotItem) {
     return `${formatCurrency(item.price)} × ${item.quantity} = ${formatCurrency(item.subtotal)}`;
   }
   return formatCurrency(item.subtotal);
+}
+
+function getQuoteRequestDateLabel(qr: QuoteRequestForVendorDTO) {
+  if (qr.preferredDateStart && qr.preferredDateEnd) {
+    return `${formatDate(qr.preferredDateStart)} - ${formatDate(qr.preferredDateEnd)}`;
+  }
+
+  return formatDate(qr.preferredDate ?? qr.plan?.eventDate);
+}
+
+function getInitialProposalDate(qr: QuoteRequestForVendorDTO) {
+  return (
+    qr.responses[0]?.currentRevision?.proposedServiceDate ??
+    qr.preferredDate ??
+    qr.preferredDateStart ??
+    qr.plan?.eventDate ??
+    null
+  );
+}
+
+function isFixedWeddingRequest(qr: QuoteRequestForVendorDTO | null | undefined) {
+  return qr?.plan?.eventType === "WEDDING" && Boolean(qr.preferredDate) && !qr.preferredDateStart && !qr.preferredDateEnd;
+}
+
+function isWeddingRangeRequest(qr: QuoteRequestForVendorDTO | null | undefined) {
+  return qr?.plan?.eventType === "WEDDING" && Boolean(qr.preferredDateStart && qr.preferredDateEnd);
 }
 
 function getPackageLineItems(
@@ -724,7 +749,7 @@ export function VendorWorkspace({
     setProposalForm({
       reservationId: "",
       quoteRequestId: qr.id,
-      serviceDate: qr.preferredDate ? qr.preferredDate.slice(0, 10) : "",
+      serviceDate: asDateInput(getInitialProposalDate(qr)),
       proposalAmount: isAdjustmentRequest
         ? ""
         : currentRevision?.totalPrice
@@ -862,8 +887,12 @@ export function VendorWorkspace({
           startTransition(() => router.refresh());
           return;
         }
-        if (!proposalForm.serviceDate) {
-          setError("행사 예정일 확인을 입력해 주세요.");
+        if ((isWeddingRangeRequest(selectedQr) || selectedQr.plan?.eventType === "FUNERAL") && !proposalForm.serviceDate) {
+          setError(
+            selectedQr.plan?.eventType === "FUNERAL"
+              ? "빈소 접수일을 확인해 주세요."
+              : "희망 날짜 범위 안에서 가능한 서비스 날짜를 선택해 주세요."
+          );
           return;
         }
         const selectedModules = selectedQr.selectedModuleDetails ?? [];
@@ -889,7 +918,8 @@ export function VendorWorkspace({
             excludedModules: []
           },
           totalPrice: Number(proposalForm.proposalAmount),
-          note: proposalForm.notes || undefined
+          note: proposalForm.notes || undefined,
+          proposedServiceDate: proposalForm.serviceDate || undefined
         });
         if (!result.success) { setError(result.error); return; }
         setMessage("견적 응답을 보냈습니다.");
@@ -1328,7 +1358,7 @@ export function VendorWorkspace({
                 <>
                   <DetailRow label="행사명" value={selectedQuoteRequest.plan?.title ?? "행사"} />
                   <DetailRow label="행사 유형" value={getEventTypeLabel(selectedQuoteRequest.plan?.eventType ?? "ETC")} />
-                  <DetailRow label="희망 일정" value={formatDate(selectedQuoteRequest.preferredDate ?? selectedQuoteRequest.plan?.eventDate)} />
+                  <DetailRow label={isWeddingRangeRequest(selectedQuoteRequest) ? "희망 일정 범위" : "희망 일정"} value={getQuoteRequestDateLabel(selectedQuoteRequest)} />
                   <DetailRow label="행사 지역" value={selectedQuoteRequest.plan?.location ?? "미정"} />
                   {selectedQuoteRequest.plan?.guestCount != null && (
                     <DetailRow label="예상 인원" value={`${selectedQuoteRequest.plan.guestCount}명`} />
@@ -1370,11 +1400,21 @@ export function VendorWorkspace({
                       )}
 
                       <div className="grid gap-4 sm:grid-cols-2">
-                        <Field label="행사 예정일 확인" name="serviceDate">
+                        <Field
+                          label={
+                            selectedPendingQuoteRequest.plan?.eventType === "FUNERAL"
+                              ? "빈소 접수일 확인"
+                              : isWeddingRangeRequest(selectedPendingQuoteRequest)
+                                ? "가능 서비스 날짜 선택"
+                                : "행사 예정일 확인"
+                          }
+                          name="serviceDate"
+                        >
                           <Input
                             id="serviceDate"
                             type="date"
                             value={proposalForm.serviceDate}
+                            disabled={isFixedWeddingRequest(selectedPendingQuoteRequest)}
                             onChange={(e) => setProposalForm((c) => ({ ...c, serviceDate: e.target.value }))}
                             className="h-10 rounded-xl border-[#e5e2da] bg-white text-xs focus-visible:ring-1 focus-visible:ring-[#c4977a]"
                           />
@@ -1389,6 +1429,13 @@ export function VendorWorkspace({
                           />
                         </Field>
                       </div>
+                      <p className="mt-2 text-[10px] leading-4 text-muted-foreground">
+                        {selectedPendingQuoteRequest.plan?.eventType === "FUNERAL"
+                          ? "장례 요청은 접수일 기준 3일 의전 일정으로 확인합니다."
+                          : isWeddingRangeRequest(selectedPendingQuoteRequest)
+                            ? "플래너가 지정한 범위 안에서 실제 가능한 서비스 날짜를 선택해 주세요."
+                            : "플래너가 지정한 확정 웨딩 날짜는 업체가 임의로 변경할 수 없습니다."}
+                      </p>
 
                       <div className="mt-4">
                         <Field label="제안 메모" name="notes">
@@ -1410,15 +1457,6 @@ export function VendorWorkspace({
                         >
                           <MessageSquareQuote className="mr-1.5 h-4 w-4" />
                           {busyReservationId === proposalForm.quoteRequestId ? "제안 전송 중..." : "견적 제안 전송"}
-                        </Button>
-                        <Button
-                          disabled={isPending || busyReservationId === proposalForm.quoteRequestId}
-                          onClick={() => updateReservation("decline")}
-                          variant="destructive"
-                          className="h-10 rounded-xl text-xs font-semibold whitespace-nowrap break-keep"
-                        >
-                          <XCircle className="mr-1.5 h-4 w-4" />
-                          일정 불가 회신
                         </Button>
                       </div>
                     </div>
@@ -1515,7 +1553,10 @@ export function VendorWorkspace({
                   )}
 
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <DetailRow label="행사 예정일" value={formatDate(selectedQuoteRequest.preferredDate ?? selectedQuoteRequest.plan?.eventDate)} />
+                    <DetailRow label={isWeddingRangeRequest(selectedQuoteRequest) ? "희망 일정 범위" : "행사 예정일"} value={getQuoteRequestDateLabel(selectedQuoteRequest)} />
+                    {selectedQuoteRequest.responses[0]?.currentRevision?.proposedServiceDate && (
+                      <DetailRow label="제안 서비스일" value={formatDate(selectedQuoteRequest.responses[0].currentRevision.proposedServiceDate)} />
+                    )}
                     <DetailRow label="행사 지역" value={selectedQuoteRequest.plan?.location ?? "미정"} />
                     <DetailRow label="예상 인원" value={selectedQuoteRequest.plan?.guestCount != null ? `${selectedQuoteRequest.plan.guestCount}명` : "미정"} />
                     <DetailRow label="희망 예산" value={selectedQuoteRequest.budget != null ? formatCurrency(selectedQuoteRequest.budget) : "미정"} />
@@ -1726,7 +1767,7 @@ export function VendorWorkspace({
                         </div>
 
                         <div className="mt-3.5 grid gap-1.5 text-xs text-[#8c8275] border-t border-[#f2ece4]/40 pt-3">
-                          <div className="flex items-center gap-2 text-[#2c3455]"><CalendarDays className="h-3.5 w-3.5 text-muted-foreground/60" />{formatDate(qr.preferredDate ?? qr.plan?.eventDate)}</div>
+                          <div className="flex items-center gap-2 text-[#2c3455]"><CalendarDays className="h-3.5 w-3.5 text-muted-foreground/60" />{getQuoteRequestDateLabel(qr)}</div>
                           <div className="flex items-center gap-2 text-[#2c3455]"><Wallet className="h-3.5 w-3.5 text-muted-foreground/60" />{formatCurrency(currentRevision?.totalPrice ?? response.totalPrice)}</div>
                           {qr.plan?.guestCount != null && (
                             <div className="flex items-center gap-2 text-[#2c3455]"><UsersRound className="h-3.5 w-3.5 text-muted-foreground/60" />{qr.plan.guestCount}명</div>

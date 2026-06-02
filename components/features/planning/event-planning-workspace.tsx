@@ -152,6 +152,18 @@ function asDateInput(v: string | null) {
   return new Date(v).toISOString().slice(0, 10);
 }
 
+function todayDateInput() {
+  const now = new Date();
+  return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function addDaysToDateInput(value: string, days: number) {
+  if (!value) return "";
+  const date = new Date(`${value}T12:00:00+09:00`);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 type QuoteRequestStatusItem = {
   id: string;
   vendorName: string;
@@ -168,6 +180,8 @@ type RequestFormState = {
   eventPlanId: string;
   vendorId: string;
   serviceDate: string;
+  preferredDateStart: string;
+  preferredDateEnd: string;
   guestCount: string;
   budget: string;
   notes: string;
@@ -182,12 +196,19 @@ function numberInputValue(value: number | null | undefined) {
 
 function getRequestFormPrefill(
   selectedPlan: PlanOption | null,
-  activeRequest: QuoteRequestWithResponses | null
+  activeRequest: QuoteRequestWithResponses | null,
+  eventType: EventType
 ) {
   const budget = activeRequest?.budget ?? selectedPlan?.budget ?? null;
+  const fallbackDate = eventType === "FUNERAL" ? todayDateInput() : "";
+  const exactDate = asDateInput(activeRequest?.preferredDate ?? selectedPlan?.scheduledAt ?? null) || fallbackDate;
+  const rangeStart = asDateInput(activeRequest?.preferredDateStart ?? null) || exactDate;
+  const rangeEnd = asDateInput(activeRequest?.preferredDateEnd ?? null) || exactDate;
 
   return {
-    serviceDate: asDateInput(activeRequest?.preferredDate ?? selectedPlan?.scheduledAt ?? null),
+    serviceDate: exactDate,
+    preferredDateStart: rangeStart,
+    preferredDateEnd: rangeEnd,
     guestCount: numberInputValue(selectedPlan?.guestTarget),
     budget: numberInputValue(budget)
   };
@@ -238,6 +259,9 @@ export function EventPlanningWorkspace({
   const [isPending, startTransition] = useTransition();
   const theme = THEMES[eventType];
   const ThemeIcon = theme.Icon;
+  const isWedding = eventType === "WEDDING";
+  const isFuneral = eventType === "FUNERAL";
+  const setupDateLabel = isFuneral ? "별세/빈소 접수일" : "행사일";
   const [onlyPlan] = plans;
   const singlePlan = plans.length === 1 ? onlyPlan : null;
   const initialPlan = initialCreateMode
@@ -658,7 +682,7 @@ export function EventPlanningWorkspace({
     title: plan?.title ?? "",
     type: eventType,
     region: plan?.region ?? "",
-    scheduledAt: asDateInput(plan?.scheduledAt ?? null),
+    scheduledAt: asDateInput(plan?.scheduledAt ?? null) || (eventType === "FUNERAL" ? todayDateInput() : ""),
     guestTarget: numberInputValue(plan?.guestTarget),
     budget: numberInputValue(plan?.budget),
     description: plan?.description ?? "",
@@ -667,7 +691,9 @@ export function EventPlanningWorkspace({
   const [requestForm, setRequestForm] = useState<RequestFormState>({
     eventPlanId: plan?.id ?? "",
     vendorId: vendors[0]?.id ?? "",
-    serviceDate: asDateInput(plan?.scheduledAt ?? null),
+    serviceDate: asDateInput(plan?.scheduledAt ?? null) || (eventType === "FUNERAL" ? todayDateInput() : ""),
+    preferredDateStart: asDateInput(plan?.scheduledAt ?? null),
+    preferredDateEnd: asDateInput(plan?.scheduledAt ?? null),
     guestCount: numberInputValue(plan?.guestTarget),
     budget: numberInputValue(plan?.budget),
     notes: "",
@@ -682,7 +708,7 @@ export function EventPlanningWorkspace({
 
   useEffect(() => {
     const nextEventPlanId = plan?.id ?? "";
-    const prefill = getRequestFormPrefill(plan, selectedVendorActiveRequest);
+    const prefill = getRequestFormPrefill(plan, selectedVendorActiveRequest, eventType);
 
     setRequestForm((current) => {
       const targetChanged =
@@ -695,6 +721,14 @@ export function EventPlanningWorkspace({
           targetChanged || selectedVendorActiveRequest?.preferredDate
             ? prefill.serviceDate
             : current.serviceDate || prefill.serviceDate,
+        preferredDateStart:
+          targetChanged || selectedVendorActiveRequest?.preferredDateStart
+            ? prefill.preferredDateStart
+            : current.preferredDateStart || prefill.preferredDateStart,
+        preferredDateEnd:
+          targetChanged || selectedVendorActiveRequest?.preferredDateEnd
+            ? prefill.preferredDateEnd
+            : current.preferredDateEnd || prefill.preferredDateEnd,
         guestCount: targetChanged ? prefill.guestCount : current.guestCount || prefill.guestCount,
         budget:
           targetChanged || selectedVendorActiveRequest?.budget != null
@@ -704,7 +738,7 @@ export function EventPlanningWorkspace({
 
       return JSON.stringify(nextState) === JSON.stringify(current) ? current : nextState;
     });
-  }, [plan, selectedVendorActiveRequest, selectedVendorId]);
+  }, [eventType, plan, selectedVendorActiveRequest, selectedVendorId]);
 
   function handleSelectPlan(nextPlanId: string) {
     setSelectedPlanId(nextPlanId);
@@ -721,7 +755,7 @@ export function EventPlanningWorkspace({
       title: nextPlan.title,
       type: eventType,
       region: nextPlan.region ?? "",
-      scheduledAt: asDateInput(nextPlan.scheduledAt),
+      scheduledAt: asDateInput(nextPlan.scheduledAt) || (eventType === "FUNERAL" ? todayDateInput() : ""),
       guestTarget: numberInputValue(nextPlan.guestTarget),
       budget: numberInputValue(nextPlan.budget),
       description: nextPlan.description ?? "",
@@ -729,7 +763,9 @@ export function EventPlanningWorkspace({
     setRequestForm((current) => ({
       ...current,
       eventPlanId: nextPlan.id,
-      serviceDate: asDateInput(nextPlan.scheduledAt),
+      serviceDate: asDateInput(nextPlan.scheduledAt) || (eventType === "FUNERAL" ? todayDateInput() : ""),
+      preferredDateStart: asDateInput(nextPlan.scheduledAt),
+      preferredDateEnd: asDateInput(nextPlan.scheduledAt),
       guestCount: numberInputValue(nextPlan.guestTarget),
       budget: numberInputValue(nextPlan.budget),
     }));
@@ -771,6 +807,8 @@ export function EventPlanningWorkspace({
         ...c,
         eventPlanId: data.planId!,
         serviceDate: planForm.scheduledAt || c.serviceDate,
+        preferredDateStart: planForm.scheduledAt || c.preferredDateStart,
+        preferredDateEnd: planForm.scheduledAt || c.preferredDateEnd,
         guestCount: planForm.guestTarget || c.guestCount,
         budget: planForm.budget || c.budget,
       }));
@@ -848,6 +886,30 @@ export function EventPlanningWorkspace({
     }
     const guestCount = Math.max(1, Number.parseInt(requestForm.guestCount, 10) || 1);
     const requestedBudget = parseOptionalPositiveInt(requestForm.budget);
+    const weddingStartDate = requestForm.preferredDateStart;
+    const weddingEndDate = requestForm.preferredDateEnd;
+    const isWeddingRangeRequest = eventType === "WEDDING" && weddingStartDate !== weddingEndDate;
+
+    if (eventType === "WEDDING") {
+      if (!weddingStartDate) {
+        showNotice("error", "희망 시작일을 입력해 주세요.");
+        return;
+      }
+      if (!weddingEndDate) {
+        showNotice("error", "희망 종료일을 입력해 주세요.");
+        return;
+      }
+      if (weddingEndDate < weddingStartDate) {
+        showNotice("error", "희망 종료일은 시작일과 같거나 이후여야 합니다.");
+        return;
+      }
+    }
+
+    if (eventType === "FUNERAL" && !requestForm.serviceDate) {
+      showNotice("error", "빈소 접수일을 입력해 주세요.");
+      return;
+    }
+
     quoteActionLockedRef.current = true;
     setIsQuoteActionPending(true);
     try {
@@ -858,7 +920,12 @@ export function EventPlanningWorkspace({
         selectedModuleIds,
         selectedPackageId: basePackage?.id,
         guestCount,
-        preferredDate: requestForm.serviceDate || undefined,
+        preferredDate:
+          eventType === "WEDDING"
+            ? isWeddingRangeRequest ? undefined : weddingStartDate
+            : requestForm.serviceDate || undefined,
+        preferredDateStart: eventType === "WEDDING" && isWeddingRangeRequest ? weddingStartDate : undefined,
+        preferredDateEnd: eventType === "WEDDING" && isWeddingRangeRequest ? weddingEndDate : undefined,
         budget: requestedBudget,
       });
       if (!result.success) { showNotice("error", result.error); return; }
@@ -1178,7 +1245,7 @@ export function EventPlanningWorkspace({
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <FieldGroup label="행사일">
+                    <FieldGroup label={setupDateLabel}>
                       <Input
                         type="date"
                         value={planForm.scheduledAt}
@@ -1211,6 +1278,26 @@ export function EventPlanningWorkspace({
                       onChange={(e) => setPlanForm((c) => ({ ...c, description: e.target.value }))}
                     />
                   </FieldGroup>
+
+                  {isFuneral && planForm.scheduledAt && (
+                    <div className="rounded-2xl border border-[#cbd3e0]/60 bg-[#f7f8fa] p-4 text-xs text-[#2c3455]">
+                      <p className="mb-3 font-bold">3일 장례 일정 기준</p>
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <div className="rounded-xl bg-white px-3 py-2">
+                          <span className="block text-[10px] font-bold text-muted-foreground">Day 1</span>
+                          <span>빈소/접수 · {formatDate(planForm.scheduledAt)}</span>
+                        </div>
+                        <div className="rounded-xl bg-white px-3 py-2">
+                          <span className="block text-[10px] font-bold text-muted-foreground">Day 2</span>
+                          <span>조문/의전 진행 · {formatDate(addDaysToDateInput(planForm.scheduledAt, 1))}</span>
+                        </div>
+                        <div className="rounded-xl bg-white px-3 py-2">
+                          <span className="block text-[10px] font-bold text-muted-foreground">Day 3</span>
+                          <span>발인/장지 이동 · {formatDate(addDaysToDateInput(planForm.scheduledAt, 2))}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex gap-2">
                     <button
@@ -1509,14 +1596,33 @@ export function EventPlanningWorkspace({
                     <span className="text-[10px] text-muted-foreground/60">요청 조건은 바로 업체에 전달됩니다.</span>
                   </div>
 
-                  <div className="mb-5 grid gap-3 rounded-2xl border border-[#ebdccf]/35 bg-white/75 p-4 sm:grid-cols-2">
-                    <FieldGroup label="희망 날짜">
-                      <Input
-                        type="date"
-                        value={requestForm.serviceDate}
-                        onChange={(e) => setRequestForm((c) => ({ ...c, serviceDate: e.target.value }))}
-                      />
-                    </FieldGroup>
+                  <div className={`mb-5 grid gap-3 rounded-2xl border border-[#ebdccf]/35 bg-white/75 p-4 ${isWedding ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+                    {isWedding ? (
+                      <>
+                        <FieldGroup label="희망 시작일">
+                          <Input
+                            type="date"
+                            value={requestForm.preferredDateStart}
+                            onChange={(e) => setRequestForm((c) => ({ ...c, preferredDateStart: e.target.value }))}
+                          />
+                        </FieldGroup>
+                        <FieldGroup label="희망 종료일">
+                          <Input
+                            type="date"
+                            value={requestForm.preferredDateEnd}
+                            onChange={(e) => setRequestForm((c) => ({ ...c, preferredDateEnd: e.target.value }))}
+                          />
+                        </FieldGroup>
+                      </>
+                    ) : (
+                      <FieldGroup label="빈소 접수일">
+                        <Input
+                          type="date"
+                          value={requestForm.serviceDate}
+                          onChange={(e) => setRequestForm((c) => ({ ...c, serviceDate: e.target.value }))}
+                        />
+                      </FieldGroup>
+                    )}
                     <FieldGroup label={`${theme.guestLabel} 수`}>
                       <Input
                         inputMode="numeric"
@@ -1525,6 +1631,25 @@ export function EventPlanningWorkspace({
                         onChange={(e) => setRequestForm((c) => ({ ...c, guestCount: e.target.value }))}
                       />
                     </FieldGroup>
+                    {isFuneral && requestForm.serviceDate && (
+                      <div className="rounded-2xl border border-[#cbd3e0]/60 bg-[#f7f8fa] p-4 text-xs text-[#2c3455] sm:col-span-2">
+                        <p className="mb-3 font-bold">접수일 기준 3일 장례 일정으로 전달됩니다.</p>
+                        <div className="grid gap-2 sm:grid-cols-3">
+                          <div className="rounded-xl bg-white px-3 py-2">
+                            <span className="block text-[10px] font-bold text-muted-foreground">Day 1</span>
+                            <span>빈소/접수 · {formatDate(requestForm.serviceDate)}</span>
+                          </div>
+                          <div className="rounded-xl bg-white px-3 py-2">
+                            <span className="block text-[10px] font-bold text-muted-foreground">Day 2</span>
+                            <span>조문/의전 진행 · {formatDate(addDaysToDateInput(requestForm.serviceDate, 1))}</span>
+                          </div>
+                          <div className="rounded-xl bg-white px-3 py-2">
+                            <span className="block text-[10px] font-bold text-muted-foreground">Day 3</span>
+                            <span>발인/장지 이동 · {formatDate(addDaysToDateInput(requestForm.serviceDate, 2))}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <FieldGroup label="희망 예산">
                       <Input
                         inputMode="numeric"
