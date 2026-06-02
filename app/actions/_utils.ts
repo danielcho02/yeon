@@ -69,6 +69,8 @@ type QuoteRequestLike = {
   selectedPackageSnapshot?: Prisma.JsonValue | null;
   priceSnapshot?: Prisma.JsonValue | null;
   preferredDate: Date | null;
+  preferredDateStart?: Date | null;
+  preferredDateEnd?: Date | null;
   budget: number | null;
   status: string;
   createdAt: Date;
@@ -101,6 +103,7 @@ type QuoteProposalRevisionLike = {
   memo: string | null;
   adjustmentRequestMemo: string | null;
   plannerRequestedTotalPrice: number | null;
+  proposedServiceDate?: Date | null;
   status: string;
   createdAt: Date;
 };
@@ -298,6 +301,8 @@ export function mapQuoteRequest(request: QuoteRequestLike): QuoteRequestData {
     priceSnapshot: request.priceSnapshot as unknown as VendorPackagePriceSnapshot ?? null,
     selectedModules: stringArrayFromJson(request.selectedModules),
     preferredDate: request.preferredDate?.toISOString() ?? null,
+    preferredDateStart: request.preferredDateStart?.toISOString() ?? null,
+    preferredDateEnd: request.preferredDateEnd?.toISOString() ?? null,
     budget: request.budget,
     status: mapQuoteStatus(request.status),
     createdAt: request.createdAt.toISOString()
@@ -336,6 +341,7 @@ export function mapQuoteProposalRevision(
     memo: revision.memo,
     adjustmentRequestMemo: revision.adjustmentRequestMemo,
     plannerRequestedTotalPrice: revision.plannerRequestedTotalPrice,
+    proposedServiceDate: revision.proposedServiceDate?.toISOString() ?? null,
     status: mapQuoteProposalRevisionStatus(revision.status),
     createdAt: revision.createdAt.toISOString()
   };

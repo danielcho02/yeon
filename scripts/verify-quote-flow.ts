@@ -707,6 +707,8 @@ async function main() {
         requirements: "Backend smoke verification request",
         selectedModules,
         preferredDate: plan.scheduledAt,
+        preferredDateStart: plan.scheduledAt,
+        preferredDateEnd: plan.scheduledAt,
         budget: quotedAmount,
         status: QuoteStatus.PENDING
       }
@@ -743,6 +745,16 @@ async function main() {
   created.activityLogIds.push(createdRequest.activity.id);
 
   checks.quote_request_created = createdRequest.quoteRequest.status === QuoteStatus.PENDING;
+  assert.equal(
+    createdRequest.quoteRequest.preferredDateStart?.toISOString(),
+    plan.scheduledAt?.toISOString(),
+    "wedding quote request must persist preferred date range start"
+  );
+  assert.equal(
+    createdRequest.quoteRequest.preferredDateEnd?.toISOString(),
+    plan.scheduledAt?.toISOString(),
+    "wedding quote request must persist preferred date range end"
+  );
 
   await expectReject("non-vendor quote response submit", async () => {
     await validateQuoteResponseContract({
@@ -882,6 +894,7 @@ async function main() {
         version: 1,
         totalPrice: quotedAmount,
         memo: "Backend smoke verification response",
+        proposedServiceDate: plan.scheduledAt,
         status: "SUBMITTED"
       }
     });
@@ -925,6 +938,11 @@ async function main() {
 
   created.responseId = quoteResponseResult.response.id;
   created.initialRevisionId = quoteResponseResult.initialRevision.id;
+  assert.equal(
+    quoteResponseResult.initialRevision.proposedServiceDate?.toISOString(),
+    plan.scheduledAt?.toISOString(),
+    "vendor proposal revision must persist proposed service date"
+  );
   created.notificationIds.push(quoteResponseResult.notification.id);
   created.activityLogIds.push(quoteResponseResult.activity.id);
 
@@ -1196,6 +1214,7 @@ async function main() {
         version: 2,
         totalPrice: revisedQuotedAmount,
         memo: "요청하신 예산에 맞춰 꽃장식 옵션을 조정했습니다.",
+        proposedServiceDate: quoteResponseResult.initialRevision.proposedServiceDate,
         status: "REVISED"
       }
     });
@@ -1366,6 +1385,11 @@ async function main() {
     newReservation!.quotedAmount,
     revisedQuotedAmount,
     "Reservation must use the accepted revised proposal total"
+  );
+  assert.equal(
+    newReservation!.serviceDate?.toISOString(),
+    quoteResponseResult.initialRevision.proposedServiceDate?.toISOString(),
+    "Reservation must carry the accepted proposal service date"
   );
   assert.equal(newReservation!.status, "PENDING", "Reservation status must be PENDING after accept");
   assert.ok(newReservation!.vendorConfirmationDueAt, "vendorConfirmationDueAt must be set");

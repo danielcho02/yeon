@@ -118,6 +118,8 @@ const createQuoteRequestSchema = z.object({
   selectedModuleIds: z.array(z.string().min(1)).min(1),
   guestCount: z.number().int().positive().optional(),
   preferredDate: z.string().trim().min(1).optional(),
+  preferredDateStart: z.string().trim().min(1).optional(),
+  preferredDateEnd: z.string().trim().min(1).optional(),
   budget: z.number().int().nonnegative().optional()
 });
 
@@ -127,7 +129,8 @@ const submitQuoteResponseSchema = z.object({
   modules: quoteResponseModulesSchema,
   totalPrice: z.number().int(),
   note: z.string().trim().optional(),
-  responseMessage: z.string().trim().optional()
+  responseMessage: z.string().trim().optional(),
+  proposedServiceDate: z.string().trim().min(1).optional()
 });
 
 const acceptQuoteResponseSchema = z.object({
@@ -145,7 +148,8 @@ const requestQuoteAdjustmentSchema = z.object({
 const submitQuoteRevisionSchema = z.object({
   quoteResponseId: z.string().min(1),
   totalPrice: z.number().int().positive(),
-  memo: z.string().trim().optional()
+  memo: z.string().trim().optional(),
+  proposedServiceDate: z.string().trim().min(1).optional()
 });
 
 const idsSchema = z.array(z.string().min(1)).min(1);
@@ -170,6 +174,25 @@ function calculateModulesTotal(modules: QuoteResponseModules) {
     modules.includedModules.reduce((sum, module) => sum + module.price, 0) +
     modules.optionalModules.reduce((sum, module) => sum + module.price, 0)
   );
+}
+
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+function kstDateKey(date: Date) {
+  return new Date(date.getTime() + KST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+function isSameKstDate(a: Date, b: Date) {
+  return kstDateKey(a) === kstDateKey(b);
+}
+
+function isKstDateWithinRange(date: Date, start: Date, end: Date) {
+  const key = kstDateKey(date);
+  return key >= kstDateKey(start) && key <= kstDateKey(end);
+}
+
+function isRangeEndBeforeStart(start: Date, end: Date) {
+  return kstDateKey(end) < kstDateKey(start);
 }
 
 function validationHasPath(issues: ValidationIssue[], path: string) {
@@ -449,7 +472,27 @@ export async function createQuoteRequest(
       );
     }
 
-    const preferredDate = parseActionDate(parsed.data.preferredDate);
+    const rawPreferredDate = parseActionDate(parsed.data.preferredDate);
+    const rawPreferredDateStart = parseActionDate(parsed.data.preferredDateStart);
+    const rawPreferredDateEnd = parseActionDate(parsed.data.preferredDateEnd);
+    const hasPreferredRange = Boolean(rawPreferredDateStart || rawPreferredDateEnd);
+
+    if (hasPreferredRange && (!rawPreferredDateStart || !rawPreferredDateEnd)) {
+      return actionError("희망 날짜 범위의 시작일과 종료일을 모두 입력해 주세요.", "INVALID_DATE_RANGE");
+    }
+
+    if (rawPreferredDateStart && rawPreferredDateEnd && isRangeEndBeforeStart(rawPreferredDateStart, rawPreferredDateEnd)) {
+      return actionError("희망 날짜 범위의 종료일은 시작일 이후여야 합니다.", "INVALID_DATE_RANGE");
+    }
+
+    const preferredDate =
+      plan.type === "FUNERAL"
+        ? rawPreferredDate ?? rawPreferredDateStart ?? plan.scheduledAt
+        : hasPreferredRange
+          ? null
+          : rawPreferredDate ?? plan.scheduledAt;
+    const preferredDateStart = plan.type === "WEDDING" ? rawPreferredDateStart : null;
+    const preferredDateEnd = plan.type === "WEDDING" ? rawPreferredDateEnd : null;
     const guestCount = parsed.data.guestCount ?? plan.guestTarget ?? 1;
     const budget = parsed.data.budget ?? plan.budget ?? null;
     let selectedPackageId: string | null = null;
@@ -521,6 +564,8 @@ export async function createQuoteRequest(
           selectedPackageSnapshot,
           priceSnapshot,
           preferredDate,
+          preferredDateStart,
+          preferredDateEnd,
           budget,
           status: PrismaQuoteStatus.PENDING
         }
@@ -601,7 +646,8 @@ export async function submitQuoteResponse(
             id: true,
             ownerId: true,
             title: true,
-            type: true
+            type: true,
+            scheduledAt: true
           }
         },
         reservation: true
@@ -663,6 +709,28 @@ export async function submitQuoteResponse(
       return actionError("견적 총액이 선택 항목 합계와 일치하지 않습니다.", "QUOTE_TOTAL_MISMATCH");
     }
 
+    const submittedServiceDate = parseActionDate(parsed.data.proposedServiceDate);
+    let proposedServiceDate =
+      request.plan.type === "FUNERAL"
+        ? submittedServiceDate ?? request.preferredDate ?? request.plan.scheduledAt
+        : submittedServiceDate ?? request.preferredDate;
+
+    if (request.plan.type === "WEDDING" && request.preferredDate && proposedServiceDate) {
+      if (!isSameKstDate(request.preferredDate, proposedServiceDate)) {
+        return actionError("확정 웨딩 날짜는 업체가 변경할 수 없습니다.", "WEDDING_FIXED_DATE_MISMATCH");
+      }
+      proposedServiceDate = request.preferredDate;
+    }
+
+    if (request.plan.type === "WEDDING" && request.preferredDateStart && request.preferredDateEnd) {
+      if (!proposedServiceDate) {
+        return actionError("희망 날짜 범위 안에서 가능한 서비스 날짜를 선택해 주세요.", "PROPOSED_SERVICE_DATE_REQUIRED");
+      }
+      if (!isKstDateWithinRange(proposedServiceDate, request.preferredDateStart, request.preferredDateEnd)) {
+        return actionError("서비스 날짜는 희망 날짜 범위 안에서 선택해 주세요.", "PROPOSED_SERVICE_DATE_OUT_OF_RANGE");
+      }
+    }
+
     const response = await prisma.$transaction(async (tx) => {
       const created = await tx.quoteResponse.create({
         data: {
@@ -684,6 +752,7 @@ export async function submitQuoteResponse(
           version: 1,
           totalPrice,
           memo: responseMessage,
+          proposedServiceDate,
           status: PrismaQuoteProposalRevisionStatus.SUBMITTED
         }
       });
@@ -734,6 +803,7 @@ export async function submitQuoteResponse(
         message: "업체가 견적 응답을 제출했습니다.",
         metadata: {
           totalPrice,
+          proposedServiceDate: proposedServiceDate?.toISOString() ?? "",
           quoteProposalRevisionId: initialRevision.id,
           hasNote: Boolean(responseMessage)
         }
@@ -780,7 +850,7 @@ export async function requestQuoteAdjustment(
         revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] },
         request: {
           include: {
-            plan: { select: { id: true, title: true, ownerId: true } },
+            plan: { select: { id: true, title: true, ownerId: true, type: true, scheduledAt: true } },
             reservation: true
           }
         }
@@ -890,7 +960,7 @@ export async function submitQuoteRevision(
         revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] },
         request: {
           include: {
-            plan: { select: { id: true, title: true, ownerId: true } },
+            plan: { select: { id: true, title: true, ownerId: true, type: true, scheduledAt: true } },
             reservation: true
           }
         }
@@ -915,6 +985,30 @@ export async function submitQuoteRevision(
       return actionError("플래너 조정 요청이 있는 제안만 수정할 수 있습니다.", "QUOTE_ADJUSTMENT_NOT_REQUESTED");
     }
 
+    const submittedServiceDate = parseActionDate(parsed.data.proposedServiceDate);
+    let proposedServiceDate = submittedServiceDate ?? latestRevision.proposedServiceDate;
+
+    if (!proposedServiceDate && response.request.plan.type === "FUNERAL") {
+      proposedServiceDate = response.request.preferredDate ?? response.request.plan.scheduledAt;
+    }
+
+    if (response.request.plan.type === "WEDDING" && response.request.preferredDate && proposedServiceDate) {
+      if (!isSameKstDate(response.request.preferredDate, proposedServiceDate)) {
+        return actionError("확정 웨딩 날짜는 업체가 변경할 수 없습니다.", "WEDDING_FIXED_DATE_MISMATCH");
+      }
+      proposedServiceDate = response.request.preferredDate;
+    }
+
+    if (
+      response.request.plan.type === "WEDDING" &&
+      response.request.preferredDateStart &&
+      response.request.preferredDateEnd &&
+      proposedServiceDate &&
+      !isKstDateWithinRange(proposedServiceDate, response.request.preferredDateStart, response.request.preferredDateEnd)
+    ) {
+      return actionError("서비스 날짜는 희망 날짜 범위 안에서 선택해 주세요.", "PROPOSED_SERVICE_DATE_OUT_OF_RANGE");
+    }
+
     const updated = await prisma.$transaction(async (tx) => {
       const revision = await tx.quoteProposalRevision.create({
         data: {
@@ -924,6 +1018,7 @@ export async function submitQuoteRevision(
           version: latestRevision.version + 1,
           totalPrice: parsed.data.totalPrice,
           memo: parsed.data.memo ?? null,
+          proposedServiceDate,
           status: PrismaQuoteProposalRevisionStatus.REVISED
         }
       });
@@ -940,6 +1035,7 @@ export async function submitQuoteRevision(
           quoteRequestId: response.requestId,
           quoteResponseId: response.id,
           quoteProposalRevisionId: revision.id,
+          proposedServiceDate: proposedServiceDate?.toISOString() ?? "",
           totalPrice: revision.totalPrice
         }
       });
@@ -1077,8 +1173,10 @@ export async function acceptQuoteResponse(
     const acceptedTotalPrice = acceptedRevision?.totalPrice ?? response.totalPrice;
     const modules = response.modules as unknown as QuoteResponseModules;
     const serviceDate =
+      acceptedRevision?.proposedServiceDate ??
       parseActionDate(parsed.data.reservedDate) ??
       response.request.preferredDate ??
+      response.request.preferredDateStart ??
       response.request.plan.scheduledAt ??
       null;
     const vendorConfirmationDueAt = getVendorConfirmationDueAt();

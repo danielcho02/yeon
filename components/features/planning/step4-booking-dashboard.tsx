@@ -105,9 +105,23 @@ function getCurrentProposal(response: QuoteResponseData) {
     memo: response.note,
     adjustmentRequestMemo: null,
     plannerRequestedTotalPrice: null,
+    proposedServiceDate: null,
     status: "SUBMITTED" as const,
     createdAt: response.createdAt
   };
+}
+
+function formatRequestedDate(request: QuoteRequestWithResponses) {
+  if (request.preferredDateStart && request.preferredDateEnd) {
+    return `${formatDate(request.preferredDateStart)} - ${formatDate(request.preferredDateEnd)}`;
+  }
+
+  return formatDate(request.preferredDate ?? request.plan?.eventDate);
+}
+
+function formatProposalDate(response: QuoteResponseData | null) {
+  const proposedDate = response?.currentRevision?.proposedServiceDate ?? null;
+  return proposedDate ? formatDate(proposedDate) : null;
 }
 
 function getProposalStatusLabel(
@@ -606,8 +620,13 @@ export function Step4BookingDashboard({
                     {request.vendor?.companyName ?? "파트너 제안"}
                   </h3>
                   <p className="text-xs text-muted-foreground">
-                    {request.plan?.title ?? "행사"} · {formatDate(request.preferredDate ?? request.plan?.eventDate)}
+                    {request.plan?.title ?? "행사"} · 요청일 {formatRequestedDate(request)}
                   </p>
+                  {formatProposalDate(response) && (
+                    <p className="text-[11px] font-semibold text-[#2c3455]">
+                      업체 확정 서비스일 {formatProposalDate(response)}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 rounded-xl bg-[#faf9f5] px-3 py-2 text-[10px] font-semibold text-[#8c8275]">
                   {reservation ? <ShieldCheck className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}

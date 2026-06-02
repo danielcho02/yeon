@@ -36,6 +36,8 @@ export interface QuoteRequestData {
   priceSnapshot?: VendorPackagePriceSnapshot | null;
   selectedModules: string[];
   preferredDate: string | null;
+  preferredDateStart: string | null;
+  preferredDateEnd: string | null;
   budget: number | null;
   status: QuoteStatus;
   createdAt: string;
@@ -66,6 +68,7 @@ export interface QuoteProposalRevisionData {
   memo: string | null;
   adjustmentRequestMemo: string | null;
   plannerRequestedTotalPrice: number | null;
+  proposedServiceDate: string | null;
   status: QuoteProposalRevisionStatus;
   createdAt: string;
 }
@@ -97,6 +100,8 @@ export interface CreateQuoteRequestPayload {
   selectedModuleIds: string[];
   guestCount?: number;
   preferredDate?: string;
+  preferredDateStart?: string;
+  preferredDateEnd?: string;
   budget?: number;
 }
 
@@ -107,6 +112,7 @@ export interface SubmitQuoteResponsePayload {
   totalPrice: number;
   note?: string;
   responseMessage?: string;
+  proposedServiceDate?: string;
 }
 
 export interface AcceptQuoteResponsePayload {
@@ -125,6 +131,7 @@ export interface SubmitQuoteRevisionPayload {
   quoteResponseId: string;
   totalPrice: number;
   memo?: string;
+  proposedServiceDate?: string;
 }
 
 export interface AcceptQuoteResult {
