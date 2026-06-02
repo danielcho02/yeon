@@ -4,11 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
+  EventType,
   Prisma,
   QuoteStatus,
   ReservationStatus,
   UserRole,
-  VendorApprovalStatus
+  VendorApprovalStatus,
+  VendorPackageModuleSelectionType
 } from "@/generated/prisma/client";
 import { getServerAuthSession } from "@/lib/auth/session";
 import { getActionError, isPrismaUniqueConstraintError } from "@/lib/errors";
@@ -17,6 +19,7 @@ import { assertQuoteTransition } from "@/lib/state-machine";
 import {
   getCatalogItem,
   getQuoteServiceModuleEventType,
+  vendorServiceModuleCategoryMatchesEventType,
   getVendorSupportedEventTypes,
   getVendorSupportedServiceModules,
   quoteServiceModuleValues
@@ -116,6 +119,193 @@ function isDuplicateQuoteResponse(error: unknown) {
     "requestId",
     "vendorId"
   ]);
+}
+
+function parsePositiveInt(value: FormDataEntryValue | null, fallback = 0) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function parsePackageEventType(value: FormDataEntryValue | null): EventType | null {
+  return value === EventType.WEDDING || value === EventType.FUNERAL ? value : null;
+}
+
+async function getPackageModulesForVendor(input: {
+  vendorId: string;
+  eventType: EventType;
+  includedModuleIds: string[];
+  optionalModuleIds: string[];
+}) {
+  const requestedIds = Array.from(new Set([...input.includedModuleIds, ...input.optionalModuleIds]));
+  if (requestedIds.length === 0) {
+    throw new Error("패키지에는 최소 1개 이상의 포함 항목이 필요합니다.");
+  }
+
+  const modules = await prisma.vendorServiceModule.findMany({
+    where: {
+      id: { in: requestedIds },
+      vendorId: input.vendorId,
+      isActive: true
+    },
+    select: { id: true, category: true }
+  });
+
+  if (modules.length !== requestedIds.length) {
+    throw new Error("패키지 항목 중 유효하지 않은 서비스가 있습니다.");
+  }
+
+  if (
+    modules.some((module) =>
+      !vendorServiceModuleCategoryMatchesEventType(input.eventType, module.category)
+    )
+  ) {
+    throw new Error("행사 유형과 맞지 않는 서비스는 패키지에 포함할 수 없습니다.");
+  }
+
+  const includedIds = new Set(input.includedModuleIds);
+  const optionalIds = input.optionalModuleIds.filter((id) => !includedIds.has(id));
+
+  return [
+    ...input.includedModuleIds.map((id, index) => ({
+      vendorServiceModuleId: id,
+      selectionType: VendorPackageModuleSelectionType.INCLUDED,
+      sortOrder: index + 1
+    })),
+    ...optionalIds.map((id, index) => ({
+      vendorServiceModuleId: id,
+      selectionType: VendorPackageModuleSelectionType.OPTIONAL,
+      sortOrder: input.includedModuleIds.length + index + 1
+    }))
+  ];
+}
+
+function revalidateVendorPackageViews(vendorId: string) {
+  revalidatePath("/vendor/dashboard");
+  revalidatePath("/vendors");
+  revalidatePath(`/vendors/${vendorId}`);
+  revalidatePath("/planner/wedding");
+  revalidatePath("/planner/funeral");
+}
+
+export async function createVendorPackage(formData: FormData) {
+  const vendorId = await requireVendor();
+  const eventType = parsePackageEventType(formData.get("eventType"));
+  const name = (formData.get("name") as string | null)?.trim() || "";
+  const description = (formData.get("description") as string | null)?.trim() || null;
+  const basePrice = parsePositiveInt(formData.get("basePrice"), -1);
+  const sortOrder = parsePositiveInt(formData.get("sortOrder"), 0);
+
+  if (!eventType || !name || basePrice <= 0) {
+    redirect("/vendor/dashboard");
+  }
+
+  const highestSortOrder = await prisma.vendorPackage.findFirst({
+    where: { vendorId, eventType },
+    orderBy: { sortOrder: "desc" },
+    select: { sortOrder: true }
+  });
+
+  await prisma.vendorPackage.create({
+    data: {
+      vendorId,
+      eventType,
+      name,
+      description,
+      basePrice,
+      sortOrder: sortOrder || (highestSortOrder?.sortOrder ?? 0) + 1,
+      isActive: false
+    }
+  });
+
+  revalidateVendorPackageViews(vendorId);
+}
+
+export async function updateVendorPackage(formData: FormData) {
+  const vendorId = await requireVendor();
+  const packageId = (formData.get("packageId") as string | null)?.trim() || "";
+  const eventType = parsePackageEventType(formData.get("eventType"));
+  const name = (formData.get("name") as string | null)?.trim() || "";
+  const description = (formData.get("description") as string | null)?.trim() || null;
+  const basePrice = parsePositiveInt(formData.get("basePrice"), -1);
+  const sortOrder = parsePositiveInt(formData.get("sortOrder"), 0);
+  const includedModuleIds = formData.getAll("includedModuleIds")
+    .map(String)
+    .filter(Boolean);
+  const optionalModuleIds = formData.getAll("optionalModuleIds")
+    .map(String)
+    .filter(Boolean);
+
+  if (!packageId || !eventType || !name || basePrice <= 0 || includedModuleIds.length === 0) {
+    redirect("/vendor/dashboard");
+  }
+
+  const existing = await prisma.vendorPackage.findFirst({
+    where: { id: packageId, vendorId },
+    select: { id: true }
+  });
+
+  if (!existing) {
+    throw new Error("권한 없음");
+  }
+
+  const items = await getPackageModulesForVendor({
+    vendorId,
+    eventType,
+    includedModuleIds,
+    optionalModuleIds
+  });
+
+  await prisma.$transaction(async (tx) => {
+    await tx.vendorPackage.update({
+      where: { id: packageId },
+      data: {
+        eventType,
+        name,
+        description,
+        basePrice,
+        sortOrder
+      }
+    });
+
+    await tx.vendorPackageModule.deleteMany({
+      where: { packageId }
+    });
+
+    for (const item of items) {
+      await tx.vendorPackageModule.create({
+        data: {
+          packageId,
+          ...item
+        }
+      });
+    }
+  });
+
+  revalidateVendorPackageViews(vendorId);
+}
+
+export async function toggleVendorPackage(packageId: string, isActive: boolean) {
+  const vendorId = await requireVendor();
+
+  const existing = await prisma.vendorPackage.findFirst({
+    where: { id: packageId, vendorId },
+    include: { items: true }
+  });
+
+  if (!existing) {
+    throw new Error("권한 없음");
+  }
+
+  if (isActive && !existing.items.some((item) => item.selectionType === "INCLUDED")) {
+    throw new Error("포함 항목이 없는 패키지는 활성화할 수 없습니다.");
+  }
+
+  await prisma.vendorPackage.update({
+    where: { id: packageId },
+    data: { isActive }
+  });
+
+  revalidateVendorPackageViews(vendorId);
 }
 
 export async function acceptReservation(reservationId: string, proposalAmount: number) {

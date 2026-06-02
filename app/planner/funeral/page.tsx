@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getQuotesByPlan, getVendorServiceModules } from "@/app/actions/quote";
+import { getQuotesByPlan, getVendorPackages, getVendorServiceModules } from "@/app/actions/quote";
 import { EventPlanningWorkspace } from "@/components/features/planning/event-planning-workspace";
 import type { ReservationItem } from "@/components/features/planning/workspace-types";
 import { UserRole } from "@/generated/prisma/client";
@@ -168,13 +168,18 @@ export default async function FuneralPlannerPage({
       : (requestedPlanId ? plans.find((item) => item.id === requestedPlanId) : null) ??
         (plans.length === 1 ? plans[0] : null);
   const initialVendor = filteredVendors[0] ?? null;
-  const [initialVendorModulesResult, initialQuoteRequestsResult] = await Promise.all([
+  const [initialVendorModulesResult, initialVendorPackagesResult, initialQuoteRequestsResult] = await Promise.all([
     initialVendor ? getVendorServiceModules(initialVendor.id, "FUNERAL") : null,
+    initialVendor ? getVendorPackages(initialVendor.id, "FUNERAL") : null,
     initialPlan ? getQuotesByPlan(initialPlan.id) : null
   ]);
   const initialVendorModulesByVendorId =
     initialVendor && initialVendorModulesResult?.success
       ? { [initialVendor.id]: initialVendorModulesResult.data }
+      : undefined;
+  const initialVendorPackagesByVendorId =
+    initialVendor && initialVendorPackagesResult?.success
+      ? { [initialVendor.id]: initialVendorPackagesResult.data }
       : undefined;
   const initialQuoteRequestsByPlanId =
     initialPlan && initialQuoteRequestsResult?.success
@@ -242,6 +247,7 @@ export default async function FuneralPlannerPage({
           }
         }))}
         initialVendorModulesByVendorId={initialVendorModulesByVendorId}
+        initialVendorPackagesByVendorId={initialVendorPackagesByVendorId}
         initialQuoteRequestsByPlanId={initialQuoteRequestsByPlanId}
       />
     </main>

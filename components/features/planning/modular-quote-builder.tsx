@@ -12,6 +12,7 @@ import {
   type BasePackage,
 } from '@/hooks/use-quote-builder'
 import type { VendorServiceModuleData } from '@/types/vendor-module'
+import type { VendorPackageData } from '@/types/vendor-package'
 import { PriceCountUp } from '@/components/ui/motion'
 import { quoteServiceModules, serviceCatalog, type MvpQuoteEventType } from '@/lib/step3.shared'
 
@@ -374,6 +375,8 @@ interface ModularQuoteBuilderProps {
   guestCount?: number
   /** Real vendor service modules from DB — when provided, replaces catalog+mock data */
   vendorModules?: VendorServiceModuleData[]
+  /** Real vendor packages from DB — when provided, replaces synthetic derived base package */
+  vendorPackages?: VendorPackageData[]
   isSubmitting?: boolean
   isAlreadyRequested?: boolean
   requestStatusLabel?: string | null
@@ -385,6 +388,7 @@ export function ModularQuoteBuilder({
   theme,
   guestCount = 100,
   vendorModules,
+  vendorPackages,
   isSubmitting = false,
   isAlreadyRequested = false,
   requestStatusLabel,
@@ -395,6 +399,7 @@ export function ModularQuoteBuilder({
   const eventType: MvpQuoteEventType = theme === 'wedding' ? 'WEDDING' : 'FUNERAL'
   const isWedding = theme === 'wedding'
   const usesVendorModules = Boolean(vendorModules && vendorModules.length > 0)
+  const usesVendorPackages = Boolean(vendorPackages && vendorPackages.length > 0)
 
   const [showCustomizer, setShowCustomizer] = useState(false)
 
@@ -424,18 +429,34 @@ export function ModularQuoteBuilder({
 
   // Base packages: from real data (isBaseIncluded) or fallback MOCK
   const basePackages = useMemo((): BasePackage[] => {
+    if (vendorPackages && vendorPackages.length > 0) {
+      return vendorPackages.map((pkg) => ({
+        id: pkg.id,
+        name: pkg.name,
+        description: pkg.description ?? '업체가 구성한 패키지입니다.',
+        price: pkg.basePrice,
+        includedModuleKeys: pkg.items
+          .filter((item) => item.selectionType === 'INCLUDED')
+          .map((item) => item.vendorServiceModuleId),
+      }))
+    }
+    if (vendorPackages !== undefined) return []
     if (vendorModules && vendorModules.length > 0) {
       const derived = buildBasePackageFromVendorData(vendorModules, guestCount)
       return derived ? [derived] : []
     }
     return MOCK_BASE_PACKAGES[eventType]
-  }, [vendorModules, guestCount, eventType])
+  }, [vendorModules, vendorPackages, guestCount, eventType])
 
   const builder = useQuoteBuilder(guestCount)
   const [activeCategory, setActiveCategory] = useState<string>('all')
   const [sheetOpen, setSheetOpen] = useState(false)
   const { basePackage, setBasePackage, pruneSelectedModules } = builder
-  const hasQuoteSelection = builder.selectedModules.length > 0 || Boolean(builder.basePackage)
+  const requiresVendorPackage = vendorPackages !== undefined && usesVendorModules
+  const packageUnavailable = requiresVendorPackage && !usesVendorPackages
+  const hasQuoteSelection = packageUnavailable
+    ? false
+    : builder.selectedModules.length > 0 || Boolean(builder.basePackage)
 
   useEffect(() => {
     const firstPackage = basePackages[0] ?? null
@@ -507,15 +528,19 @@ export function ModularQuoteBuilder({
         <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e5e2da] pb-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[#2c3455]">
-              {usesVendorModules
-                ? '업체 기본 패키지'
+              {usesVendorPackages
+                ? '업체 패키지 선택'
+                : usesVendorModules
+                  ? '업체 기본 패키지'
                 : isWedding
                   ? 'yeON 엄선 웨딩 권장 패키지'
                   : 'yeON 정립 정중 의전 상담 패키지'}
             </h3>
             <span className="text-[10px] text-muted-foreground/60 leading-normal">
-              {usesVendorModules
-                ? '업체가 기본 포함으로 등록한 항목을 하나의 구성으로 묶어 보여드립니다.'
+              {usesVendorPackages
+                ? '업체가 공개한 패키지 중 하나를 선택한 뒤 필요한 옵션만 추가하세요.'
+                : usesVendorModules
+                  ? '업체가 기본 포함으로 등록한 항목을 하나의 구성으로 묶어 보여드립니다.'
                 : isWedding
                   ? '번거로운 구성 조립 없이, 검증된 세트로 아름답고 확실하게 준비합니다.'
                   : '갑작스러운 슬픔 속에서, 경건하고 품격 있게 배웅을 보좌할 필수 구성 절차안입니다.'}
@@ -529,7 +554,7 @@ export function ModularQuoteBuilder({
                 <button
                   key={pkg.id}
                   type="button"
-                  onClick={() => builder.setBasePackage(active && !usesVendorModules ? null : pkg)}
+                  onClick={() => builder.setBasePackage(active && !usesVendorModules && !usesVendorPackages ? null : pkg)}
                   className="rounded-xl border p-4 text-left transition-all duration-150 hover:bg-[#faf9f5]/30 group relative overflow-hidden animate-fade-in"
                   style={{
                     borderColor: active ? config.primary : '#ebdccf/40',
@@ -541,7 +566,7 @@ export function ModularQuoteBuilder({
                       className="absolute right-0 top-0 rounded-bl-lg px-2 py-0.5 text-[8px] font-bold text-white whitespace-nowrap"
                       style={{ backgroundColor: config.primary }}
                     >
-                      {usesVendorModules ? '포함 선택됨' : isWedding ? '기본 선택됨' : '상담 기준'}
+                      {usesVendorModules || usesVendorPackages ? '선택됨' : isWedding ? '기본 선택됨' : '상담 기준'}
                     </div>
                   )}
                   <div className="flex items-start justify-between gap-2 pr-4">
@@ -551,7 +576,7 @@ export function ModularQuoteBuilder({
                   </div>
                   <p className="mt-1.5 text-[10px] text-[#8c8275] leading-relaxed break-keep">{pkg.description}</p>
                   <p className="mt-3.5 text-xs font-extrabold font-mono" style={{ color: config.primary }}>
-                    {usesVendorModules
+                    {usesVendorModules || usesVendorPackages
                       ? `${pkg.price.toLocaleString('ko-KR')}원`
                       : `${pkg.price.toLocaleString('ko-KR')}원~`}
                   </p>
@@ -559,6 +584,15 @@ export function ModularQuoteBuilder({
               )
             })}
           </div>
+        </div>
+      )}
+
+      {packageUnavailable && (
+        <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50/60 px-4 py-5 text-center">
+          <p className="text-sm font-bold text-amber-800">아직 활성화된 업체 패키지가 없습니다.</p>
+          <p className="mt-1 text-xs leading-5 text-amber-700/80">
+            업체가 패키지를 공개하면 포함 항목과 선택 추가 옵션을 확인한 뒤 견적을 요청할 수 있습니다.
+          </p>
         </div>
       )}
 

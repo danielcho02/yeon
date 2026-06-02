@@ -35,6 +35,7 @@ import { createQuoteRequest as createQuoteRequestLegacy } from "@/app/vendors/ac
 import {
   acceptQuoteResponse,
   createQuoteRequest as createQuoteRequestAction,
+  getVendorPackages,
   getQuotesByPlan,
   getVendorServiceModules,
   getStep4DashboardData,
@@ -42,6 +43,7 @@ import {
 import { ModularQuoteBuilder } from "./modular-quote-builder";
 import { Step4BookingDashboard } from "./step4-booking-dashboard";
 import type { VendorServiceModuleData } from "@/types/vendor-module";
+import type { VendorPackageData } from "@/types/vendor-package";
 import type { QuoteRequestWithResponses, Step4CategoryStatusDTO } from "@/types/quote";
 import type { BasePackage, QuoteModule } from "@/hooks/use-quote-builder";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -206,6 +208,7 @@ type Props = {
   vendors: VendorOption[];
   reservations: ReservationItem[];
   initialVendorModulesByVendorId?: Record<string, VendorServiceModuleData[]>;
+  initialVendorPackagesByVendorId?: Record<string, VendorPackageData[]>;
   initialQuoteRequestsByPlanId?: Record<string, QuoteRequestWithResponses[]>;
 };
 
@@ -227,6 +230,7 @@ export function EventPlanningWorkspace({
   vendors,
   reservations,
   initialVendorModulesByVendorId,
+  initialVendorPackagesByVendorId,
   initialQuoteRequestsByPlanId,
 }: Props) {
   const router = useRouter();
@@ -318,13 +322,20 @@ export function EventPlanningWorkspace({
   const [vendorModuleCache, setVendorModuleCache] = useState<Record<string, VendorServiceModuleData[]>>(
     () => initialVendorModulesByVendorId ?? {}
   );
+  const [vendorPackageCache, setVendorPackageCache] = useState<Record<string, VendorPackageData[]>>(
+    () => initialVendorPackagesByVendorId ?? {}
+  );
   const [quoteRequestsCache, setQuoteRequestsCache] = useState<Record<string, QuoteRequestWithResponses[]>>(
     () => initialQuoteRequestsByPlanId ?? {}
   );
   const [vendorModules, setVendorModules] = useState<VendorServiceModuleData[] | null>(
     () => (selectedVendorId ? initialVendorModulesByVendorId?.[selectedVendorId] ?? null : null)
   );
+  const [vendorPackages, setVendorPackages] = useState<VendorPackageData[] | null>(
+    () => (selectedVendorId ? initialVendorPackagesByVendorId?.[selectedVendorId] ?? null : null)
+  );
   const [vendorModuleError, setVendorModuleError] = useState(false);
+  const [vendorPackageError, setVendorPackageError] = useState(false);
   const [step4DashboardData, setStep4DashboardData] = useState<Step4CategoryStatusDTO[] | null>(null);
   const [isQuoteActionPending, setIsQuoteActionPending] = useState(false);
   const quoteActionLockedRef = useRef(false);
@@ -362,30 +373,61 @@ export function EventPlanningWorkspace({
   }, [pendingPlanDraft, plans]);
   // Load real VendorServiceModule records for the selected vendor
   useEffect(() => {
-    if (!selectedVendorId) { setVendorModules(null); setVendorModuleError(false); return; }
+    if (!selectedVendorId) {
+      setVendorModules(null);
+      setVendorPackages(null);
+      setVendorModuleError(false);
+      setVendorPackageError(false);
+      return;
+    }
     const cachedModules = vendorModuleCache[selectedVendorId];
+    const cachedPackages = vendorPackageCache[selectedVendorId];
     if (cachedModules) {
       setVendorModules(cachedModules);
       setVendorModuleError(false);
-      return;
+    } else {
+      setVendorModules(null);
+      setVendorModuleError(false);
+    }
+    if (cachedPackages) {
+      setVendorPackages(cachedPackages);
+      setVendorPackageError(false);
+    } else {
+      setVendorPackages(null);
+      setVendorPackageError(false);
     }
 
+    if (cachedModules && cachedPackages) return;
+
     let cancelled = false;
-    setVendorModules(null);
-    setVendorModuleError(false);
-    getVendorServiceModules(selectedVendorId, eventType).then((result) => {
-      if (cancelled) return;
-      if (result.success) {
-        setVendorModules(result.data);
-        setVendorModuleCache((current) => ({ ...current, [selectedVendorId]: result.data }));
-        setVendorModuleError(false);
-      } else {
-        setVendorModules([]);
-        setVendorModuleError(true);
-      }
-    });
+    if (!cachedModules) {
+      getVendorServiceModules(selectedVendorId, eventType).then((result) => {
+        if (cancelled) return;
+        if (result.success) {
+          setVendorModules(result.data);
+          setVendorModuleCache((current) => ({ ...current, [selectedVendorId]: result.data }));
+          setVendorModuleError(false);
+        } else {
+          setVendorModules([]);
+          setVendorModuleError(true);
+        }
+      });
+    }
+    if (!cachedPackages) {
+      getVendorPackages(selectedVendorId, eventType).then((result) => {
+        if (cancelled) return;
+        if (result.success) {
+          setVendorPackages(result.data);
+          setVendorPackageCache((current) => ({ ...current, [selectedVendorId]: result.data }));
+          setVendorPackageError(false);
+        } else {
+          setVendorPackages([]);
+          setVendorPackageError(true);
+        }
+      });
+    }
     return () => { cancelled = true; };
-  }, [selectedVendorId, eventType, vendorModuleCache]);
+  }, [selectedVendorId, eventType, vendorModuleCache, vendorPackageCache]);
 
   async function refreshQuoteRequests(planId: string) {
     const result = await getQuotesByPlan(planId);
@@ -813,6 +855,7 @@ export function EventPlanningWorkspace({
         vendorId: selectedVendorId,
         requirements: requestForm.notes.trim() || "서비스 견적 요청",
         selectedModuleIds,
+        selectedPackageId: basePackage?.id,
         guestCount,
         preferredDate: requestForm.serviceDate || undefined,
         budget: requestedBudget,
@@ -1488,7 +1531,7 @@ export function EventPlanningWorkspace({
                   />
 
                   {/* Module picker: real data → ModularQuoteBuilder, loading → skeleton, error → retry, fallback → old checklist */}
-                  {vendorModules === null ? (
+                  {vendorModules === null || vendorPackages === null ? (
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                       {Array.from({ length: 6 }).map((_, i) => (
                         <div key={i} className="animate-pulse rounded-xl border border-gray-100 p-3">
@@ -1497,7 +1540,7 @@ export function EventPlanningWorkspace({
                         </div>
                       ))}
                     </div>
-                  ) : vendorModuleError ? (
+                  ) : vendorModuleError || vendorPackageError ? (
                     <div className="rounded-2xl border border-dashed border-rose-200 bg-rose-50/50 px-4 py-6 text-center">
                       <p className="mb-2 text-sm font-semibold text-rose-700">서비스 목록을 불러오지 못했습니다</p>
                       <p className="mb-3 text-xs text-rose-600/70">네트워크 상태를 확인하고 다시 시도해주세요.</p>
@@ -1505,14 +1548,26 @@ export function EventPlanningWorkspace({
                         type="button"
                         onClick={() => {
                           setVendorModules(null);
+                          setVendorPackages(null);
                           setVendorModuleError(false);
-                          getVendorServiceModules(selectedVendorId, eventType).then((result) => {
-                            if (result.success) {
-                              setVendorModules(result.data);
-                              setVendorModuleCache((current) => ({ ...current, [selectedVendorId]: result.data }));
+                          setVendorPackageError(false);
+                          Promise.all([
+                            getVendorServiceModules(selectedVendorId, eventType),
+                            getVendorPackages(selectedVendorId, eventType)
+                          ]).then(([modulesResult, packagesResult]) => {
+                            if (modulesResult.success) {
+                              setVendorModules(modulesResult.data);
+                              setVendorModuleCache((current) => ({ ...current, [selectedVendorId]: modulesResult.data }));
                             } else {
                               setVendorModules([]);
                               setVendorModuleError(true);
+                            }
+                            if (packagesResult.success) {
+                              setVendorPackages(packagesResult.data);
+                              setVendorPackageCache((current) => ({ ...current, [selectedVendorId]: packagesResult.data }));
+                            } else {
+                              setVendorPackages([]);
+                              setVendorPackageError(true);
                             }
                           });
                         }}
@@ -1526,6 +1581,7 @@ export function EventPlanningWorkspace({
                       theme={eventType === "WEDDING" ? "wedding" : "funeral"}
                       guestCount={Math.max(1, Number.parseInt(requestForm.guestCount, 10) || 1)}
                       vendorModules={vendorModules}
+                      vendorPackages={vendorPackages}
                       isSubmitting={isQuoteActionPending}
                       isAlreadyRequested={selectedVendorRequestState?.isAlreadyRequested}
                       requestStatusLabel={selectedVendorRequestState?.label}

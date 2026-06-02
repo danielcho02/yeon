@@ -92,6 +92,11 @@ enum ModuleCategory {
   OBITUARY
 }
 
+enum VendorPackageModuleSelectionType {
+  INCLUDED
+  OPTIONAL
+}
+
 enum PostCategory {
   NOTICE
   STORY
@@ -137,6 +142,7 @@ model User {
   receivedInvitations     Invitation[]          @relation("InvitationRecipient")
   vendorServices          VendorService[]       @relation("VendorServices")
   vendorServiceModules    VendorServiceModule[] @relation("VendorServiceModules")
+  vendorPackages          VendorPackage[]       @relation("VendorPackages")
   quoteRequests           QuoteRequest[]        @relation("QuoteRequestVendor")
   quoteResponses          QuoteResponse[]       @relation("QuoteResponseVendor")
   notifications           Notification[]        @relation("UserNotifications")
@@ -354,16 +360,57 @@ model VendorServiceModule {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   vendor         User           @relation("VendorServiceModules", fields: [vendorId], references: [id], onDelete: Cascade)
+  packageItems   VendorPackageModule[]
 
   @@index([vendorId, category, isActive])
+}
+
+model VendorPackage {
+  id          String                @id @default(cuid())
+  vendorId    String
+  eventType   EventType
+  name        String
+  description String?
+  basePrice   Int
+  isActive    Boolean               @default(false)
+  sortOrder   Int                   @default(0)
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  vendor      User                  @relation("VendorPackages", fields: [vendorId], references: [id], onDelete: Cascade)
+  items       VendorPackageModule[]
+  quoteRequests QuoteRequest[]
+
+  @@index([vendorId, eventType, isActive])
+  @@index([vendorId, eventType, sortOrder])
+}
+
+model VendorPackageModule {
+  id                    String                           @id @default(cuid())
+  packageId             String
+  vendorServiceModuleId String
+  selectionType         VendorPackageModuleSelectionType
+  quantity              Int                              @default(1)
+  priceOverride         Int?
+  sortOrder             Int                              @default(0)
+  createdAt             DateTime                         @default(now())
+  updatedAt             DateTime                         @updatedAt
+  package               VendorPackage                    @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  vendorServiceModule   VendorServiceModule              @relation(fields: [vendorServiceModuleId], references: [id], onDelete: Cascade)
+
+  @@unique([packageId, vendorServiceModuleId])
+  @@index([packageId, selectionType])
+  @@index([vendorServiceModuleId])
 }
 
 model QuoteRequest {
   id              String          @id @default(cuid())
   planId          String
   vendorId        String
+  selectedPackageId String?
   requirements    String
   selectedModules Json?
+  selectedPackageSnapshot Json?
+  priceSnapshot   Json?
   preferredDate   DateTime?
   budget          Int?
   status          QuoteStatus     @default(PENDING)
@@ -371,6 +418,7 @@ model QuoteRequest {
   updatedAt       DateTime        @updatedAt
   plan            EventPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)
   vendor          User            @relation("QuoteRequestVendor", fields: [vendorId], references: [id], onDelete: Cascade)
+  selectedPackage VendorPackage?  @relation(fields: [selectedPackageId], references: [id], onDelete: SetNull)
   responses       QuoteResponse[]
   reservation     Reservation?
 

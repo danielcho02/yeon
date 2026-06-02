@@ -57,12 +57,69 @@ async function createVendorModules(
   return created;
 }
 
+async function createVendorPackages(
+  vendorId: string,
+  eventType: EventType,
+  modules: Array<{ id: string; name: string }>,
+  packages: Array<{
+    name: string;
+    description: string;
+    basePrice: number;
+    sortOrder: number;
+    included: string[];
+    optional?: string[];
+  }>
+) {
+  const moduleByName = new Map(modules.map((module) => [module.name, module]));
+
+  for (const pkg of packages) {
+    const created = await prisma.vendorPackage.create({
+      data: {
+        vendorId,
+        eventType,
+        name: pkg.name,
+        description: pkg.description,
+        basePrice: pkg.basePrice,
+        sortOrder: pkg.sortOrder,
+        isActive: true
+      }
+    });
+
+    const packageItems = [
+      ...pkg.included.map((name, index) => ({ name, selectionType: "INCLUDED" as const, sortOrder: index + 1 })),
+      ...(pkg.optional ?? []).map((name, index) => ({
+        name,
+        selectionType: "OPTIONAL" as const,
+        sortOrder: pkg.included.length + index + 1
+      }))
+    ];
+
+    for (const item of packageItems) {
+      const module = moduleByName.get(item.name);
+      if (!module) {
+        throw new Error(`Missing module for package ${pkg.name}: ${item.name}`);
+      }
+
+      await prisma.vendorPackageModule.create({
+        data: {
+          packageId: created.id,
+          vendorServiceModuleId: module.id,
+          selectionType: item.selectionType,
+          sortOrder: item.sortOrder
+        }
+      });
+    }
+  }
+}
+
 async function seedModularQuoteData() {
   await prisma.review.deleteMany();
   await prisma.transaction.deleteMany();
   await prisma.reservation.deleteMany();
   await prisma.quoteResponse.deleteMany();
   await prisma.quoteRequest.deleteMany();
+  await prisma.vendorPackageModule.deleteMany();
+  await prisma.vendorPackage.deleteMany();
   await prisma.vendorServiceModule.deleteMany();
 
   const venueVendor = await prisma.user.findUniqueOrThrow({
@@ -260,6 +317,60 @@ async function seedModularQuoteData() {
     }
   ]);
 
+  await createVendorPackages(venueVendor.id, EventType.WEDDING, venueModules, [
+    {
+      name: "Basic",
+      description: "가든 예식 공간과 핵심 진행 설비를 포함한 기본 패키지",
+      basePrice: 2_300_000,
+      sortOrder: 1,
+      included: ["가든 예식홀 대관", "신부 대기실", "음향·조명 패키지"],
+      optional: ["모바일 청첩장 기본형", "웰컴 사인보드 커스텀 제작"]
+    },
+    {
+      name: "Premium",
+      description: "기본 예식 구성에 플라워 연출과 식사 옵션을 더한 균형형 패키지",
+      basePrice: 3_100_000,
+      sortOrder: 2,
+      included: ["가든 예식홀 대관", "신부 대기실", "음향·조명 패키지", "플라워 버진로드"],
+      optional: ["하객 식사 1인", "모바일 청첩장 기본형", "야외 버진로드 런너 추가"]
+    },
+    {
+      name: "Full Care",
+      description: "공간, 연출, 안내물까지 한 번에 준비하는 풀 케어 패키지",
+      basePrice: 3_650_000,
+      sortOrder: 3,
+      included: ["가든 예식홀 대관", "신부 대기실", "음향·조명 패키지", "플라워 버진로드", "웰컴 사인보드 커스텀 제작"],
+      optional: ["하객 식사 1인", "모바일 청첩장 기본형", "야외 버진로드 런너 추가"]
+    }
+  ]);
+
+  await createVendorPackages(funeralVendor.id, EventType.FUNERAL, funeralModules, [
+    {
+      name: "Essential",
+      description: "빈소 운영과 기본 제단, 시내 운구를 갖춘 필수 의전 패키지",
+      basePrice: 1_680_000,
+      sortOrder: 1,
+      included: ["빈소 기본 3일", "기본 제단꽃 세트", "시내 운구"],
+      optional: ["추모 동선 안내 사인물"]
+    },
+    {
+      name: "Standard",
+      description: "필수 의전에 장례 지도사와 조문객 식사 선택을 더한 표준 패키지",
+      basePrice: 1_980_000,
+      sortOrder: 2,
+      included: ["빈소 기본 3일", "기본 제단꽃 세트", "시내 운구", "장례 지도사"],
+      optional: ["문상객 식사", "추모 동선 안내 사인물"]
+    },
+    {
+      name: "Dignified",
+      description: "가족 안내와 현장 동선까지 차분하게 정리하는 품격 의전 패키지",
+      basePrice: 2_120_000,
+      sortOrder: 3,
+      included: ["빈소 기본 3일", "기본 제단꽃 세트", "시내 운구", "장례 지도사", "추모 동선 안내 사인물"],
+      optional: ["문상객 식사"]
+    }
+  ]);
+
 }
 
 async function main() {
@@ -274,6 +385,8 @@ async function main() {
   await prisma.quoteResponse.deleteMany();
   await prisma.quoteRequest.deleteMany();
   await prisma.eventPlan.deleteMany();
+  await prisma.vendorPackageModule.deleteMany();
+  await prisma.vendorPackage.deleteMany();
   await prisma.vendorServiceOption.deleteMany();
   await prisma.vendorService.deleteMany();
   await prisma.vendorServiceModule.deleteMany();

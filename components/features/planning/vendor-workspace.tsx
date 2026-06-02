@@ -54,6 +54,24 @@ type ServiceRow = {
   isBaseIncluded: boolean;
 };
 
+type PackageRow = {
+  id: string;
+  vendorId: string;
+  eventType: string;
+  name: string;
+  description: string | null;
+  basePrice: number;
+  isActive: boolean;
+  sortOrder: number;
+  items: Array<{
+    id: string;
+    vendorServiceModuleId: string;
+    selectionType: "INCLUDED" | "OPTIONAL";
+    quantity: number;
+    priceOverride: number | null;
+  }>;
+};
+
 type InboxItem =
   | { type: "reservation"; id: string; label: string; eventPlanTitle: string; eventType?: string; requirements: string | null }
   | { type: "quoteRequest"; id: string; label: string; eventPlanTitle: string; eventType?: string; requirements: string | null };
@@ -67,6 +85,7 @@ type Props = {
   supportedEventTypes?: MvpQuoteEventType[];
   supportedServiceModules?: string[];
   vendorServices?: ServiceRow[];
+  vendorPackages?: PackageRow[];
   quoteRequests?: QuoteRequestForVendorDTO[];
 };
 
@@ -287,6 +306,7 @@ export function VendorWorkspace({
   supportedEventTypes,
   supportedServiceModules,
   vendorServices,
+  vendorPackages,
   quoteRequests
 }: Props) {
   const router = useRouter();
@@ -1462,6 +1482,7 @@ export function VendorWorkspace({
               supportedEventTypes={supportedEventTypes ?? []}
               supportedModules={supportedServiceModules ?? []}
               existingServices={vendorServices ?? []}
+              existingPackages={vendorPackages ?? []}
             />
           </div>
         </section>

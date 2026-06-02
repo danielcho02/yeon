@@ -31,6 +31,11 @@ import {
   vendorSupportsEventType
 } from "@/lib/step3.shared";
 import { getCatalogKeyForVendorModule } from "@/lib/vendor-service-modules";
+import {
+  buildVendorPackageQuoteSnapshots,
+  mapVendorPackageData,
+  vendorPackageInclude
+} from "@/lib/vendor-packages";
 
 import type { ActionResult } from "@/types/common";
 import type {
@@ -47,6 +52,7 @@ import type {
   Step4CategoryStatusDTO
 } from "@/types/quote";
 import type { VendorServiceModuleData } from "@/types/vendor-module";
+import type { VendorPackageData } from "@/types/vendor-package";
 
 import {
   mapQuoteRequest,
@@ -105,6 +111,7 @@ const createQuoteRequestSchema = z.object({
   vendorId: z.string().min(1),
   requirements: z.string().trim().min(1),
   requestMemo: z.string().trim().min(1).optional(),
+  selectedPackageId: z.string().min(1).optional(),
   selectedModuleIds: z.array(z.string().min(1)).min(1),
   guestCount: z.number().int().positive().optional(),
   preferredDate: z.string().trim().min(1).optional(),
@@ -144,7 +151,8 @@ function revalidateQuoteViews(planId?: string, vendorId?: string) {
 function calculateModulesTotal(modules: QuoteResponseModules) {
   return (
     modules.basePackage.price +
-    modules.includedModules.reduce((sum, module) => sum + module.price, 0)
+    modules.includedModules.reduce((sum, module) => sum + module.price, 0) +
+    modules.optionalModules.reduce((sum, module) => sum + module.price, 0)
   );
 }
 
@@ -397,12 +405,14 @@ export async function createQuoteRequest(
       },
       select: {
         id: true,
+        vendorId: true,
         name: true,
         category: true,
         price: true,
         pricingType: true,
         description: true,
         isBaseIncluded: true,
+        isActive: true,
         sortOrder: true
       },
       orderBy: [{ isBaseIncluded: "desc" }, { sortOrder: "asc" }]
@@ -426,15 +436,74 @@ export async function createQuoteRequest(
     const preferredDate = parseActionDate(parsed.data.preferredDate);
     const guestCount = parsed.data.guestCount ?? plan.guestTarget ?? 1;
     const budget = parsed.data.budget ?? plan.budget ?? null;
-    const quotedAmount = calculateRequestModuleTotal(modules, guestCount);
+    let selectedPackageId: string | null = null;
+    let selectedPackageSnapshot: Prisma.InputJsonValue | undefined;
+    let priceSnapshot: Prisma.InputJsonValue | undefined;
+    let quotedAmount = calculateRequestModuleTotal(modules, guestCount);
+
+    if (parsed.data.selectedPackageId) {
+      const selectedPackage = await prisma.vendorPackage.findFirst({
+        where: {
+          id: parsed.data.selectedPackageId,
+          vendorId: vendor.id,
+          eventType: plan.type,
+          isActive: true
+        },
+        include: vendorPackageInclude
+      });
+
+      if (!selectedPackage) {
+        return actionError("선택한 패키지가 유효하지 않습니다.", "INVALID_PACKAGE");
+      }
+
+      const selectedModuleIdSet = new Set(selectedModuleIds);
+      const includedModuleIds = selectedPackage.items
+        .filter((item) => item.selectionType === "INCLUDED")
+        .map((item) => item.vendorServiceModuleId);
+
+      if (includedModuleIds.length === 0) {
+        return actionError("선택한 패키지에 포함 항목이 없습니다.", "INVALID_PACKAGE");
+      }
+
+      if (includedModuleIds.some((moduleId) => !selectedModuleIdSet.has(moduleId))) {
+        return actionError("패키지 포함 항목이 견적 요청에서 누락되었습니다.", "INVALID_PACKAGE_MODULES");
+      }
+
+      if (
+        selectedPackage.items.some((item) =>
+          item.vendorServiceModule.vendorId !== vendor.id ||
+          !item.vendorServiceModule.isActive ||
+          !vendorServiceModuleCategoryMatchesEventType(plan.type, item.vendorServiceModule.category)
+        )
+      ) {
+        return actionError("선택한 패키지에 유효하지 않은 항목이 있습니다.", "INVALID_PACKAGE_MODULES");
+      }
+
+      const packageDto = mapVendorPackageData(selectedPackage);
+      const moduleDtos = modules.map(mapVendorServiceModuleData);
+      const snapshots = buildVendorPackageQuoteSnapshots({
+        package: packageDto,
+        selectedModuleIds,
+        allVendorModules: moduleDtos,
+        guestCount
+      });
+
+      selectedPackageId = selectedPackage.id;
+      selectedPackageSnapshot = snapshots.selectedPackageSnapshot as unknown as Prisma.InputJsonValue;
+      priceSnapshot = snapshots.priceSnapshot as unknown as Prisma.InputJsonValue;
+      quotedAmount = snapshots.priceSnapshot.estimatedTotal;
+    }
 
     const request = await prisma.$transaction(async (tx) => {
       const created = await tx.quoteRequest.create({
         data: {
           planId: plan.id,
           vendorId: vendor.id,
+          selectedPackageId,
           requirements: parsed.data.requirements,
           selectedModules: selectedModuleIds,
+          selectedPackageSnapshot,
+          priceSnapshot,
           preferredDate,
           budget,
           status: PrismaQuoteStatus.PENDING
@@ -450,6 +519,7 @@ export async function createQuoteRequest(
         metadata: {
           planId: plan.id,
           quoteRequestId: created.id,
+          selectedPackageId,
           selectedModuleIds,
           guestCount
         }
@@ -464,6 +534,7 @@ export async function createQuoteRequest(
         message: "일반 사용자가 업체에 견적 요청을 보냈습니다.",
         metadata: {
           eventType: plan.type,
+          selectedPackageId,
           selectedModuleIds,
           guestCount,
           budget: budget ?? 0,
@@ -1098,6 +1169,55 @@ export async function getVendorServiceModules(
     return actionSuccess(filteredModules.map(mapVendorServiceModuleData));
   } catch (error) {
     return actionError(getActionError(error), "GET_VENDOR_MODULES_FAILED");
+  }
+}
+
+export async function getVendorPackages(
+  vendorId: string,
+  eventType?: "WEDDING" | "FUNERAL"
+): Promise<ActionResult<VendorPackageData[]>> {
+  try {
+    await requireSessionUser();
+
+    if (!vendorId) {
+      return actionError("업체 ID가 필요합니다.", "VALIDATION_ERROR");
+    }
+
+    if (eventType && eventType !== "WEDDING" && eventType !== "FUNERAL") {
+      return actionError("행사 유형을 확인해 주세요.", "VALIDATION_ERROR");
+    }
+
+    const packages = await withPrismaRetry(async () => {
+      if (eventType) {
+        const vendor = await prisma.user.findFirst({
+          where: {
+            id: vendorId,
+            role: UserRole.VENDOR,
+            vendorApprovalStatus: VendorApprovalStatus.APPROVED,
+            isActive: true
+          },
+          select: { id: true, supportedEventTypes: true }
+        });
+
+        if (!vendor || !vendorSupportsEventType(vendor, eventType)) {
+          return [];
+        }
+      }
+
+      return prisma.vendorPackage.findMany({
+        where: {
+          vendorId,
+          isActive: true,
+          ...(eventType ? { eventType } : {})
+        },
+        include: vendorPackageInclude,
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }]
+      });
+    });
+
+    return actionSuccess(packages.map(mapVendorPackageData));
+  } catch (error) {
+    return actionError(getActionError(error), "GET_VENDOR_PACKAGES_FAILED");
   }
 }
 
