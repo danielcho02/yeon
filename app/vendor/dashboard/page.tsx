@@ -19,6 +19,7 @@ import { buildVendorDashboardReservationContract } from "@/lib/vendor-dashboard-
 import type { VendorDashboardReservationDTO } from "@/types/reservation";
 import type { QuoteRequestForVendorDTO, QuoteStatus } from "@/types/quote";
 import type { VendorServiceModuleData } from "@/types/vendor-module";
+import type { VendorPackagePriceSnapshot, VendorPackageSnapshot } from "@/types/vendor-package";
 import { VendorOnboardingForm } from "./onboarding-form";
 
 export default async function VendorDashboardPage() {
@@ -58,7 +59,9 @@ export default async function VendorDashboardPage() {
           quoteRequest: {
             select: {
               status: true,
-              requirements: true
+              requirements: true,
+              selectedPackageSnapshot: true,
+              priceSnapshot: true
             }
           },
           quoteResponse: {
@@ -219,6 +222,8 @@ export default async function VendorDashboardPage() {
     quoteRequestId: r.quoteRequestId,
     quoteResponseId: r.quoteResponseId,
     quoteRequestStatus: r.quoteRequest?.status ?? null,
+    selectedPackageSnapshot: (r.quoteRequest?.selectedPackageSnapshot as VendorPackageSnapshot | null) ?? null,
+    priceSnapshot: (r.quoteRequest?.priceSnapshot as VendorPackagePriceSnapshot | null) ?? null,
     selectedServiceOptions: r.selectedServiceOptions as ReservationItem["selectedServiceOptions"] ?? null,
     eventPlan: {
       id: r.eventPlan.id,
