@@ -38,6 +38,7 @@ import {
   getVendorPackages,
   getQuotesByPlan,
   getVendorServiceModules,
+  requestQuoteAdjustment,
   getStep4DashboardData,
 } from "@/app/actions/quote";
 import { ModularQuoteBuilder } from "./modular-quote-builder";
@@ -871,13 +872,14 @@ export function EventPlanningWorkspace({
     }
   }
 
-  async function handleAcceptQuote(quoteResponseId: string) {
+  async function handleAcceptQuote(quoteResponseId: string, quoteProposalRevisionId?: string) {
     if (quoteActionLockedRef.current) return;
     quoteActionLockedRef.current = true;
     setIsQuoteActionPending(true);
     try {
       const result = await acceptQuoteResponse({
         quoteResponseId,
+        quoteProposalRevisionId,
         reservedDate: requestForm.serviceDate || undefined,
       });
       if (!result.success) { showNotice("error", result.error); return; }
@@ -888,6 +890,34 @@ export function EventPlanningWorkspace({
       }
       if (plan?.id) await refreshQuoteRequests(plan.id);
       startTransition(() => router.refresh());
+    } finally {
+      setIsQuoteActionPending(false);
+      quoteActionLockedRef.current = false;
+    }
+  }
+
+  async function handleRequestQuoteAdjustment(
+    quoteResponseId: string,
+    plannerRequestedTotalPrice: number,
+    memo: string
+  ) {
+    if (quoteActionLockedRef.current) return { success: false, error: "이미 처리 중입니다." };
+    quoteActionLockedRef.current = true;
+    setIsQuoteActionPending(true);
+    try {
+      const result = await requestQuoteAdjustment({
+        quoteResponseId,
+        plannerRequestedTotalPrice,
+        memo
+      });
+      if (!result.success) {
+        showNotice("error", result.error);
+        return result;
+      }
+      showNotice("success", "조정 요청을 보냈습니다. 업체 수정 제안을 기다리는 중입니다.");
+      if (plan?.id) await refreshQuoteRequests(plan.id);
+      startTransition(() => router.refresh());
+      return result;
     } finally {
       setIsQuoteActionPending(false);
       quoteActionLockedRef.current = false;
@@ -1746,6 +1776,7 @@ export function EventPlanningWorkspace({
             totalCost={totalCost}
             isQuoteActionPending={isQuoteActionPending}
             handleAcceptQuote={handleAcceptQuote}
+            handleRequestQuoteAdjustment={handleRequestQuoteAdjustment}
             requestForm={requestForm}
             theme={theme}
             step4DashboardData={step4DashboardData}

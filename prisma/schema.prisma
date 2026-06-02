@@ -56,6 +56,13 @@ enum QuoteStatus {
   CANCELED
 }
 
+enum QuoteProposalRevisionStatus {
+  SUBMITTED
+  ADJUSTMENT_REQUESTED
+  REVISED
+  ACCEPTED
+}
+
 enum TransactionStatus {
   PENDING
   SUCCEEDED
@@ -145,6 +152,7 @@ model User {
   vendorPackages          VendorPackage[]       @relation("VendorPackages")
   quoteRequests           QuoteRequest[]        @relation("QuoteRequestVendor")
   quoteResponses          QuoteResponse[]       @relation("QuoteResponseVendor")
+  quoteProposalRevisions  QuoteProposalRevision[] @relation("QuoteProposalRevisionVendor")
   notifications           Notification[]        @relation("UserNotifications")
   activityLogs            ActivityLog[]         @relation("ActivityActor")
 
@@ -196,6 +204,7 @@ model Reservation {
   selectedServiceOptions  Json?
   quoteRequestId          String?           @unique
   quoteResponseId         String?           @unique
+  quoteProposalRevisionId String?           @unique
   vendorConfirmationDueAt DateTime?
   status                  ReservationStatus @default(PENDING)
   notes                   String?
@@ -205,6 +214,7 @@ model Reservation {
   vendor                  User              @relation("ReservationVendor", fields: [vendorId], references: [id])
   quoteRequest            QuoteRequest?     @relation(fields: [quoteRequestId], references: [id], onDelete: SetNull)
   quoteResponse           QuoteResponse?    @relation(fields: [quoteResponseId], references: [id], onDelete: SetNull)
+  quoteProposalRevision   QuoteProposalRevision? @relation(fields: [quoteProposalRevisionId], references: [id], onDelete: SetNull)
   transaction             Transaction?
   reviews                 Review[]          @relation("ReservationReviews")
 
@@ -420,6 +430,7 @@ model QuoteRequest {
   vendor          User            @relation("QuoteRequestVendor", fields: [vendorId], references: [id], onDelete: Cascade)
   selectedPackage VendorPackage?  @relation(fields: [selectedPackageId], references: [id], onDelete: SetNull)
   responses       QuoteResponse[]
+  proposalRevisions QuoteProposalRevision[]
   reservation     Reservation?
 
   @@index([planId, status])
@@ -439,10 +450,34 @@ model QuoteResponse {
   request     QuoteRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   vendor      User         @relation("QuoteResponseVendor", fields: [vendorId], references: [id], onDelete: Cascade)
   reservation Reservation?
+  revisions   QuoteProposalRevision[]
 
   @@unique([requestId, vendorId])
   @@index([requestId])
   @@index([vendorId])
+}
+
+model QuoteProposalRevision {
+  id                    String                      @id @default(cuid())
+  quoteResponseId       String
+  requestId             String
+  vendorId              String
+  version               Int
+  totalPrice            Int
+  memo                  String?
+  adjustmentRequestMemo String?
+  plannerRequestedTotalPrice Int?
+  status                QuoteProposalRevisionStatus @default(SUBMITTED)
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  quoteResponse         QuoteResponse               @relation(fields: [quoteResponseId], references: [id], onDelete: Cascade)
+  request               QuoteRequest                @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  vendor                User                        @relation("QuoteProposalRevisionVendor", fields: [vendorId], references: [id], onDelete: Cascade)
+  reservation           Reservation?
+
+  @@unique([quoteResponseId, version])
+  @@index([requestId, createdAt])
+  @@index([vendorId, status])
 }
 
 model VendorService {

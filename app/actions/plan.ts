@@ -6,6 +6,7 @@ import { z } from "zod";
 import { EventStatus, EventType as PrismaEventType, UserRole } from "@/generated/prisma/client";
 import { actionError, actionSuccess, getActionError } from "@/lib/errors";
 import { generateMockAIRecommendation } from "@/lib/mocks/ai-recommendation";
+import { resolvePlanNextAction, resolveQuoteRequestNextAction } from "@/lib/plan-dashboard-status";
 import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { buildEventPlanSlug } from "@/lib/step3.server";
 
@@ -13,13 +14,11 @@ import type { ActionResult } from "@/types/common";
 import type {
   CreatePlanPayload,
   PlanDashboardData,
-  PlanDashboardNextAction,
   PlanQuoteStatusData,
   EventPlanData,
   EventPlanWithDetails,
   UpdatePlanPayload
 } from "@/types/plan";
-import type { QuoteStatus } from "@/types/quote";
 import type { ReservationStatus } from "@/types/reservation";
 
 import {
@@ -61,34 +60,6 @@ function revalidatePlanViews(id?: string) {
   revalidatePath("/planner");
   revalidatePath("/planner/wedding");
   revalidatePath("/planner/funeral");
-}
-
-function getQuoteRequestNextAction(
-  status: QuoteStatus,
-  reservationStatus: ReservationStatus | null,
-  hasResponse: boolean
-): PlanDashboardNextAction {
-  if (status === "ACCEPTED") {
-    if (reservationStatus === "CONFIRMED") return "confirmed";
-    return "reservation_pending";
-  }
-  if (status === "RESPONDED" && hasResponse) return "accept_quote";
-  if (status === "PENDING") return "waiting_for_vendor";
-  if (reservationStatus === "CONFIRMED") return "confirmed";
-  return "canceled";
-}
-
-function getPlanNextAction(items: PlanQuoteStatusData[]): PlanDashboardNextAction {
-  if (items.some((item) => item.nextAction === "confirmed")) return "confirmed";
-  if (items.some((item) => item.nextAction === "reservation_pending")) {
-    return "reservation_pending";
-  }
-  if (items.some((item) => item.status === "RESPONDED" && item.latestResponse)) {
-    return "compare_quotes";
-  }
-  if (items.some((item) => item.status === "PENDING")) return "waiting_for_vendor";
-  if (items.length === 0) return "create_quote_request";
-  return "canceled";
 }
 
 export async function createPlan(
@@ -192,7 +163,8 @@ export async function getPlanById(
           include: {
             responses: {
               include: {
-                vendor: true
+                vendor: true,
+                revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
               },
               orderBy: { createdAt: "desc" }
             }
@@ -202,9 +174,11 @@ export async function getPlanById(
         reservations: {
           include: {
             vendor: true,
+            quoteProposalRevision: true,
             quoteResponse: {
               include: {
-                vendor: true
+                vendor: true,
+                revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
               }
             }
           },
@@ -256,9 +230,11 @@ export async function getPlansWithQuoteStatus(): Promise<ActionResult<PlanDashbo
             reservation: {
               include: {
                 vendor: true,
+                quoteProposalRevision: true,
                 quoteResponse: {
                   include: {
-                    vendor: true
+                    vendor: true,
+                    revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
                   }
                 }
               }
@@ -266,12 +242,15 @@ export async function getPlansWithQuoteStatus(): Promise<ActionResult<PlanDashbo
             responses: {
               include: {
                 vendor: true,
+                revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] },
                 reservation: {
                   include: {
                     vendor: true,
+                    quoteProposalRevision: true,
                     quoteResponse: {
                       include: {
-                        vendor: true
+                        vendor: true,
+                        revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
                       }
                     }
                   }
@@ -285,9 +264,11 @@ export async function getPlansWithQuoteStatus(): Promise<ActionResult<PlanDashbo
         reservations: {
           include: {
             vendor: true,
+            quoteProposalRevision: true,
             quoteResponse: {
               include: {
-                vendor: true
+                vendor: true,
+                revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
               }
             }
           },
@@ -301,6 +282,7 @@ export async function getPlansWithQuoteStatus(): Promise<ActionResult<PlanDashbo
       plans.map((plan) => {
         const quoteRequests = plan.quoteRequests.map((request): PlanQuoteStatusData => {
           const latestResponse = request.responses[0] ?? null;
+          const mappedLatestResponse = latestResponse ? mapQuoteResponse(latestResponse) : null;
           const responseIds = new Set(request.responses.map((response) => response.id));
           const linkedReservation =
             request.responses.find((response) => response.reservation)?.reservation ??
@@ -322,14 +304,15 @@ export async function getPlansWithQuoteStatus(): Promise<ActionResult<PlanDashbo
           return {
             request: mapQuoteRequest(request),
             vendor: mapVendorProfile(request.vendor),
-            latestResponse: latestResponse ? mapQuoteResponse(latestResponse) : null,
+            latestResponse: mappedLatestResponse,
             reservation: visibleReservation ? mapReservation(visibleReservation) : null,
             status,
-            nextAction: getQuoteRequestNextAction(
-              status,
+            nextAction: resolveQuoteRequestNextAction({
+              quoteStatus: status,
               reservationStatus,
-              latestResponse !== null
-            )
+              currentRevisionStatus: mappedLatestResponse?.currentRevision?.status ?? null,
+              hasResponse: latestResponse !== null
+            })
           };
         });
 
@@ -353,7 +336,7 @@ export async function getPlansWithQuoteStatus(): Promise<ActionResult<PlanDashbo
             acceptedQuoteResponseId:
               acceptedQuote?.latestResponse?.id ?? acceptedQuote?.reservation?.quoteResponseId ?? null,
             reservationId: acceptedReservation?.id ?? null,
-            nextAction: getPlanNextAction(quoteRequests)
+            nextAction: resolvePlanNextAction(quoteRequests)
           }
         };
       })

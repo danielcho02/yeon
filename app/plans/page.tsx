@@ -63,6 +63,32 @@ function getNextActionMeta(nextAction: PlanDashboardNextAction, eventType: strin
         ctaVariant: isWedding ? "weddingWarm" : "funeralPrimary",
         Icon: Scale,
       } as const;
+    case "adjustment_requested":
+      return {
+        label: "조정 요청 중",
+        description: isWedding
+          ? "조정 요청을 보냈습니다. 업체 수정 제안을 기다리는 중입니다."
+          : "조정 요청을 전달했습니다. 의전 파트너사의 수정 제안을 대기하고 있습니다.",
+        badge: isWedding
+          ? "bg-[#faf8f4] text-[#8c8275] border border-[#e5e2da]"
+          : "bg-[#f4f5f8] text-[#475569] border border-[#d8dee8]",
+        cta: "업체 수정 제안 대기",
+        ctaVariant: isWedding ? "weddingOutline" : "funeralOutline",
+        Icon: Clock,
+      } as const;
+    case "revised_quote_received":
+      return {
+        label: "수정 제안 도착",
+        description: isWedding
+          ? "업체가 수정 제안을 보냈습니다. 최종 금액과 메모를 확인해 보세요."
+          : "의전 파트너사의 수정 제안이 도착했습니다. 최종 내용을 확인해 보세요.",
+        badge: isWedding
+          ? "bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/60"
+          : "bg-[#eef2f6] text-[#2c3455] border border-[#cbd3e0]",
+        cta: "수정 제안 확인하기",
+        ctaVariant: isWedding ? "weddingWarm" : "funeralPrimary",
+        Icon: Scale,
+      } as const;
     case "reservation_pending":
       return {
         label: "최종 승인 대기",
@@ -116,6 +142,8 @@ function getPlannerStep(nextAction: PlanDashboardNextAction) {
   switch (nextAction) {
     case "compare_quotes":
     case "accept_quote":
+    case "adjustment_requested":
+    case "revised_quote_received":
     case "reservation_pending":
     case "confirmed":
       return 4;

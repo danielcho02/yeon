@@ -1,7 +1,7 @@
 # yeON PM Development Roadmap
 
-> Last updated: 2026-06-02
-> Current branch: `codex/package-proposal-comparison`
+> Last updated: 2026-06-03
+> Current branch: `codex/proposal-adjustment-flow`
 
 ---
 
@@ -17,20 +17,25 @@ yeON currently supports the core demo lifecycle for wedding/funeral planning:
 - Vendor confirms the accepted reservation from the final confirmation panel.
 - Reservation(CONFIRMED) is visible to planner and vendor.
 - Package-backed requests preserve package snapshot, price snapshot, selected package options, vendor-specific add-ons, final proposal total, and proposal memo through the accepted/confirmed reservation surfaces.
+- Planner can request one simple proposal adjustment with a target total and memo before accepting; vendor can accept that target or submit a different revised proposal total/memo without creating a Reservation.
 
 ---
 
 ## Current Branch Scope
 
-`codex/package-proposal-comparison` is scoped to package proposal comparison and reservation continuity:
+`codex/proposal-adjustment-flow` is scoped to U09 simple proposal adjustment:
 
-- Planner Step 4 compares package request estimate against vendor final proposal total.
-- Planner Step 4 keeps package/proposal context visible before accept, after accept, and after confirm.
-- Vendor proposal-writing UI shows original package estimate before final total submission.
-- Vendor final confirmation and confirmed reservation panels show accepted package/proposal context.
-- Existing JSON snapshot fields are reused; no Prisma schema changes are included.
+- Planner Step 4 adds `제안 수락` and `조정 요청` choices after a vendor proposal arrives.
+- Planner Step 4 keeps the adjustment waiting state visible, separates proposal summary/revision history/reservation progress into internal panels, and renders revision history directly in the `조율 내역` panel.
+- Planner adjustment requests store a target total and memo and create no Reservation.
+- Vendor dashboard writes initial proposals only from `새 요청` pending quote requests; `견적 응답` is limited to state summaries, planner adjustment detail, target acceptance, and alternate revised proposal actions.
+- Vendor dashboard shows the planner adjustment memo, requested total, previous proposal, difference, and package estimate before accepting the requested total or submitting a different revised proposal; submitted/revised quotes then move to a read-only planner-acceptance waiting state.
+- Vendor final confirmation and confirmed reservation panels are separated: final approval lives in pending confirmation card footers, while confirmed reservations stay compact with optional collapsed package context.
+- Revised proposal acceptance creates Reservation(PENDING) using the accepted revision amount.
+- Package snapshots and reservation continuity remain preserved through existing QuoteRequest JSON snapshots.
+- Wedding/funeral event-date domain modeling is deferred to a separate branch.
 
-Do not expand this branch into negotiation, broad visual redesign, notification center work, or account/profile management.
+Do not expand this branch into real-time chat, complex negotiation threads, broad visual redesign, notification center work, or account/profile management.
 
 ---
 
@@ -48,19 +53,15 @@ These are polish items unless they block a core use case:
 
 ## Next Development Priorities
 
-1. **U09 proposal adjustment / simple revision request**
-   - Let planner request a simple adjustment after receiving a proposal.
-   - Keep this as a small revision loop, not multi-version negotiation.
-
-2. **U06 reservation change/cancel flow**
+1. **U06 reservation change/cancel flow**
    - Clarify planner/vendor change and cancellation responsibilities after Reservation(PENDING/CONFIRMED).
    - Preserve workflow history and user-facing status copy.
 
-3. **U08 mobile invitation/obituary prototype**
+2. **U08 mobile invitation/obituary prototype**
    - Add a minimal mobile-first shareable invitation/obituary prototype.
    - Keep it scoped to MVP publishing and viewing.
 
-4. **U07 event money ledger / settlement**
+3. **U07 event money ledger / settlement**
    - Track event-related money entries and basic settlement summaries.
    - Avoid payment processing until the ledger use case is validated.
 

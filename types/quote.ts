@@ -6,6 +6,11 @@ import type { VendorPackagePriceSnapshot, VendorPackageSnapshot } from "./vendor
 export type QuoteStatus = "PENDING" | "RESPONDED" | "ACCEPTED" | "CANCELED";
 export type QuoteRequestStatus = QuoteStatus;
 export type QuoteResponseStatus = "SUBMITTED" | "ACCEPTED" | "NOT_SELECTED";
+export type QuoteProposalRevisionStatus =
+  | "SUBMITTED"
+  | "ADJUSTMENT_REQUESTED"
+  | "REVISED"
+  | "ACCEPTED";
 
 export interface BasePackage {
   name: string;
@@ -47,6 +52,22 @@ export interface QuoteResponseData {
   responseMessage: string | null;
   createdAt: string;
   vendor?: VendorProfileData;
+  revisions: QuoteProposalRevisionData[];
+  currentRevision: QuoteProposalRevisionData | null;
+}
+
+export interface QuoteProposalRevisionData {
+  id: string;
+  quoteResponseId: string;
+  requestId: string;
+  vendorId: string;
+  version: number;
+  totalPrice: number;
+  memo: string | null;
+  adjustmentRequestMemo: string | null;
+  plannerRequestedTotalPrice: number | null;
+  status: QuoteProposalRevisionStatus;
+  createdAt: string;
 }
 
 export interface QuoteRequestPlanSummaryDTO {
@@ -90,7 +111,20 @@ export interface SubmitQuoteResponsePayload {
 
 export interface AcceptQuoteResponsePayload {
   quoteResponseId: string;
+  quoteProposalRevisionId?: string;
   reservedDate?: string;
+}
+
+export interface RequestQuoteAdjustmentPayload {
+  quoteResponseId: string;
+  plannerRequestedTotalPrice: number;
+  memo: string;
+}
+
+export interface SubmitQuoteRevisionPayload {
+  quoteResponseId: string;
+  totalPrice: number;
+  memo?: string;
 }
 
 export interface AcceptQuoteResult {
@@ -119,6 +153,8 @@ export interface Step4CategoryStatusDTO {
     | "NOT_REQUESTED"
     | "REQUESTED"
     | "RESPONDED"
+    | "ADJUSTMENT_REQUESTED"
+    | "REVISED"
     | "ACCEPTED_WAITING_VENDOR"
     | "CONFIRMED";
   vendorSummaries: Array<{
