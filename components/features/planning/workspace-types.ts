@@ -45,6 +45,24 @@ export type VendorOption = {
   services?: VendorServiceOption[];
 };
 
+export type VendorPackageOption = {
+  id: string;
+  vendorId: string;
+  eventType: string;
+  name: string;
+  description: string | null;
+  basePrice: number;
+  isActive: boolean;
+  sortOrder: number;
+  items: Array<{
+    id: string;
+    vendorServiceModuleId: string;
+    selectionType: "INCLUDED" | "OPTIONAL";
+    quantity: number;
+    priceOverride: number | null;
+  }>;
+};
+
 export type ReservationItem = {
   id: string;
   serviceName: string;

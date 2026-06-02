@@ -13,9 +13,12 @@ import {
 } from "@/lib/step3.shared";
 import {
   addCustomItem,
+  createVendorPackage,
   deleteCustomItem,
   setStandardItemPrice,
-  toggleVendorService
+  toggleVendorPackage,
+  toggleVendorService,
+  updateVendorPackage
 } from "../actions";
 
 type ServiceRow = {
@@ -32,7 +35,25 @@ type ServiceRow = {
   isBaseIncluded: boolean;
 };
 
-type ManagerView = "current" | "catalog" | "custom";
+type PackageRow = {
+  id: string;
+  vendorId: string;
+  eventType: string;
+  name: string;
+  description: string | null;
+  basePrice: number;
+  isActive: boolean;
+  sortOrder: number;
+  items: Array<{
+    id: string;
+    vendorServiceModuleId: string;
+    selectionType: "INCLUDED" | "OPTIONAL";
+    quantity: number;
+    priceOverride: number | null;
+  }>;
+};
+
+type ManagerView = "current" | "packages" | "catalog" | "custom";
 
 const managerViews: Array<{
   key: ManagerView;
@@ -40,6 +61,7 @@ const managerViews: Array<{
   description: string;
 }> = [
   { key: "current", label: "현재 구성", description: "플래너에게 보이는 활성 서비스" },
+  { key: "packages", label: "패키지 관리", description: "플래너가 선택할 실제 패키지" },
   { key: "catalog", label: "표준 항목 불러오기", description: "표준 카탈로그 항목 등록" },
   { key: "custom", label: "업체 전용 항목", description: "특화 옵션 추가 및 관리" }
 ];
@@ -541,14 +563,202 @@ function VendorSpecificPanel({
   );
 }
 
+function PackageModuleChecklist({
+  services,
+  packageItems,
+  mode
+}: {
+  services: ServiceRow[];
+  packageItems: PackageRow["items"];
+  mode: "included" | "optional";
+}) {
+  const selected = new Set(
+    packageItems
+      .filter((item) => item.selectionType === (mode === "included" ? "INCLUDED" : "OPTIONAL"))
+      .map((item) => item.vendorServiceModuleId)
+  );
+
+  return (
+    <div className="grid gap-1.5">
+      {services.map((service) => (
+        <label
+          key={`${mode}-${service.id}`}
+          className="flex items-center justify-between gap-2 rounded-xl border border-border/40 bg-white px-3 py-2 text-xs"
+        >
+          <span className="min-w-0">
+            <span className="block truncate font-semibold text-foreground">{service.name}</span>
+            <span className="text-[10px] text-muted-foreground">{formatServicePrice(service)}</span>
+          </span>
+          <input
+            type="checkbox"
+            name={mode === "included" ? "includedModuleIds" : "optionalModuleIds"}
+            value={service.id}
+            defaultChecked={selected.has(service.id)}
+            className="h-4 w-4 shrink-0 rounded border-input accent-primary"
+          />
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function PackageManagementPanel({
+  packages,
+  services,
+  eventType
+}: {
+  packages: PackageRow[];
+  services: ServiceRow[];
+  eventType: MvpQuoteEventType;
+}) {
+  const activeServices = services.filter((service) => service.isActive);
+
+  return (
+    <div className="space-y-4">
+      <form action={createVendorPackage} className="rounded-2xl border border-primary/20 bg-primary/3 p-4">
+        <input type="hidden" name="eventType" value={eventType} />
+        <SectionHeading
+          title="새 패키지 만들기"
+          description="패키지 셸을 만든 뒤 아래 목록에서 포함/선택 항목을 지정합니다."
+        />
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_8rem_6rem_auto]">
+          <input
+            name="name"
+            required
+            placeholder="패키지명"
+            className="h-10 rounded-xl border border-input bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          <input
+            name="basePrice"
+            required
+            type="number"
+            min={1}
+            placeholder="기본가"
+            className={priceInputClass}
+          />
+          <input
+            name="sortOrder"
+            type="number"
+            min={0}
+            placeholder="순서"
+            className="h-10 rounded-xl border border-input bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          <button
+            type="submit"
+            className={`${actionButtonClass} h-10 border-primary bg-primary text-primary-foreground hover:bg-primary/90`}
+          >
+            생성
+          </button>
+          <textarea
+            name="description"
+            rows={2}
+            placeholder="패키지 설명"
+            className="resize-none rounded-xl border border-input bg-white px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring md:col-span-4"
+          />
+        </div>
+      </form>
+
+      {packages.length === 0 ? (
+        <EmptyPanel>아직 등록된 패키지가 없습니다. 첫 패키지를 만든 뒤 포함 항목을 저장해 주세요.</EmptyPanel>
+      ) : (
+        <div className="grid gap-4">
+          {packages.map((pkg) => (
+            <form key={pkg.id} action={updateVendorPackage} className="rounded-2xl border border-border/60 bg-white/80 p-4">
+              <input type="hidden" name="packageId" value={pkg.id} />
+              <input type="hidden" name="eventType" value={eventType} />
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Badge tone={pkg.isActive ? "success" : "muted"}>{pkg.isActive ? "활성" : "비활성"}</Badge>
+                    <Badge>{pkg.items.filter((item) => item.selectionType === "INCLUDED").length}개 포함</Badge>
+                    <Badge>{pkg.items.filter((item) => item.selectionType === "OPTIONAL").length}개 선택</Badge>
+                  </div>
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    활성 패키지만 플래너 Step 3에 노출됩니다.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className={`${actionButtonClass} border-primary/30 bg-primary/5 text-primary hover:bg-primary/10`}
+                  >
+                    저장
+                  </button>
+                  <button
+                    formAction={toggleVendorPackage.bind(null, pkg.id, !pkg.isActive)}
+                    className={`${actionButtonClass} border-border/60 bg-white text-muted-foreground hover:bg-muted/30`}
+                  >
+                    {pkg.isActive ? "끄기" : "활성화"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_8rem_6rem]">
+                <input
+                  name="name"
+                  required
+                  defaultValue={pkg.name}
+                  className="h-10 rounded-xl border border-input bg-white px-3 text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                <input
+                  name="basePrice"
+                  required
+                  type="number"
+                  min={1}
+                  defaultValue={pkg.basePrice}
+                  className={priceInputClass}
+                />
+                <input
+                  name="sortOrder"
+                  type="number"
+                  min={0}
+                  defaultValue={pkg.sortOrder}
+                  className="h-10 rounded-xl border border-input bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                <textarea
+                  name="description"
+                  rows={2}
+                  defaultValue={pkg.description ?? ""}
+                  className="resize-none rounded-xl border border-input bg-white px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring md:col-span-3"
+                />
+              </div>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <section className="rounded-2xl border border-border/40 bg-muted/10 p-3">
+                  <SectionHeading
+                    title="포함 항목"
+                    description="패키지 기본가에 포함되어 플래너에게 체크된 상태로 보입니다."
+                    count={pkg.items.filter((item) => item.selectionType === "INCLUDED").length}
+                  />
+                  <PackageModuleChecklist services={activeServices} packageItems={pkg.items} mode="included" />
+                </section>
+                <section className="rounded-2xl border border-border/40 bg-muted/10 p-3">
+                  <SectionHeading
+                    title="선택 추가 항목"
+                    description="패키지 선택 후 플래너가 추가로 고를 수 있는 옵션입니다."
+                    count={pkg.items.filter((item) => item.selectionType === "OPTIONAL").length}
+                  />
+                  <PackageModuleChecklist services={activeServices} packageItems={pkg.items} mode="optional" />
+                </section>
+              </div>
+            </form>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ServiceManager({
   supportedEventTypes,
   supportedModules,
-  existingServices
+  existingServices,
+  existingPackages = []
 }: {
   supportedEventTypes: MvpQuoteEventType[];
   supportedModules: string[];
   existingServices: ServiceRow[];
+  existingPackages?: PackageRow[];
 }) {
   const firstTab = supportedEventTypes[0] ?? "WEDDING";
   const [activeTab, setActiveTab] = useState<MvpQuoteEventType>(firstTab);
@@ -558,6 +768,7 @@ export function ServiceManager({
     (module) => getQuoteServiceModuleEventType(module) === activeTab
   );
   const tabServices = existingServices.filter((service) => service.eventType === activeTab);
+  const tabPackages = existingPackages.filter((pkg) => pkg.eventType === activeTab);
   const baseIncludedServices = tabServices.filter((service) => service.isActive && service.isBaseIncluded);
   const optionalStandardServices = tabServices.filter(
     (service) => service.isActive && !service.isBaseIncluded && service.catalogKey !== null
@@ -603,7 +814,7 @@ export function ServiceManager({
         </span>
       )}
 
-      <div className="grid gap-2 rounded-2xl border border-border/60 bg-muted/10 p-1.5 md:grid-cols-3">
+      <div className="grid gap-2 rounded-2xl border border-border/60 bg-muted/10 p-1.5 md:grid-cols-4">
         {managerViews.map((view) => {
           const isActive = activeView === view.key;
           return (
@@ -634,6 +845,12 @@ export function ServiceManager({
           optionalStandardServices={optionalStandardServices}
           vendorSpecificServices={vendorSpecificServices}
           inactiveServices={inactiveServices}
+        />
+      ) : activeView === "packages" ? (
+        <PackageManagementPanel
+          packages={tabPackages}
+          services={tabServices}
+          eventType={activeTab}
         />
       ) : activeView === "catalog" ? (
         <StandardImportPanel

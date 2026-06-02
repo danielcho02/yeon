@@ -12,6 +12,7 @@ import type {
   QuoteResponseModules,
   QuoteStatus
 } from "@/types/quote";
+import type { VendorPackagePriceSnapshot, VendorPackageSnapshot } from "@/types/vendor-package";
 import type { ReservationData, ReservationStatus } from "@/types/reservation";
 import type { TransactionData, TransactionType } from "@/types/transaction";
 import type { VendorProfileData } from "@/types/user";
@@ -60,8 +61,11 @@ type QuoteRequestLike = {
   id: string;
   planId: string;
   vendorId: string;
+  selectedPackageId?: string | null;
   requirements: string;
   selectedModules: Prisma.JsonValue | null;
+  selectedPackageSnapshot?: Prisma.JsonValue | null;
+  priceSnapshot?: Prisma.JsonValue | null;
   preferredDate: Date | null;
   budget: number | null;
   status: string;
@@ -258,6 +262,9 @@ export function mapQuoteRequest(request: QuoteRequestLike): QuoteRequestData {
     vendorId: request.vendorId,
     requirements: request.requirements,
     requestMemo: request.requirements,
+    selectedPackageId: request.selectedPackageId ?? null,
+    selectedPackageSnapshot: request.selectedPackageSnapshot as unknown as VendorPackageSnapshot ?? null,
+    priceSnapshot: request.priceSnapshot as unknown as VendorPackagePriceSnapshot ?? null,
     selectedModules: stringArrayFromJson(request.selectedModules),
     preferredDate: request.preferredDate?.toISOString() ?? null,
     budget: request.budget,

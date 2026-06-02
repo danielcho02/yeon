@@ -1,6 +1,7 @@
 import type { VendorProfileData } from "./user";
 import type { ReservationData } from "./reservation";
 import type { QuoteModule, VendorServiceModuleData } from "./vendor-module";
+import type { VendorPackagePriceSnapshot, VendorPackageSnapshot } from "./vendor-package";
 
 export type QuoteStatus = "PENDING" | "RESPONDED" | "ACCEPTED" | "CANCELED";
 export type QuoteRequestStatus = QuoteStatus;
@@ -25,6 +26,9 @@ export interface QuoteRequestData {
   vendorId: string;
   requirements: string;
   requestMemo: string;
+  selectedPackageId?: string | null;
+  selectedPackageSnapshot?: VendorPackageSnapshot | null;
+  priceSnapshot?: VendorPackagePriceSnapshot | null;
   selectedModules: string[];
   preferredDate: string | null;
   budget: number | null;
@@ -68,6 +72,7 @@ export interface CreateQuoteRequestPayload {
   vendorId: string;
   requirements: string;
   requestMemo?: string;
+  selectedPackageId?: string;
   selectedModuleIds: string[];
   guestCount?: number;
   preferredDate?: string;
@@ -144,4 +149,3 @@ export interface Step3PreparationGroupDTO {
   optionalModuleIds: string[];
   defaultSelectedModuleIds: string[];
 }
-

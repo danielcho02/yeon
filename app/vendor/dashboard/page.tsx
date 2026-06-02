@@ -29,7 +29,7 @@ export default async function VendorDashboardPage() {
 
   const vendorId = session.user.id;
 
-  const [vendor, rawReservations, vendorServiceModules, rawQuoteRequests] = await withPrismaRetry(() =>
+  const [vendor, rawReservations, vendorServiceModules, vendorPackages, rawQuoteRequests] = await withPrismaRetry(() =>
     Promise.all([
       prisma.user.findUnique({
         where: { id: vendorId },
@@ -104,6 +104,30 @@ export default async function VendorDashboardPage() {
           sortOrder: true
         },
         orderBy: [{ category: "asc" }, { sortOrder: "asc" }]
+      }),
+      prisma.vendorPackage.findMany({
+        where: { vendorId },
+        select: {
+          id: true,
+          vendorId: true,
+          eventType: true,
+          name: true,
+          description: true,
+          basePrice: true,
+          isActive: true,
+          sortOrder: true,
+          items: {
+            select: {
+              id: true,
+              vendorServiceModuleId: true,
+              selectionType: true,
+              quantity: true,
+              priceOverride: true
+            },
+            orderBy: [{ selectionType: "asc" as const }, { sortOrder: "asc" as const }]
+          }
+        },
+        orderBy: [{ eventType: "asc" as const }, { sortOrder: "asc" as const }]
       }),
       prisma.quoteRequest.findMany({
         where: {
@@ -251,12 +275,15 @@ export default async function VendorDashboardPage() {
   );
 
   const quoteRequestsForVendor: QuoteRequestForVendorDTO[] = rawQuoteRequests.map((qr) => ({
-    id: qr.id,
-    planId: qr.planId,
-    vendorId: qr.vendorId,
-    requirements: qr.requirements,
-    requestMemo: qr.requirements,
-    selectedModules: Array.isArray(qr.selectedModules) ? qr.selectedModules as string[] : [],
+          id: qr.id,
+          planId: qr.planId,
+          vendorId: qr.vendorId,
+          requirements: qr.requirements,
+          requestMemo: qr.requirements,
+          selectedPackageId: qr.selectedPackageId,
+          selectedPackageSnapshot: qr.selectedPackageSnapshot as import("@/types/vendor-package").VendorPackageSnapshot | null,
+          priceSnapshot: qr.priceSnapshot as import("@/types/vendor-package").VendorPackagePriceSnapshot | null,
+          selectedModules: Array.isArray(qr.selectedModules) ? qr.selectedModules as string[] : [],
     selectedModuleDetails: Array.isArray(qr.selectedModules)
       ? qr.selectedModules
           .filter((id): id is string => typeof id === "string")
@@ -314,6 +341,23 @@ export default async function VendorDashboardPage() {
           supportedEventTypes={supportedEventTypes}
           supportedServiceModules={supportedServiceModules}
           vendorServices={vendorServices}
+          vendorPackages={vendorPackages.map((pkg) => ({
+            id: pkg.id,
+            vendorId: pkg.vendorId,
+            eventType: pkg.eventType,
+            name: pkg.name,
+            description: pkg.description,
+            basePrice: pkg.basePrice,
+            isActive: pkg.isActive,
+            sortOrder: pkg.sortOrder,
+            items: pkg.items.map((item) => ({
+              id: item.id,
+              vendorServiceModuleId: item.vendorServiceModuleId,
+              selectionType: item.selectionType as "INCLUDED" | "OPTIONAL",
+              quantity: item.quantity,
+              priceOverride: item.priceOverride
+            }))
+          }))}
           quoteRequests={quoteRequestsForVendor}
         />
 
