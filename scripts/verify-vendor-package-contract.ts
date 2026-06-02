@@ -21,11 +21,13 @@ const prisma = new PrismaClient({
 type CreatedIds = {
   planId: string;
   requestId: string;
+  responseId: string;
 };
 
 const created: CreatedIds = {
   planId: "",
-  requestId: ""
+  requestId: "",
+  responseId: ""
 };
 
 function assertPackageSnapshot(value: unknown) {
@@ -43,6 +45,7 @@ function assertPriceSnapshot(value: unknown) {
   assert.equal(typeof snapshot.packageBasePrice, "number");
   assert.equal(typeof snapshot.selectedAddOnsSubtotal, "number");
   assert.equal(typeof snapshot.estimatedTotal, "number");
+  assert.equal(typeof snapshot.guestCount, "number");
   assert.ok(Array.isArray(snapshot.lineItems), "price snapshot must include lineItems");
 }
 
@@ -178,6 +181,71 @@ async function main() {
   assert.equal(responseCount, 0, "package request creation must not create QuoteResponse");
   assert.equal(reservationCount, 0, "package request creation must not create Reservation");
 
+  const finalProposalTotal = estimatedTotal + 150_000;
+  const response = await prisma.quoteResponse.create({
+    data: {
+      requestId: request.id,
+      vendorId: momentGarden.id,
+      basePrice: finalProposalTotal,
+      modules: {
+        basePackage: {
+          name: packageForRequest.name,
+          price: finalProposalTotal,
+          description: packageForRequest.description ?? "패키지 기준 견적입니다."
+        },
+        includedModules: selectedModuleIds.map((id) => ({ id, name: id, category: "VENUE", price: 0 })),
+        optionalModules: [],
+        excludedModules: []
+      },
+      totalPrice: finalProposalTotal,
+      note: "현장 동선 보강 인력 1인을 반영했습니다."
+    }
+  });
+  created.responseId = response.id;
+
+  await prisma.quoteRequest.update({
+    where: { id: request.id },
+    data: { status: QuoteStatus.RESPONDED }
+  });
+
+  const comparisonShape = await prisma.quoteRequest.findUniqueOrThrow({
+    where: { id: request.id },
+    include: { responses: true, reservation: true }
+  });
+  const comparisonPriceSnapshot = comparisonShape.priceSnapshot as Record<string, unknown>;
+  const latestResponse = comparisonShape.responses[0];
+
+  assert.equal(
+    comparisonPriceSnapshot.estimatedTotal,
+    estimatedTotal,
+    "planner comparison must use QuoteRequest.priceSnapshot.estimatedTotal as request estimate"
+  );
+  assert.equal(
+    latestResponse?.totalPrice,
+    finalProposalTotal,
+    "planner comparison must use QuoteResponse.totalPrice as vendor final proposal"
+  );
+  assert.equal(
+    latestResponse.totalPrice - Number(comparisonPriceSnapshot.estimatedTotal),
+    150_000,
+    "package proposal comparison delta must be final proposal minus request estimate"
+  );
+  assert.equal(
+    latestResponse.note,
+    "현장 동선 보강 인력 1인을 반영했습니다.",
+    "vendor note must remain the proposal/adjustment memo"
+  );
+  assert.equal(
+    comparisonShape.requirements,
+    "패키지 구성으로 견적을 요청합니다.",
+    "request memo must remain separate from vendor response memo"
+  );
+  assert.equal(
+    comparisonShape.reservation,
+    null,
+    "package proposal response must not create Reservation before planner accept"
+  );
+
   console.log("verify-vendor-package-contract: ok");
 }
 
@@ -188,6 +256,9 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
+    if (created.responseId) {
+      await prisma.quoteResponse.deleteMany({ where: { id: created.responseId } });
+    }
     if (created.requestId) {
       await prisma.quoteRequest.deleteMany({ where: { id: created.requestId } });
     }

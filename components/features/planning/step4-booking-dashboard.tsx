@@ -20,6 +20,11 @@ import type {
   QuoteResponseData,
   Step4CategoryStatusDTO
 } from "@/types/quote";
+import type {
+  VendorPackagePriceSnapshot,
+  VendorPackageSnapshot,
+  VendorPackageSnapshotItem
+} from "@/types/vendor-package";
 import type { VendorServiceModuleData } from "@/types/vendor-module";
 
 interface Step4BookingDashboardProps {
@@ -168,7 +173,10 @@ function ProposalSummary({
           </Badge>
           <p className="text-sm font-bold text-[#2c3455]">{response.modules.basePackage.name}</p>
           {response.note && (
-            <p className="max-w-xl text-xs leading-5 text-muted-foreground">{response.note}</p>
+            <div className="max-w-xl rounded-lg bg-white/70 px-3 py-2 text-xs leading-5 text-[#2c3455]">
+              <p className="mb-1 text-[9px] font-bold uppercase tracking-wider text-[#8c8275]">업체 제안 메모</p>
+              <p>{response.note}</p>
+            </div>
           )}
         </div>
         <div className="text-left sm:text-right">
@@ -200,6 +208,195 @@ function formatRequestedModulePrice(module: VendorServiceModuleData, guestCount?
     return `${formatCurrency(module.price)} / 1인${total}`;
   }
   return formatCurrency(module.price);
+}
+
+function formatSnapshotItemPrice(item: VendorPackageSnapshotItem) {
+  if (item.price === 0) return "포함";
+  if (item.pricingType === "PER_GUEST") {
+    return `${formatCurrency(item.price)} × ${item.quantity}명 = ${formatCurrency(item.subtotal)}`;
+  }
+  if (item.quantity > 1) {
+    return `${formatCurrency(item.price)} × ${item.quantity} = ${formatCurrency(item.subtotal)}`;
+  }
+  return formatCurrency(item.subtotal);
+}
+
+function lineItemsBySource(
+  priceSnapshot: VendorPackagePriceSnapshot | null | undefined,
+  source: VendorPackageSnapshotItem["source"]
+) {
+  return (priceSnapshot?.lineItems ?? []).filter((item) => item.source === source);
+}
+
+function SnapshotItemList({
+  items,
+  emptyText
+}: {
+  items: VendorPackageSnapshotItem[];
+  emptyText: string;
+}) {
+  if (items.length === 0) {
+    return <p className="text-xs leading-5 text-muted-foreground">{emptyText}</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {items.map((item) => (
+        <div
+          key={`${item.source}:${item.id}:${item.packageItemId ?? "direct"}`}
+          className="flex flex-col gap-1 rounded-xl border border-[#f2ece4] bg-white px-3.5 py-3 sm:flex-row sm:items-start sm:justify-between"
+        >
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-semibold text-[#2c3455]">{item.name}</span>
+              <span className="rounded-full border border-[#ebdccf]/70 bg-[#faf9f5] px-2 py-0.5 text-[10px] font-semibold text-[#8c8275]">
+                {categoryLabel(item.category)}
+              </span>
+              {item.source === "VENDOR_ADDON" && (
+                <span className="rounded-full border border-[#ebdccf]/60 bg-white px-2 py-0.5 text-[9px] font-semibold text-[#8c8275]">
+                  업체 전용
+                </span>
+              )}
+            </div>
+            {item.description && (
+              <p className="text-[11px] leading-5 text-muted-foreground">{item.description}</p>
+            )}
+          </div>
+          <span className="text-[10px] font-bold text-[#c4977a]">{formatSnapshotItemPrice(item)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PackageRequestSummary({
+  packageSnapshot,
+  priceSnapshot
+}: {
+  packageSnapshot: VendorPackageSnapshot;
+  priceSnapshot?: VendorPackagePriceSnapshot | null;
+}) {
+  const selectedOptionalItems = lineItemsBySource(priceSnapshot, "PACKAGE_OPTIONAL");
+  const vendorAddOnItems = lineItemsBySource(priceSnapshot, "VENDOR_ADDON");
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border border-[#ebdccf]/70 bg-white p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-bold text-[#2c3455]">{packageSnapshot.name}</p>
+            {packageSnapshot.description && (
+              <p className="text-xs leading-5 text-muted-foreground">{packageSnapshot.description}</p>
+            )}
+          </div>
+          <div className="text-left sm:text-right">
+            <span className="block text-[9px] text-muted-foreground">패키지 기본가</span>
+            <span className="font-bold text-[#c4977a]">{formatCurrency(packageSnapshot.basePrice)}</span>
+          </div>
+        </div>
+      </div>
+
+      <SectionBlock title="패키지 포함 모듈">
+        <SnapshotItemList
+          items={packageSnapshot.includedItems}
+          emptyText="패키지 포함 모듈 정보가 없습니다."
+        />
+      </SectionBlock>
+
+      <SectionBlock title="선택한 패키지 옵션">
+        <SnapshotItemList
+          items={selectedOptionalItems}
+          emptyText="선택한 패키지 옵션이 없습니다."
+        />
+      </SectionBlock>
+
+      <SectionBlock title="선택한 업체 전용 추가 항목">
+        <SnapshotItemList
+          items={vendorAddOnItems}
+          emptyText="선택한 업체 전용 추가 항목이 없습니다."
+        />
+      </SectionBlock>
+
+      {priceSnapshot && (
+        <SectionBlock title="요청 기준 예상 금액">
+          <div className="space-y-2 text-xs text-[#2c3455]">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">패키지 기본가</span>
+              <span className="font-semibold">{formatCurrency(priceSnapshot.packageBasePrice)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">선택 추가 항목 합계</span>
+              <span className="font-semibold">{formatCurrency(priceSnapshot.selectedAddOnsSubtotal)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">요청 인원</span>
+              <span className="font-semibold">{priceSnapshot.guestCount}명</span>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-t border-[#f2ece4] pt-2">
+              <span className="font-bold text-[#2c3455]">요청 예상 총액</span>
+              <span className="font-bold text-[#c4977a]">{formatCurrency(priceSnapshot.estimatedTotal)}</span>
+            </div>
+            {priceSnapshot.lineItems.length > 0 && (
+              <div className="mt-3 rounded-lg border border-[#f2ece4] bg-white px-3 py-2">
+                <p className="mb-2 text-[9px] font-bold uppercase tracking-wider text-[#8c8275]">Line items</p>
+                <div className="space-y-1.5">
+                  {priceSnapshot.lineItems.map((item) => (
+                    <div
+                      key={`line:${item.source}:${item.id}:${item.packageItemId ?? "direct"}`}
+                      className="flex items-center justify-between gap-3 text-[10px]"
+                    >
+                      <span className="text-muted-foreground">{item.name}</span>
+                      <span className="font-semibold text-[#2c3455]">{formatSnapshotItemPrice(item)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </SectionBlock>
+      )}
+    </div>
+  );
+}
+
+function ProposalPriceComparison({
+  request,
+  response
+}: {
+  request: QuoteRequestWithResponses;
+  response: QuoteResponseData;
+}) {
+  const estimatedTotal = request.priceSnapshot?.estimatedTotal;
+  if (estimatedTotal == null) return null;
+
+  const delta = response.totalPrice - estimatedTotal;
+  const deltaLabel =
+    delta === 0
+      ? "예상 금액과 동일"
+      : delta > 0
+      ? `예상보다 ${formatCurrency(delta)} 증가`
+      : `예상보다 ${formatCurrency(Math.abs(delta))} 감소`;
+
+  return (
+    <SectionBlock title="요청 예상 금액과 최종 제안 비교">
+      <div className="space-y-2 text-xs text-[#2c3455]">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">요청 예상 총액</span>
+          <span className="font-semibold">{formatCurrency(estimatedTotal)}</span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">업체 최종 제안 총액</span>
+          <span className="font-bold text-[#c4977a]">{formatCurrency(response.totalPrice)}</span>
+        </div>
+        <div className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2">
+          <span className="text-muted-foreground">차액</span>
+          <span className={`font-bold ${delta > 0 ? "text-amber-700" : delta < 0 ? "text-emerald-700" : "text-[#2c3455]"}`}>
+            {deltaLabel}
+          </span>
+        </div>
+      </div>
+    </SectionBlock>
+  );
 }
 
 function ModuleWorkflowDetail({
@@ -253,49 +450,56 @@ function ModuleWorkflowDetail({
 
               <div className="mt-4 space-y-3">
                 <SectionBlock title="요청 범위">
-                  <div className="space-y-2.5">
-                    {(request.selectedModuleDetails ?? []).map((module) => (
-                      <div
-                        key={module.id}
-                        className="rounded-xl border border-[#f2ece4] bg-white px-3.5 py-3"
-                      >
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="space-y-1">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="font-semibold text-[#2c3455]">{module.name}</span>
-                              <span className="rounded-full border border-[#ebdccf]/70 bg-[#faf9f5] px-2 py-0.5 text-[10px] font-semibold text-[#8c8275]">
-                                {categoryLabel(module.category)}
-                              </span>
-                              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-                                {moduleSelectionLabel(module)}
-                              </span>
-                              {module.catalogKey === null && (
-                                <span className="rounded-full border border-[#ebdccf]/60 bg-white px-2 py-0.5 text-[9px] font-semibold text-[#8c8275]">
-                                  업체 전용
+                  {request.selectedPackageSnapshot ? (
+                    <PackageRequestSummary
+                      packageSnapshot={request.selectedPackageSnapshot}
+                      priceSnapshot={request.priceSnapshot}
+                    />
+                  ) : (
+                    <div className="space-y-2.5">
+                      {(request.selectedModuleDetails ?? []).map((module) => (
+                        <div
+                          key={module.id}
+                          className="rounded-xl border border-[#f2ece4] bg-white px-3.5 py-3"
+                        >
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="space-y-1">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="font-semibold text-[#2c3455]">{module.name}</span>
+                                <span className="rounded-full border border-[#ebdccf]/70 bg-[#faf9f5] px-2 py-0.5 text-[10px] font-semibold text-[#8c8275]">
+                                  {categoryLabel(module.category)}
                                 </span>
+                                <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                                  {moduleSelectionLabel(module)}
+                                </span>
+                                {module.catalogKey === null && (
+                                  <span className="rounded-full border border-[#ebdccf]/60 bg-white px-2 py-0.5 text-[9px] font-semibold text-[#8c8275]">
+                                    업체 전용
+                                  </span>
+                                )}
+                              </div>
+                              {module.description && (
+                                <p className="text-[11px] leading-5 text-muted-foreground">{module.description}</p>
                               )}
                             </div>
-                            {module.description && (
-                              <p className="text-[11px] leading-5 text-muted-foreground">{module.description}</p>
-                            )}
-                          </div>
-                          <div className="space-y-1 text-left sm:text-right">
-                            <p className="text-[10px] font-semibold text-[#8c8275]">
-                              기준가 {formatRequestedModulePrice(module, request.plan?.guestCount)}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground">
-                              가격 방식 {getPricingTypeLabel(module.pricingType)}
-                            </p>
+                            <div className="space-y-1 text-left sm:text-right">
+                              <p className="text-[10px] font-semibold text-[#8c8275]">
+                                기준가 {formatRequestedModulePrice(module, request.plan?.guestCount)}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground">
+                                가격 방식 {getPricingTypeLabel(module.pricingType)}
+                              </p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                    {(request.selectedModuleDetails ?? []).length === 0 && (
-                      <p className="text-xs leading-5 text-muted-foreground">
-                        요청 모듈 상세가 없습니다. 상단 제안 카드의 메모와 금액을 기준으로 확인해 주세요.
-                      </p>
-                    )}
-                  </div>
+                      ))}
+                      {(request.selectedModuleDetails ?? []).length === 0 && (
+                        <p className="text-xs leading-5 text-muted-foreground">
+                          요청 모듈 상세가 없습니다. 상단 제안 카드의 메모와 금액을 기준으로 확인해 주세요.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </SectionBlock>
 
                 <SectionBlock title="업체 제안">
@@ -306,7 +510,10 @@ function ModuleWorkflowDetail({
                         <span className="font-bold text-[#c4977a]">{formatCurrency(response.totalPrice)}</span>
                       </div>
                       {response.note && (
-                        <p className="rounded-lg bg-white px-3 py-2 leading-5 text-[#2c3455]">{response.note}</p>
+                        <div className="rounded-lg bg-white px-3 py-2 leading-5 text-[#2c3455]">
+                          <p className="mb-1 text-[9px] font-bold uppercase tracking-wider text-[#8c8275]">금액 조정 사유</p>
+                          <p>{response.note}</p>
+                        </div>
                       )}
                       {finalIncludedModules.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
@@ -328,6 +535,7 @@ function ModuleWorkflowDetail({
                     </p>
                   )}
                 </SectionBlock>
+                {response && <ProposalPriceComparison request={request} response={response} />}
 
                 <SectionBlock title="예약 상태">
                   {reservation ? (
@@ -448,10 +656,17 @@ export function Step4BookingDashboard({
 
               <div className="space-y-4">
                 <SectionBlock title="Step 3에서 요청한 선택 모듈">
-                  <ModulePills
-                    modules={request.selectedModuleDetails ?? []}
-                    emptyText="요청 모듈 상세가 없습니다. 업체 요청 메모와 제안서를 기준으로 확인해 주세요."
-                  />
+                  {request.selectedPackageSnapshot ? (
+                    <PackageRequestSummary
+                      packageSnapshot={request.selectedPackageSnapshot}
+                      priceSnapshot={request.priceSnapshot}
+                    />
+                  ) : (
+                    <ModulePills
+                      modules={request.selectedModuleDetails ?? []}
+                      emptyText="요청 모듈 상세가 없습니다. 업체 요청 메모와 제안서를 기준으로 확인해 주세요."
+                    />
+                  )}
                 </SectionBlock>
 
                 {request.requirements && (
@@ -469,6 +684,7 @@ export function Step4BookingDashboard({
                 {response && request.status === "RESPONDED" && (
                   <>
                     <ProposalSummary response={response} />
+                    <ProposalPriceComparison request={request} response={response} />
                     <div className="flex flex-col gap-3 rounded-xl border border-amber-200/70 bg-amber-50/30 p-4 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-xs leading-5 text-amber-800">
                         이 제안을 수락하면 예약 요청이 생성되고, 업체의 최종 확정을 기다립니다.
@@ -489,6 +705,7 @@ export function Step4BookingDashboard({
                 {response && isAccepted && !isConfirmed && (
                   <>
                     <ProposalSummary response={response} isAccepted />
+                    <ProposalPriceComparison request={request} response={response} />
                     <div className="rounded-xl border border-[#e5e2da] bg-[#faf8f4]/70 p-4">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="space-y-1">
@@ -510,6 +727,7 @@ export function Step4BookingDashboard({
                 {response && isConfirmed && reservation && (
                   <>
                     <ProposalSummary response={response} isAccepted />
+                    <ProposalPriceComparison request={request} response={response} />
                     <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/30 p-4">
                       <div className="mb-3 flex items-center gap-2">
                         <Check className="h-4 w-4 text-emerald-700" />
