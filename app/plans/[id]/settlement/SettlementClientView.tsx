@@ -191,7 +191,7 @@ export function SettlementClientView({
           <h3 className="font-[var(--font-display)] text-base font-semibold text-foreground">장부 내역</h3>
           <span className="text-xs text-muted-foreground font-medium">총 {entries.length}건</span>
         </div>
-        
+
         <SettlementLedger
           entries={entries}
           onEditClick={handleOpenEdit}

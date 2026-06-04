@@ -16,7 +16,7 @@ export function SettlementLedger({ entries, onEditClick, eventType }: Settlement
   const [selectedType, setSelectedType] = useState("전체");
 
   const isWedding = eventType === "WEDDING";
-  
+
   // Unique relations present in the entries for filtering
   const allRelations = ["전체", ...Array.from(new Set(entries.map((e) => e.relation || "미분류")))];
 

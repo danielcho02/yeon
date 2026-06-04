@@ -107,7 +107,7 @@ async function main() {
 
     // 5. Test EventPlan-specific total calculation
     console.log("\n[5] Testing plan-specific total and summary calculation...");
-    
+
     // Wedding Total calculation
     const weddingTransactions = await prisma.transaction.findMany({
       where: { planId: weddingPlan.id }
@@ -224,14 +224,14 @@ async function main() {
     const resIds = testReservations.map(r => r.id);
 
     await prisma.transaction.deleteMany({
-      where: { 
+      where: {
         OR: [
           { planId: { in: [weddingPlan.id, funeralPlan.id] } },
           { reservationId: { in: resIds } }
         ]
       }
     });
-    
+
     await prisma.reservation.deleteMany({
       where: { id: { in: resIds } }
     });

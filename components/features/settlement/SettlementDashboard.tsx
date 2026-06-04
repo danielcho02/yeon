@@ -11,7 +11,7 @@ interface SettlementDashboardProps {
 export function SettlementDashboard({ summary, eventType }: SettlementDashboardProps) {
   const isWedding = eventType === "WEDDING";
   const title = isWedding ? "축의금 정산 요약" : "조의금 정산 요약";
-  
+
   // Theme colors
   const primaryText = isWedding ? "text-rose-700" : "text-zinc-800";
   const cardBorder = isWedding ? "border-rose-100 bg-rose-50/20" : "border-zinc-200 bg-zinc-50/20";
@@ -39,7 +39,7 @@ export function SettlementDashboard({ summary, eventType }: SettlementDashboardP
               총 수합된 금액입니다.
             </p>
           </div>
-          
+
           <div className="flex gap-4 border-t sm:border-t-0 sm:border-l border-border/80 pt-4 sm:pt-0 sm:pl-6">
             <div>
               <p className="text-xs text-muted-foreground font-semibold">총 건수</p>

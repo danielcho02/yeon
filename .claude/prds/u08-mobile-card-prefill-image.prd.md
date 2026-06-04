@@ -17,7 +17,7 @@
 
 ## Hypothesis
 
-We believe **EventPlan + confirmed Reservation 데이터로 자동 초안을 생성하고 대표 이미지 입력을 지원하는 것**이 **카드 초안 없이 빈 폼이 뜨는 UX 문제를 해결**할 것이다.  
+We believe **EventPlan + confirmed Reservation 데이터로 자동 초안을 생성하고 대표 이미지 입력을 지원하는 것**이 **카드 초안 없이 빈 폼이 뜨는 UX 문제를 해결**할 것이다.
 We'll know we're right when **edit 화면 최초 진입 시 날짜·장소 등 핵심 필드가 이미 채워진 상태로 표시되고, 이미지를 설정한 카드가 preview 및 공개 URL에 정상 반영된다.**
 
 ## Success Metrics
