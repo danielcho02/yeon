@@ -103,7 +103,7 @@ export default async function HomePage() {
             ) : (
               <>
                 <Link className={buttonVariants({ variant: "ghost", size: "sm" }) + " text-xs font-medium text-[#2c3455] hover:text-[#c4977a] hover:bg-transparent"} href="/login">로그인</Link>
-                <Link className="inline-flex h-8 items-center justify-center rounded-xl bg-[#2c3455] px-4 text-xs font-semibold text-white transition-all duration-150 hover:bg-[#1e2645] active:scale-[0.98]" href="/signup">시작하기</Link>
+                <Link className="inline-flex h-8 items-center justify-center rounded-xl bg-[#2c3455] px-4 text-xs font-semibold text-white transition-[transform,background-color] duration-150 hover:bg-[#1e2645] active:scale-[0.98]" href="/signup">시작하기</Link>
               </>
             )}
           </nav>
@@ -157,14 +157,14 @@ export default async function HomePage() {
             <div className="relative z-10 mb-12 flex items-center justify-center gap-3">
               <Link
                 href={primaryHeroHref}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#2c3455] px-6 text-xs font-bold text-white transition-all duration-150 hover:bg-[#1e2645] active:scale-[0.98] shadow-sm"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#2c3455] px-6 text-xs font-bold text-white transition-[transform,background-color] duration-150 hover:bg-[#1e2645] active:scale-[0.98] shadow-sm"
               >
                 {primaryHeroLabel}
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
               <Link
                 href={publicVendorHref}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#e5e2da] bg-white/50 px-6 text-xs font-semibold text-[#2c3455] backdrop-blur-sm transition-all duration-150 hover:bg-white hover:border-[#8c8275] active:scale-[0.98]"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#e5e2da] bg-white/50 px-6 text-xs font-semibold text-[#2c3455] backdrop-blur-sm transition-[transform,background-color,border-color] duration-150 hover:bg-white hover:border-[#8c8275] active:scale-[0.98]"
               >
                 파트너 목록 보기
               </Link>
@@ -205,7 +205,7 @@ export default async function HomePage() {
               {/* Wedding card */}
               <Link
                 href={weddingHref}
-                className="group relative overflow-hidden rounded-2xl border border-[#ebdccf] bg-[#faf9f5] transition-all duration-300 hover:-translate-y-1 hover:border-[#c4977a] hover:shadow-[0_8px_32px_rgba(196,151,122,0.06)]"
+                className="group relative overflow-hidden rounded-2xl border border-[#ebdccf] bg-[#faf9f5] transition-[transform,box-shadow,border-color] duration-300 hover:-translate-y-1 hover:border-[#c4977a] hover:shadow-[0_8px_32px_rgba(196,151,122,0.06)]"
               >
                 <div className="absolute inset-x-0 bottom-0 h-1.5 bg-[#ebdccf] transition-colors group-hover:bg-[#c4977a]" />
                 <div className="relative p-8 sm:p-10">
@@ -217,7 +217,7 @@ export default async function HomePage() {
                   <p className="mb-8 text-xs leading-relaxed text-[#8c8275]">
                     정제된 웨딩 아키텍처와 엄선된 공간 대관, 식대 패키지 구성까지 번잡한 조립 없이 아름다운 하루를 준비합니다.
                   </p>
-                  <div className="flex items-center gap-2 text-xs font-semibold text-[#c4977a] transition-all duration-200 group-hover:gap-3">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-[#c4977a] transition-[gap] duration-200 group-hover:gap-3">
                     결혼 플래닝 시작하기
                     <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
                   </div>
@@ -227,7 +227,7 @@ export default async function HomePage() {
               {/* Funeral card */}
               <Link
                 href={funeralHref}
-                className="group relative overflow-hidden rounded-2xl border border-[#cbd3e0] bg-[#faf9f5] transition-all duration-300 hover:-translate-y-1 hover:border-[#2c3455] hover:shadow-[0_8px_32px_rgba(44,52,85,0.04)]"
+                className="group relative overflow-hidden rounded-2xl border border-[#cbd3e0] bg-[#faf9f5] transition-[transform,box-shadow,border-color] duration-300 hover:-translate-y-1 hover:border-[#2c3455] hover:shadow-[0_8px_32px_rgba(44,52,85,0.04)]"
               >
                 <div className="absolute inset-x-0 bottom-0 h-1.5 bg-[#cbd3e0] transition-colors group-hover:bg-[#2c3455]" />
                 <div className="relative p-8 sm:p-10">
@@ -239,7 +239,7 @@ export default async function HomePage() {
                   <p className="mb-8 text-xs leading-relaxed text-[#8c8275]">
                     차분하고 안정적인 준비 가이드와 엄숙한 파트너 연결을 통해 소중한 마무리를 경건하고 세심하게 안내합니다.
                   </p>
-                  <div className="flex items-center gap-2 text-xs font-semibold text-[#2c3455] transition-all duration-200 group-hover:gap-3">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-[#2c3455] transition-[gap] duration-200 group-hover:gap-3">
                     장례 의전 안내받기
                     <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
                   </div>
@@ -305,13 +305,13 @@ export default async function HomePage() {
               </div>
               <div className="flex items-center gap-3">
                 {isLoggedIn ? (
-                  <Link className="inline-flex h-9 items-center justify-center rounded-xl bg-white/10 border border-white/20 px-4 text-xs font-semibold text-white transition-all hover:bg-white/20" href={defaultWorkspaceHref}>
+                  <Link className="inline-flex h-9 items-center justify-center rounded-xl bg-white/10 border border-white/20 px-4 text-xs font-semibold text-white transition-[background-color,border-color] hover:bg-white/20" href={defaultWorkspaceHref}>
                     {isVendor ? "업체 대시보드" : "내 플랜 확인"}
                   </Link>
                 ) : (
                   <>
                     <Link className="text-xs font-semibold text-white/75 hover:text-white transition-colors" href="/login">로그인</Link>
-                    <Link href="/signup" className="inline-flex h-9 items-center justify-center rounded-xl bg-[#faf9f5] px-4 text-xs font-semibold text-[#2c3455] transition-all hover:bg-white active:scale-[0.98]">
+                    <Link href="/signup" className="inline-flex h-9 items-center justify-center rounded-xl bg-[#faf9f5] px-4 text-xs font-semibold text-[#2c3455] transition-[transform,background-color] hover:bg-white active:scale-[0.98]">
                       무료 체험
                     </Link>
                   </>
@@ -347,7 +347,7 @@ function FeatureCard({ index, title, description, href }: { index: string; title
   return (
     <Link
       href={href}
-      className="group flex flex-col rounded-2xl bg-white border border-[#e5e2da] p-6 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#ebdccf] hover:shadow-[0_4px_16px_rgba(0,0,0,0.015)]"
+      className="group flex flex-col rounded-2xl bg-white border border-[#e5e2da] p-6 transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-[#ebdccf] hover:shadow-[0_4px_16px_rgba(0,0,0,0.015)]"
     >
       <span className="font-mono text-[10px] font-bold text-[#c4977a] tracking-widest">{index}</span>
       <h3 className="mt-4 mb-2 font-[var(--font-serif)] text-base font-bold text-[#2c3455]">{title}</h3>
@@ -419,7 +419,7 @@ function RoleCard({
   }[colorScheme];
 
   return (
-    <div className={`group flex flex-col rounded-2xl border border-[#e5e2da] bg-white p-7 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${scheme.border}`}>
+    <div className={`group flex flex-col rounded-2xl border border-[#e5e2da] bg-white p-7 transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:shadow-md ${scheme.border}`}>
       <div className={`mb-4 inline-flex w-fit rounded-xl p-2.5 transition-transform duration-200 group-hover:scale-103 ${scheme.iconWrap}`}>
         <Icon className="h-4 w-4" />
       </div>
@@ -443,7 +443,7 @@ function RoleCard({
 
 function DemoChip({ role, email }: { role: string; email: string }) {
   return (
-    <div className="rounded-xl border border-white/5 bg-white/5 px-4 py-3 backdrop-blur-sm transition-all duration-150 hover:border-white/12 hover:bg-white/10">
+    <div className="rounded-xl border border-white/5 bg-white/5 px-4 py-3 backdrop-blur-sm transition-[background-color,border-color] duration-150 hover:border-white/12 hover:bg-white/10">
       <p className="text-[10px] font-bold text-white/80">{role}</p>
       <p className="mt-0.5 font-mono text-[9px] text-white/35">{email}</p>
     </div>

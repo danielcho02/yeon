@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Clock,
   FileQuestion,
+  MapPin,
   Plus,
   Scale,
   Users2,
@@ -163,6 +164,15 @@ function getPlannerLink(plan: PlanDashboardData) {
   return `/planner/${type}?${params.toString()}`;
 }
 
+function buildActivityLine(summary: PlanDashboardData["summary"]): string {
+  const parts: string[] = [];
+  if (summary.respondedQuotes > 0) parts.push(`견적 ${summary.respondedQuotes}건 도착`);
+  if (summary.pendingRequests > 0) parts.push(`응답 대기 ${summary.pendingRequests}건`);
+  if (summary.acceptedQuotes > 0) parts.push(`업체 최종 확인 대기 ${summary.acceptedQuotes}건`);
+  if (summary.reservationsConfirmed > 0) parts.push(`예약 확정 ${summary.reservationsConfirmed}건`);
+  return parts.join(" · ");
+}
+
 export default async function PlansPage() {
   const session = await getServerAuthSession();
   if (!session?.user?.id) redirect("/login?callbackUrl=/plans");
@@ -186,7 +196,7 @@ export default async function PlansPage() {
               진행 중인 의례 설계 및 파트너 조율 현황을 차분하게 검토하세요.
             </p>
           </div>
-          <Link href="/planner?create=1" className="inline-flex h-9 items-center justify-center rounded-xl bg-[#2c3455] px-4 text-xs font-semibold text-white transition-all duration-150 hover:bg-[#1e2645] active:scale-[0.98]">
+          <Link href="/planner?create=1" className="inline-flex h-9 items-center justify-center rounded-xl bg-[#2c3455] px-4 text-xs font-semibold text-white transition-[background-color,transform] duration-150 hover:bg-[#1e2645] active:scale-[0.98]">
             <Plus className="mr-1.5 h-3.5 w-3.5" />
             새 행사 만들기
           </Link>
@@ -202,146 +212,73 @@ export default async function PlansPage() {
             <p className="mb-6 max-w-xs text-xs text-[#8c8275] leading-relaxed">
               결혼이나 장례 행사를 준비 중이라면 새 플랜을 만들어 보세요. yeON이 기본 구성을 정돈하여 품격 있게 보좌하겠습니다.
             </p>
-            <Link href="/planner?create=1" className="inline-flex h-9 items-center justify-center rounded-xl bg-[#2c3455] px-4 text-xs font-semibold text-white transition-all hover:bg-[#1e2645]">
+            <Link href="/planner?create=1" className="inline-flex h-9 items-center justify-center rounded-xl bg-[#2c3455] px-4 text-xs font-semibold text-white transition-[background-color] hover:bg-[#1e2645]">
               <Plus className="mr-1.5 h-3.5 w-3.5" />
               첫 행사 만들기
             </Link>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="divide-y divide-[#e5e2da]">
             {plans.map((plan) => {
               const meta = getNextActionMeta(plan.summary.nextAction, plan.eventType);
-              const { Icon } = meta;
               const plannerLink = getPlannerLink(plan);
               const isWedding = plan.eventType === "WEDDING";
-              const cardBg = isWedding
-                ? "bg-white/80 border-[#ebdccf]/70 hover:border-[#c4977a]"
-                : "bg-white/80 border-[#cbd3e0]/80 hover:border-[#2c3455]";
 
-              const hasAnyActivity =
-                plan.summary.pendingRequests > 0 ||
-                plan.summary.respondedQuotes > 0 ||
-                plan.summary.acceptedQuotes > 0 ||
-                plan.summary.reservationsPending > 0 ||
-                plan.summary.reservationsConfirmed > 0;
+              const activityLine = buildActivityLine(plan.summary);
 
               return (
-                <div
-                  key={plan.id}
-                  className={`rounded-2xl border p-6 transition-all duration-200 hover:shadow-[0_4px_16px_rgba(0,0,0,0.01)] ${cardBg}`}
-                >
-                  {/* Top row: title + desktop CTA */}
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    <div className="min-w-0 flex-1 space-y-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`text-[10px] font-bold uppercase tracking-wider ${isWedding ? "text-[#c4977a]" : "text-[#475569]"}`}>
-                          {isWedding ? "Wedding" : "Funeral"}
-                        </span>
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${meta.badge}`}
-                        >
-                          <Icon className="h-3 w-3" />
-                          {meta.label}
-                        </span>
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <h2 className="font-[var(--font-serif)] text-base font-bold text-[#2c3455] truncate">
-                          {plan.title ?? "(제목 없음)"}
-                        </h2>
-                        
-                        <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#8c8275] font-medium">
-                          {plan.eventDate && (
-                            <span className="flex items-center gap-1">
-                              <CalendarDays className="h-3.5 w-3.5 text-[#8c8275]/50" />
-                              {formatDate(plan.eventDate)}
-                            </span>
-                          )}
-                          {plan.location && <span>📍 {plan.location}</span>}
-                          {plan.guestCount && (
-                            <span className="flex items-center gap-1">
-                              <Users2 className="h-3.5 w-3.5 text-[#8c8275]/50" />
-                              {plan.guestCount.toLocaleString()}명
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                <article key={plan.id} className="group py-8 first:pt-0">
+                  <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between md:gap-8">
+                    <div className="min-w-0 flex-1 space-y-2.5">
+                      {/* typographic event-type marker */}
+                      <p className={`text-[10px] font-semibold uppercase tracking-[0.28em] ${isWedding ? "text-[#c4977a]" : "text-[#5b6b86]"}`}>
+                        {isWedding ? "Wedding" : "Funeral"}
+                      </p>
 
-                      {/* Activity badges (simplified) */}
-                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                        {plan.summary.pendingRequests > 0 && (
-                          <span className="inline-flex items-center gap-1 rounded-lg border border-[#e5e2da] bg-[#faf9f5]/60 px-2.5 py-1 text-[10px] font-medium text-[#8c8275]">
-                            <Clock className="h-3 w-3" />
-                            응답 대기 {plan.summary.pendingRequests}건
+                      <h2 className="font-[var(--font-serif)] text-xl font-normal tracking-tight text-[#2c3455] sm:text-2xl">
+                        {plan.title ?? "(제목 없음)"}
+                      </h2>
+
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[#8c8275]">
+                        {plan.eventDate && (
+                          <span className="inline-flex items-center gap-1.5">
+                            <CalendarDays className="h-3.5 w-3.5 text-[#8c8275]/55" />
+                            {formatDate(plan.eventDate)}
                           </span>
                         )}
-                        {plan.summary.respondedQuotes > 0 && (
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold ${
-                              isWedding
-                                ? "border border-[#ebdccf]/60 bg-[#fcf8f2] text-[#c4977a]"
-                                : "border border-[#cbd3e0] bg-[#eef2f6] text-[#2c3455]"
-                            }`}
-                          >
-                            <Scale className="h-3 w-3" />
-                            도착한 제안 {plan.summary.respondedQuotes}건
+                        {plan.location && (
+                          <span className="inline-flex items-center gap-1.5">
+                            <MapPin className="h-3.5 w-3.5 text-[#8c8275]/55" />
+                            {plan.location}
                           </span>
                         )}
-                        {plan.summary.acceptedQuotes > 0 && (
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-medium ${
-                              isWedding
-                                ? "border border-[#e7d2c4] bg-[#fbf4ee]/70 text-[#9b6b4f]"
-                                : "border border-[#cbd3e0] bg-[#f4f5f8] text-[#475569]"
-                            }`}
-                          >
-                            수락 완료 {plan.summary.acceptedQuotes}건
-                          </span>
-                        )}
-                        {plan.summary.reservationsConfirmed > 0 && (
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-extrabold ${
-                              isWedding
-                                ? "border border-emerald-200 bg-[#eafaf1] text-emerald-800"
-                                : "border border-[#cbd3e0] bg-[#eef2f6] text-[#2c3455]"
-                            }`}
-                          >
-                            <CheckCircle2 className="h-3 w-3" />
-                            예약 확정 완료 {plan.summary.reservationsConfirmed}건
-                          </span>
-                        )}
-                        {!hasAnyActivity && (
-                          <span className="text-[10px] text-[#8c8275]/50 font-medium">
-                            아직 파트너 견적 요청이 없습니다.
+                        {plan.guestCount && (
+                          <span className="inline-flex items-center gap-1.5">
+                            <Users2 className="h-3.5 w-3.5 text-[#8c8275]/55" />
+                            {plan.guestCount.toLocaleString()}명
                           </span>
                         )}
                       </div>
 
-                      {/* Brief concierge helper description */}
-                      <p className="text-[11px] text-[#8c8275]/80 leading-relaxed font-normal pt-1">{meta.description}</p>
+                      {/* status as a single quiet line */}
+                      <p className="pt-1 text-xs text-[#2c3455]">
+                        <span className="font-semibold">{meta.label}</span>
+                        {activityLine && (
+                          <span className="text-[#8c8275]"> · {activityLine}</span>
+                        )}
+                      </p>
                     </div>
 
-                    {/* Desktop/Tablet CTA */}
+                    {/* single CTA, right-aligned */}
                     <a
                       href={plannerLink}
-                      className={`hidden shrink-0 items-center gap-1.5 rounded-xl px-5 py-2.5 text-xs font-bold transition-transform duration-150 hover:-translate-y-0.5 sm:inline-flex ${ctaStyles[meta.ctaVariant]}`}
+                      className={`inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl px-5 text-xs font-semibold transition-transform duration-150 hover:-translate-y-0.5 h-11 ${ctaStyles[meta.ctaVariant]}`}
                     >
                       {meta.cta}
                       <ArrowRight className="h-3.5 w-3.5" />
                     </a>
                   </div>
-
-                  {/* Mobile CTA */}
-                  <div className="mt-5 sm:hidden">
-                    <a
-                      href={plannerLink}
-                      className={`flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-3 text-xs font-bold transition-transform duration-150 ${ctaStyles[meta.ctaVariant]}`}
-                    >
-                      {meta.cta}
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </a>
-                  </div>
-                </div>
+                </article>
               );
             })}
           </div>

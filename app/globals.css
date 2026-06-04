@@ -32,6 +32,14 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  h1, h2, h3, h4, h5, h6 {
+    text-wrap: balance;
+  }
+
+  p, li {
+    text-wrap: pretty;
+  }
+
   body {
     @apply min-h-screen bg-background text-foreground antialiased;
     font-family: var(--font-body);
@@ -82,27 +90,27 @@
 
   /* ─── Elevation / Interaction ────────────────────────────── */
   .soft-elevate {
-    @apply transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-lg;
+    @apply transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-1 hover:shadow-lg;
   }
 
   .card-interactive {
-    @apply transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-sm;
+    @apply transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-sm;
   }
 
   .card-selectable {
-    @apply cursor-pointer transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+    @apply cursor-pointer transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
   }
 
   .card-lift {
-    @apply transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-xl;
+    @apply transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-1.5 hover:shadow-xl;
   }
 
   .card-lift-strong {
-    @apply transition-all duration-400 ease-out hover:-translate-y-3 hover:shadow-2xl;
+    @apply transition-[transform,box-shadow] duration-[400ms] ease-out hover:-translate-y-3 hover:shadow-2xl;
   }
 
   .link-hover {
-    @apply transition-all duration-200 hover:-translate-y-0.5;
+    @apply transition-transform duration-200 hover:-translate-y-0.5;
   }
 
   /* ─── Dashboard grid ─────────────────────────────────────── */

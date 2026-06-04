@@ -122,74 +122,80 @@ export function SettlementClientView({
 
   // Styling theme classes
   const registerBtnColor = isWedding
-    ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-100"
-    : "bg-zinc-900 hover:bg-zinc-800 text-white shadow-zinc-100";
-  const titleText = isWedding ? "축의금 정산 장부" : "조의금 정산 장부";
-  const planSubtitle = isWedding ? "웨딩 정산 대시보드" : "장례 조의금 정산 대시보드";
+    ? "bg-[#c4977a] hover:bg-[#b08569] text-white"
+    : "bg-[#2c3455] hover:bg-[#1e2645] text-white";
+  const accent = isWedding ? "text-[#c4977a]" : "text-[#5b6b86]";
+  const titleText = isWedding ? "축의금 장부" : "조의금 장부";
+
+  const onlineStat = summary.byType.find((t) => t.type === "ONLINE") || { amount: 0, count: 0 };
+  const offlineStat = summary.byType.find((t) => t.type === "OFFLINE") || { amount: 0, count: 0 };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
+    <div className="animate-in fade-in space-y-10 duration-300">
       {/* Top Navigation / Breadcrumb */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <nav className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Link href="/plans" className="hover:text-foreground transition-colors">내 플랜</Link>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <nav className="flex items-center gap-2 text-xs text-[#8c8275]">
+          <Link href="/plans" className="transition-colors hover:text-[#2c3455]">내 행사 현황</Link>
           <span>/</span>
-          <Link href={`/plans/${plan.id}`} className="hover:text-foreground transition-colors truncate max-w-[120px] sm:max-w-none">
+          <Link href={`/plans/${plan.id}`} className="max-w-[120px] truncate transition-colors hover:text-[#2c3455] sm:max-w-none">
             {plan.title}
           </Link>
           <span>/</span>
-          <span className="text-foreground font-medium">{titleText}</span>
+          <span className="font-medium text-[#2c3455]">{titleText}</span>
         </nav>
 
         <Link
           href={`/plans/${plan.id}`}
-          className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-[#8c8275] transition-colors hover:text-[#2c3455]"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          플랜 상세로 돌아가기
+          돌아가기
         </Link>
       </div>
 
-      {/* Header Panel */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border/60 pb-6">
-        <div>
-          <h1 className="font-[var(--font-display)] text-2xl font-bold text-foreground sm:text-3xl tracking-tight">
-            {titleText}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {planSubtitle} &middot; {plan.title}
-          </p>
-        </div>
+      {/* Editorial header */}
+      <header className="border-b border-[#e5e2da] pb-8">
+        <p className={`text-[10px] font-semibold uppercase tracking-[0.28em] ${accent}`}>Account Book</p>
+        <h1 className="mt-3 font-[var(--font-serif)] text-3xl font-normal tracking-tight text-[#2c3455] sm:text-4xl">
+          {titleText}
+        </h1>
+        <p className="mt-3 text-sm text-[#8c8275]">{plan.title}</p>
+      </header>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {/* CSV Export Button */}
-          <button
-            onClick={handleExportCSV}
-            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-2xl border border-border bg-white px-4 text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-all duration-200"
-          >
-            <Download className="h-4 w-4" />
-            CSV 내보내기
-          </button>
-
-          {/* Add Entry Button */}
-          <button
-            onClick={handleOpenRegister}
-            className={`inline-flex h-11 items-center justify-center gap-1.5 rounded-2xl px-5 text-sm font-semibold shadow-md transition-all duration-200 ${registerBtnColor}`}
-          >
-            <Plus className="h-4 w-4" />
-            내역 등록
-          </button>
-        </div>
-      </div>
+      {/* Quiet stats row */}
+      <section className="grid grid-cols-2 gap-x-8 gap-y-6 border-b border-[#e5e2da] pb-8 sm:grid-cols-4">
+        <StatField label="총 건수" value={`${summary.totalCount}건`} />
+        <StatField label="합계 금액" value={`${summary.totalAmount.toLocaleString()}원`} emphasis />
+        <StatField label="이체" value={`${onlineStat.amount.toLocaleString()}원`} sub={`${onlineStat.count}건`} />
+        <StatField label="현금" value={`${offlineStat.amount.toLocaleString()}원`} sub={`${offlineStat.count}건`} />
+      </section>
 
       {/* Statistics Dashboard */}
       <SettlementDashboard summary={summary} eventType={eventType} />
 
       {/* Ledger Table */}
-      <div className="pt-4 border-t border-border/60">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-[var(--font-display)] text-base font-semibold text-foreground">장부 내역</h3>
-          <span className="text-xs text-muted-foreground font-medium">총 {entries.length}건</span>
+      <div className="border-t border-[#e5e2da] pt-8">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-baseline gap-3">
+            <h3 className="font-[var(--font-serif)] text-lg font-normal text-[#2c3455]">장부 내역</h3>
+            <span className="text-xs tabular-nums text-[#8c8275]">총 {entries.length}건</span>
+          </div>
+          <div className="flex items-center gap-5">
+            <button
+              onClick={handleExportCSV}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#8c8275] transition-colors hover:text-[#2c3455]"
+            >
+              <Download className="h-3.5 w-3.5" />
+              CSV 내보내기
+            </button>
+            <button
+              onClick={handleOpenRegister}
+              className={`inline-flex h-11 items-center justify-center gap-1.5 rounded-xl px-5 text-sm font-semibold transition-[background-color] duration-200 ${registerBtnColor}`}
+            >
+              <Plus className="h-4 w-4" />
+              내역 등록
+            </button>
+          </div>
         </div>
 
         <SettlementLedger
@@ -208,6 +214,32 @@ export function SettlementClientView({
         entry={selectedEntry}
         eventType={eventType}
       />
+    </div>
+  );
+}
+
+function StatField({
+  label,
+  value,
+  sub,
+  emphasis = false
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  emphasis?: boolean;
+}) {
+  return (
+    <div className="space-y-1">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8c8275]">{label}</p>
+      <p
+        className={`font-[var(--font-serif)] font-normal tabular-nums text-[#2c3455] ${
+          emphasis ? "text-2xl" : "text-xl"
+        }`}
+      >
+        {value}
+      </p>
+      {sub && <p className="text-[11px] tabular-nums text-[#8c8275]">{sub}</p>}
     </div>
   );
 }

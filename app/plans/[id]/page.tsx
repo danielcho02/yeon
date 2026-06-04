@@ -2,16 +2,14 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { CalendarDays, Edit, MapPin, Trash2, Users, Wallet, Layers } from "lucide-react";
+import { ArrowRight, Edit, Trash2, Layers } from "lucide-react";
 
 import { Nav } from "@/components/nav";
-import { buttonVariants } from "@/components/ui/button";
 import { UserRole } from "@/generated/prisma/client";
 import { getServerAuthSession } from "@/lib/auth/session";
 import { formatDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import {
-  getEventTypeLabel,
   getQuoteServiceModuleLabel,
   getQuoteStatusMeta
 } from "@/lib/step3.shared";
@@ -56,235 +54,168 @@ export default async function PlanDetailPage({
     cancelled: plan.reservations.filter((r) => r.status === "CANCELED").length,
   };
 
+  const isWedding = plan.type === "WEDDING";
+  const accent = isWedding ? "text-[#c4977a]" : "text-[#5b6b86]";
+  const primaryCtaCls = isWedding
+    ? "bg-[#c4977a] hover:bg-[#b08569] text-white"
+    : "bg-[#2c3455] hover:bg-[#1e2645] text-white";
+
+  const definitions: Array<{ label: string; value: string }> = [];
+  if (plan.scheduledAt) definitions.push({ label: "예정일", value: formatDate(plan.scheduledAt) });
+  if (plan.venueName) definitions.push({ label: "장소", value: plan.venueName });
+  if (plan.budget) definitions.push({ label: "예산", value: `${plan.budget.toLocaleString()}원` });
+  if (plan.guestTarget) definitions.push({ label: "목표 하객 수", value: `${plan.guestTarget.toLocaleString()}명` });
+  definitions.push({ label: "생성일", value: formatDate(plan.createdAt) });
+
+  const totalReservations = stats.requesting + stats.proposed + stats.confirmed;
+  const statusLine =
+    stats.confirmed > 0
+      ? `예약 확정 ${stats.confirmed}건`
+      : stats.proposed > 0
+      ? `도착한 제안 ${stats.proposed}건`
+      : stats.requesting > 0
+      ? `견적 요청 진행 ${stats.requesting}건`
+      : "아직 파트너 견적 요청이 없습니다";
+
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-[#faf9f5] text-[#2c3455]">
       <Nav />
-      <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+      <main className="mx-auto max-w-3xl px-6 py-12 sm:px-8 sm:py-16">
         {/* Breadcrumb */}
-        <nav className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
-          <Link href="/plans" className="hover:text-foreground transition-colors">내 플랜</Link>
+        <nav className="mb-10 flex items-center gap-2 text-xs text-[#8c8275]">
+          <Link href="/plans" className="transition-colors hover:text-[#2c3455]">내 행사 현황</Link>
           <span>/</span>
-          <span className="text-foreground font-medium truncate">{plan.title}</span>
+          <span className="truncate font-medium text-[#2c3455]">{plan.title}</span>
         </nav>
 
-        {/* Header */}
-        <div className="mb-8 flex items-start justify-between gap-4">
-          <div>
-            <div className="mb-2 flex items-center gap-2">
-              <span className="inline-flex rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-                {getEventTypeLabel(plan.type)}
-              </span>
-              <span className="inline-flex rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
-                {plan.status}
-              </span>
-            </div>
-            <h1 className="font-[var(--font-display)] text-2xl font-bold text-foreground sm:text-3xl">
-              {plan.title}
-            </h1>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Link
-              href={`/plans/${id}/edit`}
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              <Edit className="mr-1.5 h-3.5 w-3.5" />
-              수정
-            </Link>
-            <form action={deletePlanById}>
-              <button
-                type="submit"
-                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-2xl border border-rose-200 bg-white px-3 text-sm font-semibold text-rose-600 transition-all duration-200 hover:bg-rose-50 hover:border-rose-300"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                삭제
-              </button>
-            </form>
-          </div>
-        </div>
+        {/* Editorial header */}
+        <header className="border-b border-[#e5e2da] pb-8">
+          <p className={`text-[10px] font-semibold uppercase tracking-[0.28em] ${accent}`}>
+            {isWedding ? "Wedding" : "Funeral"}
+          </p>
+          <h1 className="mt-3 font-[var(--font-serif)] text-3xl font-normal leading-tight tracking-tight text-[#2c3455] sm:text-4xl">
+            {plan.title}
+          </h1>
+          <p className="mt-3 text-sm text-[#8c8275]">{statusLine}</p>
 
-        {/* 준비 현황 위젯 */}
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard label="견적 요청 중" count={stats.requesting} tone="neutral" />
-          <StatCard label="제안 수신" count={stats.proposed} tone={stats.proposed > 0 ? "amber" : "neutral"} />
-          <StatCard label="확정" count={stats.confirmed} tone={stats.confirmed > 0 ? "emerald" : "neutral"} />
-          <StatCard label="취소" count={stats.cancelled} tone="neutral" />
-        </div>
-
-        {/* 플래너 빠른 진입 및 행사 운영 지원 바로가기 */}
-        {plan.type && (
-          <div className="mb-6 flex flex-wrap gap-3">
-            <Link
+          {/* single primary CTA */}
+          {plan.type && (
+            <a
               href={`/planner/${plan.type.toLowerCase()}?planId=${plan.id}`}
-              className="inline-flex items-center gap-1.5 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm font-semibold text-primary transition-all duration-200 hover:bg-primary/10"
+              className={`mt-6 inline-flex h-12 items-center justify-center gap-2 rounded-xl px-7 text-sm font-semibold transition-transform duration-150 hover:-translate-y-0.5 ${primaryCtaCls}`}
             >
-              이 행사로 업체 찾기 →
+              파트너 찾기
+              <ArrowRight className="h-4 w-4" />
+            </a>
+          )}
+        </header>
+
+        {/* Plan info — definition list */}
+        <section className="border-b border-[#e5e2da] py-8">
+          <h2 className="mb-5 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8c8275]">행사 정보</h2>
+          <dl className="divide-y divide-[#ece7df]">
+            {definitions.map((d) => (
+              <div key={d.label} className="flex items-baseline justify-between gap-6 py-3">
+                <dt className="text-xs text-[#8c8275]">{d.label}</dt>
+                <dd className="text-sm font-medium tabular-nums text-[#2c3455]">{d.value}</dd>
+              </div>
+            ))}
+          </dl>
+
+          {plan.description && (
+            <div className="mt-6 border-l-2 border-[#ebdccf] pl-4">
+              <p className="text-sm leading-7 text-[#6b6357] whitespace-pre-wrap">{plan.description}</p>
+            </div>
+          )}
+        </section>
+
+        {/* Reservations — compact list */}
+        <section className="py-8">
+          <div className="mb-5 flex items-baseline justify-between">
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8c8275]">
+              파트너 조율 내역
+              {totalReservations > 0 && <span className="ml-2 tabular-nums text-[#2c3455]">{totalReservations}</span>}
+            </h2>
+            <Link href={`/vendors?planId=${plan.id}`} className="text-xs font-semibold text-[#c4977a] transition-colors hover:text-[#b08569]">
+              업체 찾기 →
             </Link>
-            {(plan.type === "WEDDING" || plan.type === "FUNERAL") && (
-              <Link
-                href={`/plans/${plan.id}/support`}
-                className="inline-flex items-center gap-1.5 rounded-2xl border border-emerald-600/30 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition-all duration-200 hover:bg-emerald-100/50"
-              >
-                <Layers className="mr-1.5 h-4 w-4" />
-                행사 운영 지원 서비스 →
-              </Link>
-            )}
           </div>
-        )}
 
-        <div className="grid gap-5 lg:grid-cols-[1fr_0.85fr]">
-          {/* Plan Info */}
-          <section className="rounded-[1.5rem] border border-border/60 bg-white/90 p-6 shadow-sm">
-            <h2 className="mb-5 font-[var(--font-display)] text-base font-semibold text-foreground">플랜 정보</h2>
-            <div className="space-y-3.5">
-              {plan.scheduledAt && (
-                <InfoRow icon={CalendarDays} label="예정일" value={formatDate(plan.scheduledAt)} />
-              )}
-              {plan.venueName && (
-                <InfoRow icon={MapPin} label="장소" value={plan.venueName} />
-              )}
-              {plan.budget && (
-                <InfoRow icon={Wallet} label="예산" value={`${plan.budget.toLocaleString()}원`} />
-              )}
-              {plan.guestTarget && (
-                <InfoRow icon={Users} label="목표 하객 수" value={`${plan.guestTarget.toLocaleString()}명`} />
-              )}
-              <InfoRow icon={CalendarDays} label="생성일" value={formatDate(plan.createdAt)} />
-            </div>
+          {plan.reservations.length === 0 ? (
+            <p className="py-6 text-sm text-[#8c8275]">
+              아직 조율 중인 파트너가 없습니다. 위 버튼으로 파트너를 찾아보세요.
+            </p>
+          ) : (
+            <ul className="divide-y divide-[#ece7df]">
+              {plan.reservations.map((res) => {
+                const displayMeta = getQuoteStatusMeta({
+                  ...res,
+                  quoteRequestStatus: res.quoteRequest?.status ?? null
+                });
+                const confirmedAmount = res.status === "CONFIRMED" ? res.confirmedAmount : null;
+                const proposedAmount =
+                  res.status !== "CONFIRMED" && res.quoteResponseId && res.quotedAmount != null
+                    ? res.quotedAmount
+                    : null;
+                const requestedBudget = res.quoteResponseId == null ? res.quotedAmount : null;
+                const amount = confirmedAmount ?? proposedAmount ?? requestedBudget;
 
-            {plan.description && (
-              <div className="mt-5 rounded-2xl border border-border/40 bg-muted/30 p-4">
-                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/55">메모</p>
-                <p className="text-sm leading-6 text-muted-foreground whitespace-pre-wrap">{plan.description}</p>
-              </div>
-            )}
-          </section>
-
-          {/* Reservations */}
-          <section className="rounded-[1.5rem] border border-border/60 bg-white/90 p-6 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-[var(--font-display)] text-base font-semibold text-foreground">견적 요청</h2>
-              <Link href={`/vendors?planId=${plan.id}`} className="text-xs font-semibold text-primary hover:underline">
-                업체 찾기 →
-              </Link>
-            </div>
-
-            {plan.reservations.length === 0 ? (
-              <div className="flex flex-col items-center py-8 text-center">
-                <p className="text-sm text-muted-foreground">아직 견적 요청이 없습니다.</p>
-                <Link href={`/vendors?planId=${plan.id}`} className="mt-3 text-xs font-semibold text-primary hover:underline">
-                  업체를 찾아 견적을 요청해보세요
-                </Link>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {plan.reservations.map((res) => {
-                  const displayMeta = getQuoteStatusMeta({
-                    ...res,
-                    quoteRequestStatus: res.quoteRequest?.status ?? null
-                  });
-                  const confirmedAmount =
-                    res.status === "CONFIRMED" ? res.confirmedAmount : null;
-                  const proposedAmount =
-                    res.status !== "CONFIRMED" &&
-                    res.quoteResponseId &&
-                    res.quotedAmount != null
-                      ? res.quotedAmount
-                      : null;
-                  const requestedBudget =
-                    res.quoteResponseId == null ? res.quotedAmount : null;
-                  const vendorConfirmationDueAt =
-                    res.quoteRequest?.status === "ACCEPTED" ? res.vendorConfirmationDueAt : null;
-
-                  return (
-                    <div
-                      key={res.id}
-                      className="rounded-2xl border border-border/40 bg-white/70 p-4"
-                    >
-                      <div className="mb-1.5 flex items-start justify-between gap-2">
-                        <p className="text-sm font-semibold text-foreground">
-                          {res.vendor?.companyName ?? res.vendor?.name ?? "업체"}
-                        </p>
-                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${displayMeta.tone}`}>
-                          {displayMeta.label}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
+                return (
+                  <li key={res.id} className="flex flex-col gap-1 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="text-sm font-semibold text-[#2c3455]">
+                        {res.vendor?.companyName ?? res.vendor?.name ?? "업체"}
+                      </p>
+                      <p className="text-xs text-[#8c8275]">
                         {getQuoteServiceModuleLabel({
                           eventType: plan.type,
                           serviceCategory: res.serviceCategory,
                           serviceName: res.serviceName
                         })}
+                        {res.serviceDate ? ` · ${formatDate(res.serviceDate)}` : ""}
                       </p>
-                      {res.serviceDate && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          희망일: {formatDate(res.serviceDate)}
-                        </p>
-                      )}
-                      {requestedBudget != null && (
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          요청 예산: {requestedBudget.toLocaleString()}원
-                        </p>
-                      )}
-                      {proposedAmount != null && (
-                        <p className="mt-0.5 text-xs font-semibold text-primary">
-                          제안 금액: {proposedAmount.toLocaleString()}원
-                        </p>
-                      )}
-                      {confirmedAmount != null && (
-                        <p className="mt-0.5 text-xs font-semibold text-emerald-700">
-                          확정 금액: {confirmedAmount.toLocaleString()}원
-                        </p>
-                      )}
-                      {vendorConfirmationDueAt && (
-                        <p className="mt-0.5 text-xs font-semibold text-[#8c8275]">
-                          업체 확정 요청 기한: {formatDate(vendorConfirmationDueAt)}
-                        </p>
-                      )}
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        </div>
+                    <div className="flex shrink-0 items-center gap-4">
+                      {amount != null && (
+                        <span className="text-sm font-medium tabular-nums text-[#2c3455]">
+                          {amount.toLocaleString()}원
+                        </span>
+                      )}
+                      <span className="text-xs font-semibold text-[#8c8275]">{displayMeta.label}</span>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        {/* support shortcut + demoted edit/delete */}
+        <footer className="flex flex-col gap-4 border-t border-[#e5e2da] pt-6">
+          {(plan.type === "WEDDING" || plan.type === "FUNERAL") && (
+            <Link
+              href={`/plans/${plan.id}/support`}
+              className="inline-flex items-center gap-2 text-xs font-semibold text-[#2c3455] transition-colors hover:text-[#c4977a]"
+            >
+              <Layers className="h-3.5 w-3.5" />
+              행사 운영 지원 도구 열기
+            </Link>
+          )}
+          <div className="flex items-center gap-4 text-xs text-[#8c8275]">
+            <Link href={`/plans/${id}/edit`} className="inline-flex items-center gap-1 transition-colors hover:text-[#2c3455]">
+              <Edit className="h-3 w-3" />
+              정보 수정
+            </Link>
+            <span className="text-[#d8d2c7]">·</span>
+            <form action={deletePlanById}>
+              <button type="submit" className="inline-flex items-center gap-1 transition-colors hover:text-rose-600">
+                <Trash2 className="h-3 w-3" />
+                행사 삭제
+              </button>
+            </form>
+          </div>
+        </footer>
       </main>
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  count,
-  tone,
-}: {
-  label: string;
-  count: number;
-  tone: "neutral" | "amber" | "emerald";
-}) {
-  const toneClass =
-    tone === "emerald"
-      ? "border-emerald-200/60 bg-emerald-50/60 text-emerald-700"
-      : tone === "amber"
-        ? "border-amber-200/60 bg-amber-50/60 text-amber-700"
-        : "border-border/60 bg-white/90 text-foreground";
-  return (
-    <div className={`rounded-2xl border p-4 ${toneClass}`}>
-      <p className="text-2xl font-bold">{count}</p>
-      <p className="mt-0.5 text-xs font-medium opacity-70">{label}</p>
-    </div>
-  );
-}
-
-function InfoRow({ icon: Icon, label, value }: { icon: typeof CalendarDays; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-3 rounded-2xl border border-border/40 bg-white/70 px-4 py-3">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-muted/60">
-        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-[10px] text-muted-foreground/55">{label}</p>
-        <p className="mt-0.5 text-sm font-medium text-foreground truncate">{value}</p>
-      </div>
     </div>
   );
 }

@@ -2,12 +2,16 @@
 
 import { type ElementType, type ReactNode, useMemo, useRef, useState, useTransition } from "react";
 import {
+  ArrowUp,
   BadgeCheck,
+  CalendarCheck,
   CalendarDays,
   Clock,
   ClipboardList,
   Heart,
   Inbox,
+  LayoutList,
+  MessageSquare,
   MessageSquareQuote,
   Shield,
   ShieldCheck,
@@ -1064,70 +1068,57 @@ export function VendorWorkspace({
 
   return (
     <div className="grid gap-6">
-      {/* ── Priority Banner for Pending Confirmations ──────────────────────────────────── */}
-      {pendingConfirmationReservations.length > 0 && (
-        <div className={`relative overflow-hidden rounded-2xl border p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-fade-in ${finalConfirmTone.banner}`}>
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-xl ${finalConfirmTone.bannerIconWrap}`}>
-              <Clock className="h-5 w-5" />
-            </div>
-            <div>
-              <p className={`text-xs font-bold ${finalConfirmTone.bannerEyebrow}`}>예약 최종 확정 필요</p>
-              <p className={`text-[11px] ${finalConfirmTone.bannerCopy}`}>고객이 견적을 최종 수락했습니다. 실제 승인은 최종 확정 화면에서만 진행됩니다.</p>
-            </div>
+      {/* ── Partner Header (editorial) ──────────────────────────────────────────── */}
+      <header className="flex flex-col gap-1 border-b border-[#e5e2da] pb-6">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#ebdccf] bg-white text-[#c4977a]">
+            <ThemeIcon className="h-4 w-4" />
           </div>
-          <button
-            onClick={scrollToPendingConfirmations}
-            className={`px-4 h-9 text-xs font-bold text-white rounded-xl transition-all shadow-sm whitespace-nowrap break-keep ${finalConfirmTone.bannerButton}`}
-          >
-            최종 확정 화면으로 이동
-          </button>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[#8c8275]">Partner Portal</p>
         </div>
-      )}
+        <h1 className="mt-2 font-[var(--font-serif)] text-2xl font-normal tracking-tight text-[#2c3455] sm:text-[1.75rem]">
+          {companyName}
+        </h1>
+        <p className="text-xs text-[#8c8275]">{viewerName} · {viewerEmail}</p>
+      </header>
 
-      {/* ── Compact Partner Header ──────────────────────────────────────────── */}
-      <section className="relative overflow-hidden rounded-2xl border border-[#e5e2da] bg-[#faf9f5] px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white border border-[#ebdccf] text-[#c4977a]">
-            <ThemeIcon className="h-4.5 w-4.5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="font-[var(--font-serif)] text-sm font-bold text-[#2c3455]">{companyName}</h2>
-              <Badge className="bg-[#fcf8f2] text-[#c4977a] border border-[#ebdccf]/60 text-[8px] px-1.5 py-0.5 rounded shadow-none font-bold">파트너</Badge>
-            </div>
-            <p className="text-[10px] text-[#8c8275]">{viewerEmail} · {viewerName}</p>
-          </div>
-        </div>
-
-        {/* ── Today Work Summary (Compact Metric Cards) ── */}
-        <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-[#2c3455]">
-          <div className="flex items-center gap-1.5 bg-white border border-[#ebdccf]/40 px-3 py-1.5 rounded-lg shadow-sm">
-            <span className="text-muted-foreground text-[10px]">새 요청</span>
-            <span className={inboxItems.length > 0 ? "text-amber-600 font-bold" : "text-[#2c3455]"}>{inboxItems.length}건</span>
-          </div>
-          <div className="flex items-center gap-1.5 bg-white border border-[#ebdccf]/40 px-3 py-1.5 rounded-lg shadow-sm">
-            <span className="text-muted-foreground text-[10px]">진행 제안</span>
-            <span>{proposalActivityCount}건</span>
-          </div>
-          <div className={`flex items-center gap-1.5 border px-3 py-1.5 rounded-lg shadow-sm transition-all ${
-            pendingConfirmationReservations.length > 0
-              ? finalConfirmTone.metricActive
-              : "bg-white border-[#ebdccf]/40 text-[#2c3455]"
-          }`}>
-            <span className="text-[10px]">최종 확정 필요</span>
-            <span>{pendingConfirmationReservations.length}건</span>
-          </div>
-          <div className="flex items-center gap-1.5 bg-white border border-[#ebdccf]/40 px-3 py-1.5 rounded-lg shadow-sm">
-            <span className="text-muted-foreground text-[10px]">확정 예약</span>
-            <span>{confirmedReservations.length}건</span>
-          </div>
-          <div className="flex items-center gap-1.5 bg-white border border-[#ebdccf]/40 px-3 py-1.5 rounded-lg shadow-sm">
-            <span className="text-muted-foreground text-[10px]">확정 총액</span>
-            <span className="text-[#c4977a] font-bold font-mono">{formatCurrency(confirmedTotal)}</span>
-          </div>
-        </div>
+      {/* ── Priority Queue (editorial numerals) ─────────────────────────────────── */}
+      <section className="grid grid-cols-1 divide-y divide-[#e5e2da] rounded-2xl border border-[#e5e2da] bg-white sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        <PriorityCell
+          eyebrow="새 견적 요청"
+          count={inboxItems.length}
+          hint={inboxItems.length > 0 ? "검토가 필요합니다" : "대기 중인 요청 없음"}
+          active={inboxItems.length > 0}
+          accent="accent"
+          onClick={() => setActivePanel("inbox")}
+        />
+        <PriorityCell
+          eyebrow="견적서 작성 진행"
+          count={proposalActivityCount}
+          hint={proposalActivityCount > 0 ? "조율 중인 제안" : "진행 중인 제안 없음"}
+          active={false}
+          accent="neutral"
+          onClick={() => setActivePanel("proposals")}
+        />
+        <PriorityCell
+          eyebrow="최종 확정 필요"
+          count={pendingConfirmationReservations.length}
+          hint={pendingConfirmationReservations.length > 0 ? "고객 수락 완료 · 승인 대기" : "확정 대기 건 없음"}
+          active={pendingConfirmationReservations.length > 0}
+          accent={selectedReservation?.eventPlan.type === "WEDDING" || vendorPrimaryType === "WEDDING" ? "accent" : "primary"}
+          onClick={scrollToPendingConfirmations}
+        />
       </section>
+
+      {/* ── Confirmed summary line ─────────────────────────────────── */}
+      <div className="flex flex-wrap items-baseline justify-between gap-2 px-1 text-xs text-[#8c8275]">
+        <span>
+          확정 예약 <span className="font-semibold text-[#2c3455] tabular-nums">{confirmedReservations.length}건</span>
+        </span>
+        <span>
+          확정 계약 총액 <span className="font-[var(--font-serif)] text-sm font-semibold text-[#c4977a] tabular-nums">{formatCurrency(confirmedTotal)}</span>
+        </span>
+      </div>
 
       {error && (
         <div className="rounded-xl border border-rose-200 bg-rose-50/50 px-4 py-3 text-xs font-semibold text-rose-800 animate-fade-in flex justify-between items-center shadow-sm">
@@ -1155,7 +1146,7 @@ export function VendorWorkspace({
                   setActivePanel(panel.key);
                   setShowServiceManager(false);
                 }}
-                className={`relative -mb-[2px] border-b-2 px-4 py-3 text-xs font-semibold transition-all duration-200 ${
+                className={`relative -mb-[2px] border-b-2 px-4 py-3 text-xs font-semibold transition-[color,border-color] duration-200 ${
                   isActive && !showServiceManager
                     ? "border-[#c4977a] text-[#c4977a]"
                     : "border-transparent text-muted-foreground hover:text-[#2c3455]"
@@ -1163,9 +1154,7 @@ export function VendorWorkspace({
               >
                 {panel.label}
                 {count > 0 && (
-                  <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
-                    isActive && !showServiceManager ? "bg-[#c4977a] text-white" : "bg-[#f2ece4] text-muted-foreground"
-                  }`}>
+                  <span className="ml-1.5 align-text-top text-[10px] font-semibold tabular-nums text-[#8c8275]">
                     {count}
                   </span>
                 )}
@@ -1268,7 +1257,7 @@ export function VendorWorkspace({
               {inboxItems.length ? (
                 <div className="space-y-3">
                   {inboxItems.slice(0, 3).map((item) => (
-                    <div key={item.id} className="rounded-xl border border-[#e5e2da]/70 bg-white p-4 transition-all duration-150 hover:border-[#ebdccf]">
+                    <div key={item.id} className="rounded-xl border border-[#e5e2da]/70 bg-white p-4 transition-[border-color] duration-150 hover:border-[#ebdccf]">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="font-semibold text-xs text-[#2c3455]">{item.label}</p>
@@ -1302,36 +1291,35 @@ export function VendorWorkspace({
             </div>
 
             {/* Proposals & Confirmed Quick View */}
-            <div className="rounded-2xl border border-[#e5e2da] bg-white p-6 shadow-sm space-y-5">
-              <div>
-                <h3 className="font-[var(--font-serif)] text-sm font-bold text-[#2c3455] border-b border-[#f2ece4] pb-3 mb-4">내 비즈니스 업무 요약</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-xl border border-[#e5e2da]/60 bg-[#faf9f5]/50 p-4 text-center">
-                    <p className="text-[10px] text-muted-foreground">진행 제안</p>
-                    <p className="text-base font-extrabold font-mono text-[#2c3455] mt-1">{proposalActivityCount}건</p>
-                    <button onClick={() => setActivePanel("proposals")} className="mt-2 text-[9px] font-bold text-[#c4977a] hover:underline block mx-auto">제안 보기 →</button>
-                  </div>
-                  <div className="rounded-xl border border-[#e5e2da]/60 bg-[#faf9f5]/50 p-4 text-center">
-                    <p className="text-[10px] text-muted-foreground">확정 예약</p>
-                    <p className="text-base font-extrabold font-mono text-[#2c3455] mt-1">{confirmedReservations.length}건</p>
-                    <button onClick={() => setActivePanel("confirmed")} className="mt-2 text-[9px] font-bold text-[#c4977a] hover:underline block mx-auto">스케줄 보기 →</button>
-                  </div>
-                </div>
+            <div className="flex flex-col justify-between gap-5 rounded-2xl border border-[#e5e2da] bg-white p-6 shadow-sm">
+              <div className="space-y-4">
+                <h3 className="border-b border-[#f2ece4] pb-3 font-[var(--font-serif)] text-sm font-bold text-[#2c3455]">진행 현황 요약</h3>
+                <button
+                  onClick={() => setActivePanel("proposals")}
+                  className="flex w-full items-baseline justify-between border-b border-[#f2ece4]/70 pb-3 text-left transition-[color] duration-150 hover:text-[#c4977a]"
+                >
+                  <span className="text-xs text-[#8c8275]">진행 중인 제안</span>
+                  <span className="font-[var(--font-serif)] text-xl font-normal tabular-nums text-[#2c3455]">{proposalActivityCount}</span>
+                </button>
+                <button
+                  onClick={() => setActivePanel("confirmed")}
+                  className="flex w-full items-baseline justify-between text-left transition-[color] duration-150 hover:text-[#c4977a]"
+                >
+                  <span className="text-xs text-[#8c8275]">확정된 예약</span>
+                  <span className="font-[var(--font-serif)] text-xl font-normal tabular-nums text-[#2c3455]">{confirmedReservations.length}</span>
+                </button>
               </div>
 
-              <div className="rounded-xl bg-[#faf9f5]/50 border border-[#ebdccf]/40 p-4 flex items-center justify-between">
+              <button
+                onClick={() => setShowServiceManager(true)}
+                className="flex items-center justify-between rounded-xl border border-[#ebdccf]/40 bg-[#faf9f5]/50 px-4 py-3 text-left transition-[background-color] duration-150 hover:bg-[#faf9f5]"
+              >
                 <div className="space-y-0.5">
                   <p className="text-[10px] text-muted-foreground">공급 서비스 설정</p>
-                  <p className="text-[11px] font-bold text-[#2c3455]">내 제공 서비스 목록</p>
+                  <p className="text-[11px] font-bold text-[#2c3455]">내 제공 서비스 목록 관리</p>
                 </div>
-                <Button 
-                  onClick={() => setShowServiceManager(true)}
-                  variant="outline" 
-                  className="rounded-xl text-[10px] h-8 border-[#e5e2da] text-[#2c3455] bg-white hover:bg-[#faf9f5]"
-                >
-                  목록 관리
-                </Button>
-              </div>
+                <ClipboardList className="h-4 w-4 text-[#8c8275]" />
+              </button>
             </div>
           </div>
         </section>
@@ -1351,7 +1339,7 @@ export function VendorWorkspace({
                 inboxItems.map((item) => (
                   <article
                     key={item.id}
-                    className={`rounded-xl border p-4 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#c4977a] ${
+                    className={`rounded-xl border p-4 text-left transition-[border-color,background-color] duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#c4977a] ${
                       (item.type === "reservation" ? selectedReservationId === item.id : proposalForm.quoteRequestId === item.id)
                         ? "border-[#c4977a] bg-[#faf9f5]"
                         : "border-[#e5e2da]/70 bg-white hover:border-[#ebdccf] hover:bg-[#faf9f5]/30"
@@ -1411,7 +1399,7 @@ export function VendorWorkspace({
                   </article>
                 ))
               ) : (
-                <EmptyState emoji="📭" title={inboxEmptyText} description="새 견적 요청이 접수되면 이곳에 표시됩니다." />
+                <EmptyState icon={Inbox} title={inboxEmptyText} description="새 견적 요청이 접수되면 이곳에 표시됩니다." />
               )}
             </div>
           </div>
@@ -1519,7 +1507,7 @@ export function VendorWorkspace({
                         <Button
                           disabled={isPending || busyReservationId === proposalForm.quoteRequestId}
                           onClick={() => updateReservation("quote")}
-                          className="h-10 flex-1 rounded-xl bg-[#2c3455] text-xs font-semibold text-white transition-all hover:bg-[#1e2645] whitespace-nowrap break-keep"
+                          className="h-10 flex-1 rounded-xl bg-[#2c3455] text-xs font-semibold text-white transition-[background-color] hover:bg-[#1e2645] whitespace-nowrap break-keep"
                         >
                           <MessageSquareQuote className="mr-1.5 h-4 w-4" />
                           {busyReservationId === proposalForm.quoteRequestId ? "제안 전송 중..." : "견적 제안 전송"}
@@ -1575,7 +1563,7 @@ export function VendorWorkspace({
                   )}
                 </>
               ) : (
-                <EmptyState emoji="👆" title="요청을 선택해 주세요." description="왼쪽 목록에서 요청을 클릭하면 상세 요건을 확인하실 수 있습니다." />
+                <EmptyState icon={ArrowUp} title="요청을 선택해 주세요." description="왼쪽 목록에서 요청을 클릭하면 상세 요건을 확인하실 수 있습니다." />
               )}
             </div>
           </div>
@@ -1596,7 +1584,7 @@ export function VendorWorkspace({
             <div className="grid gap-5">
               {!selectedQuoteRequest && (
                 <EmptyState
-                  emoji="💌"
+                  icon={MessageSquare}
                   title="진행 중인 제안을 선택해 주세요."
                   description="오른쪽 목록에서 조정 요청이나 플래너 수락 대기 중인 제안을 선택하면 상세 상태가 표시됩니다."
                 />
@@ -1714,7 +1702,7 @@ export function VendorWorkspace({
                       <Button
                         disabled={isPending || busyReservationId === proposalForm.quoteRequestId}
                         onClick={() => updateReservation("quote")}
-                        className="mt-3 h-10 w-full rounded-xl bg-[#2c3455] text-xs font-semibold text-white transition-all hover:bg-[#1e2645] whitespace-nowrap break-keep"
+                        className="mt-3 h-10 w-full rounded-xl bg-[#2c3455] text-xs font-semibold text-white transition-[background-color] hover:bg-[#1e2645] whitespace-nowrap break-keep"
                       >
                         <MessageSquareQuote className="mr-1.5 h-4 w-4" />
                         {busyReservationId === proposalForm.quoteRequestId ? "제안 전송 중..." : "다른 금액으로 수정 제안"}
@@ -1761,7 +1749,7 @@ export function VendorWorkspace({
               {proposalActivityCount ? (
                 <>
                   {inProgressReservations.map((r) => (
-                    <div key={r.id} className="rounded-xl border border-[#e5e2da]/70 bg-white p-4 transition-all duration-200 hover:border-[#ebdccf] hover:shadow-[0_4px_16px_rgba(0,0,0,0.01)]">
+                    <div key={r.id} className="rounded-xl border border-[#e5e2da]/70 bg-white p-4 transition-[border-color,box-shadow] duration-200 hover:border-[#ebdccf] hover:shadow-[0_4px_16px_rgba(0,0,0,0.01)]">
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1">
                           <p className="font-semibold text-xs text-[#2c3455]">
@@ -1818,7 +1806,7 @@ export function VendorWorkspace({
                         key={`responded:${qr.id}`}
                         type="button"
                         onClick={() => loadQuoteRequest(qr, "proposals")}
-                        className="w-full rounded-xl border border-[#e5e2da]/70 bg-white p-4 text-left transition-all duration-200 hover:border-[#ebdccf] hover:bg-[#faf9f5]/40 hover:shadow-[0_4px_16px_rgba(0,0,0,0.01)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#c4977a]"
+                        className="w-full rounded-xl border border-[#e5e2da]/70 bg-white p-4 text-left transition-[border-color,background-color,box-shadow] duration-200 hover:border-[#ebdccf] hover:bg-[#faf9f5]/40 hover:shadow-[0_4px_16px_rgba(0,0,0,0.01)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#c4977a]"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="space-y-1">
@@ -1844,7 +1832,7 @@ export function VendorWorkspace({
                   })}
                 </>
               ) : (
-                <EmptyState emoji="💌" title="진행 중인 견적이 없습니다." description="견적 제안을 회신하시면 이곳에서 모니터링하실 수 있습니다." />
+                <EmptyState icon={MessageSquare} title="진행 중인 견적이 없습니다." description="견적 제안을 회신하시면 이곳에서 모니터링하실 수 있습니다." />
               )}
             </div>
           </div>
@@ -1919,7 +1907,7 @@ export function VendorWorkspace({
                         disabled={isPending || busyReservationId === r.id}
                         onClick={() => confirmAcceptedReservation(r.id)}
                         size="sm"
-                        className={`text-white rounded-xl h-9 text-xs font-semibold px-4 transition-all whitespace-nowrap break-keep ${finalConfirmTone.infoButton}`}
+                        className={`text-white rounded-xl h-9 text-xs font-semibold px-4 transition-[background-color] whitespace-nowrap break-keep ${finalConfirmTone.infoButton}`}
                       >
                         <BadgeCheck className="mr-1 h-3.5 w-3.5" />
                         {busyReservationId === r.id ? "승인 중..." : "최종 예약 승인"}
@@ -1930,7 +1918,7 @@ export function VendorWorkspace({
               })
             ) : (
               <div className="py-12">
-                <EmptyState emoji="✨" title="최종 확정 대기 중인 일정이 없습니다." description="고객이 보낸 견적 제안을 수락하면 이곳에 대기 목록으로 올라옵니다." />
+                <EmptyState icon={Clock} title="최종 확정 대기 중인 일정이 없습니다." description="고객이 보낸 견적 제안을 수락하면 이곳에 대기 목록으로 올라옵니다." />
               </div>
             )}
           </div>
@@ -2067,7 +2055,7 @@ export function VendorWorkspace({
             })}
 
             {pendingReservationRequestCount === 0 && (
-              <EmptyState emoji="🗂️" title="처리할 변경/취소 요청이 없습니다." description="고객이 예약 변경 또는 취소 승인을 요청하면 이곳에 표시됩니다." />
+              <EmptyState icon={LayoutList} title="처리할 변경/취소 요청이 없습니다." description="고객이 예약 변경 또는 취소 승인을 요청하면 이곳에 표시됩니다." />
             )}
           </div>
         </section>
@@ -2093,7 +2081,7 @@ export function VendorWorkspace({
               confirmedReservations.map((r) => (
                 <article
                   key={r.id}
-                  className="rounded-xl border border-[#e5e2da]/70 bg-white p-5 transition-all duration-200 hover:border-[#ebdccf]"
+                  className="rounded-xl border border-[#e5e2da]/70 bg-white p-5 transition-[border-color] duration-200 hover:border-[#ebdccf]"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#f2ece4]/40 pb-3 mb-3">
                     <div className="space-y-1">
@@ -2123,7 +2111,7 @@ export function VendorWorkspace({
               ))
             ) : (
               <div className="col-span-2">
-                <EmptyState emoji="✨" title="확정된 예약 일정이 없습니다." description="최종 예약을 확정하시면 스케줄 목록에 반영됩니다." />
+                <EmptyState icon={CalendarCheck} title="확정된 예약 일정이 없습니다." description="최종 예약을 확정하시면 스케줄 목록에 반영됩니다." />
               </div>
             )}
           </div>
@@ -2131,6 +2119,44 @@ export function VendorWorkspace({
       )}
 
     </div>
+  );
+}
+
+function PriorityCell({
+  eyebrow,
+  count,
+  hint,
+  active,
+  accent,
+  onClick
+}: {
+  eyebrow: string;
+  count: number;
+  hint: string;
+  active: boolean;
+  accent: "accent" | "primary" | "neutral";
+  onClick: () => void;
+}) {
+  const numeralColor = !active
+    ? "text-[#d8d2c7]"
+    : accent === "accent"
+    ? "text-[#c4977a]"
+    : accent === "primary"
+    ? "text-[#2c3455]"
+    : "text-[#2c3455]";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex flex-col gap-1 px-6 py-6 text-left transition-[background-color] duration-200 hover:bg-[#faf9f5] focus-visible:outline-none focus-visible:bg-[#faf9f5]"
+    >
+      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8c8275]">{eyebrow}</span>
+      <span className={`font-[var(--font-serif)] text-5xl font-normal leading-none tabular-nums ${numeralColor}`}>
+        {count}
+      </span>
+      <span className="mt-1.5 text-[11px] text-[#8c8275]">{hint}</span>
+    </button>
   );
 }
 
@@ -2158,17 +2184,21 @@ function Field({
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-[#e5e2da]/50 bg-white px-4 py-3 transition-all duration-150 hover:bg-[#faf9f5]/30">
+    <div className="rounded-xl border border-[#e5e2da]/50 bg-white px-4 py-3 transition-[background-color] duration-150 hover:bg-[#faf9f5]/30">
       <p className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-wider">{label}</p>
       <p className="mt-0.5 text-xs font-semibold text-[#2c3455]">{value}</p>
     </div>
   );
 }
 
-function EmptyState({ title, description, emoji }: { title: string; description: string; emoji?: string }) {
+function EmptyState({ title, description, icon: Icon }: { title: string; description: string; icon?: ElementType }) {
   return (
-    <div className="rounded-xl border border-dashed border-[#ebdccf] bg-[#faf9f5]/30 p-8 text-center max-w-md mx-auto">
-      {emoji && <p className="mb-3 text-2xl">{emoji}</p>}
+    <div className="mx-auto max-w-md rounded-xl border border-dashed border-[#ebdccf] bg-[#faf9f5]/30 p-8 text-center">
+      {Icon ? (
+        <Icon className="mx-auto mb-3 h-5 w-5 text-[#bcae9c]" aria-hidden="true" />
+      ) : (
+        <span className="mx-auto mb-3 block h-px w-8 bg-[#ebdccf]" />
+      )}
       <p className="text-xs font-semibold text-[#2c3455]">{title}</p>
       <p className="mt-1.5 text-xs leading-relaxed text-[#8c8275]">{description}</p>
     </div>

@@ -44,9 +44,9 @@ function resolveLoginDestination(role: string | undefined, callbackUrl: string |
 }
 
 const DEMO_ACCOUNTS = [
-  { label: "일반 사용자", email: "planner@yeon.local", description: "플래너 체험", hoverClass: "hover:border-[#c4977a] hover:bg-[#faf9f5]" },
-  { label: "웨딩 파트너", email: "venue@yeon.local", description: "웨딩홀 파트너", hoverClass: "hover:border-[#ebdccf] hover:bg-[#faf9f5]" },
-  { label: "장례 파트너", email: "memorial@yeon.local", description: "장례 파트너", hoverClass: "hover:border-[#cbd3e0] hover:bg-[#f4f5f8]" },
+  { label: "일반 사용자", email: "planner@yeon.local" },
+  { label: "웨딩 파트너", email: "venue@yeon.local" },
+  { label: "장례 파트너", email: "memorial@yeon.local" },
 ] as const;
 
 export function LoginForm({
@@ -119,7 +119,7 @@ export function LoginForm({
             required
             type="email"
             value={email}
-            className="rounded-xl border-[#e5e2da] bg-white text-xs h-10 transition-all duration-150 focus-visible:ring-1 focus-visible:ring-[#c4977a]"
+            className="rounded-xl border-[#e5e2da] bg-white text-xs h-10 transition-[border-color,box-shadow] duration-150 focus-visible:ring-1 focus-visible:ring-[#c4977a]"
           />
         </div>
 
@@ -134,7 +134,7 @@ export function LoginForm({
             required
             type="password"
             value={password}
-            className="rounded-xl border-[#e5e2da] bg-white text-xs h-10 transition-all duration-150 focus-visible:ring-1 focus-visible:ring-[#c4977a]"
+            className="rounded-xl border-[#e5e2da] bg-white text-xs h-10 transition-[border-color,box-shadow] duration-150 focus-visible:ring-1 focus-visible:ring-[#c4977a]"
           />
         </div>
       </div>
@@ -152,55 +152,43 @@ export function LoginForm({
         </div>
       ) : null}
 
-      <Button 
-        className="w-full bg-[#2c3455] text-white hover:bg-[#1e2645] h-10 text-xs font-semibold rounded-xl transition-colors duration-150" 
-        disabled={isSubmitting} 
-        size="full" 
+      <Button
+        className="h-11 w-full rounded-xl bg-[#2c3455] text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#1e2645]"
+        disabled={isSubmitting}
+        size="full"
         type="submit"
       >
         {isSubmitting ? "로그인 중..." : "로그인"}
       </Button>
 
-      {/* Demo accounts */}
-      <div className="space-y-4 pt-2">
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t border-[#e5e2da]/70" />
-          </div>
-          <div className="relative flex justify-center">
-            <span className="bg-white px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-[#8c8275]">
-              데모 샌드박스 간편 접속
-            </span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2">
-          {DEMO_ACCOUNTS.map((account) => (
-            <button
-              className={`rounded-xl border border-[#e5e2da] bg-[#faf9f5]/20 px-2 py-3 text-center transition-all duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 ${account.hoverClass}`}
-              disabled={isSubmitting}
-              key={account.email}
-              onClick={() => fillDemo(account.email)}
-              type="button"
-            >
-              <p className="text-[10px] font-bold text-[#2c3455]">{account.label}</p>
-              <p className="mt-0.5 text-[9px] text-[#8c8275]">{account.description}</p>
-            </button>
-          ))}
-        </div>
-        <p className="text-center text-[10px] text-[#8c8275] leading-relaxed">
-          샌드박스 공통 비밀번호:{" "}
-          <code className="rounded bg-[#faf9f5] border border-[#e5e2da] px-1.5 py-0.5 font-mono text-[#2c3455] font-bold">demo1234</code>
-        </p>
-      </div>
-
       <p className="text-center text-xs text-[#8c8275]">
         아직 계정이 없다면{" "}
-        <Link className="font-bold text-[#2c3455] hover:text-[#c4977a] underline underline-offset-4" href="/signup">
+        <Link className="font-semibold text-[#2c3455] underline underline-offset-4 hover:text-[#c4977a]" href="/signup">
           회원가입
         </Link>
-        하세요.
       </p>
+
+      {/* Demo sandbox — quiet text links */}
+      <div className="border-t border-[#e5e2da]/70 pt-5">
+        <p className="text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8c8275]">
+          데모 간편 접속
+        </p>
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs">
+          {DEMO_ACCOUNTS.map((account, i) => (
+            <span key={account.email} className="inline-flex items-center gap-4">
+              {i > 0 && <span className="text-[#d8d2c7]">·</span>}
+              <button
+                className="font-medium text-[#2c3455] transition-colors duration-150 hover:text-[#c4977a] disabled:pointer-events-none disabled:opacity-50"
+                disabled={isSubmitting}
+                onClick={() => fillDemo(account.email)}
+                type="button"
+              >
+                {account.label}
+              </button>
+            </span>
+          ))}
+        </div>
+      </div>
     </form>
   );
 }

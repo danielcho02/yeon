@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, Edit, Eye, Globe } from "lucide-react";
+import { ArrowLeft, ChevronRight, Edit, Eye, Globe } from "lucide-react";
 
 import { Nav } from "@/components/nav";
 import { ShareLinkButton } from "@/components/features/invitation/ShareLinkButton";
@@ -50,85 +50,118 @@ export default async function MobileCardPage({
     await publishMobileCard(card.id);
   }
 
-  const headerCls = isWedding ? "border-rose-100 bg-rose-50/40" : "border-slate-100 bg-slate-50/40";
-  const titleCls = isWedding ? "text-rose-700" : "text-slate-700";
-  const btnCls = isWedding ? "bg-rose-500 hover:bg-rose-600 text-white" : "bg-slate-700 hover:bg-slate-800 text-white";
+  const accent = isWedding ? "text-[#c4977a]" : "text-[#5b6b86]";
+  const iconWrap = isWedding ? "bg-[#fcf1e7] text-[#c4977a]" : "bg-[#eef2f6] text-[#2c3455]";
+  const btnCls = isWedding ? "bg-[#c4977a] hover:bg-[#b08569] text-white" : "bg-[#2c3455] hover:bg-[#1e2645] text-white";
 
   return (
-    <div className="min-h-screen bg-[#faf9f5]">
+    <div className="min-h-screen bg-[#faf9f5] text-[#2c3455]">
       <Nav />
-      <main className="mx-auto max-w-xl px-4 py-8 sm:px-6">
-        <nav className="mb-6 flex items-center gap-2 text-xs text-muted-foreground">
-          <Link href="/plans" className="hover:text-foreground">내 플랜</Link>
-          <span>/</span>
-          <Link href={`/plans/${id}`} className="hover:text-foreground">{plan.title}</Link>
-          <span>/</span>
-          <span className="font-medium text-foreground">{label}</span>
-        </nav>
+      <main className="mx-auto max-w-xl px-6 py-12 sm:py-16">
+        <div className="mb-10 flex items-center justify-between gap-4">
+          <nav className="flex items-center gap-2 text-xs text-[#8c8275]">
+            <Link href="/plans" className="transition-colors hover:text-[#2c3455]">내 행사 현황</Link>
+            <span>/</span>
+            <Link href={`/plans/${id}`} className="max-w-[120px] truncate transition-colors hover:text-[#2c3455] sm:max-w-none">{plan.title}</Link>
+            <span>/</span>
+            <span className="font-medium text-[#2c3455]">{label}</span>
+          </nav>
+          <Link
+            href={`/plans/${id}`}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[#8c8275] transition-colors hover:text-[#2c3455]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            돌아가기
+          </Link>
+        </div>
 
-        <div className={`mb-6 rounded-2xl border p-5 ${headerCls}`}>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className={`text-sm font-bold ${titleCls}`}>{label}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {card.isPublished ? (
-                  <span className="inline-flex items-center gap-1 font-semibold text-emerald-600">
-                    <Globe className="h-3 w-3" /> 공개 중 · 조회 {card.viewCount}회
-                  </span>
-                ) : (
-                  "비공개 상태"
-                )}
+        {/* Editorial header */}
+        <header className="border-b border-[#e5e2da] pb-8">
+          <p className={`text-[10px] font-semibold uppercase tracking-[0.28em] ${accent}`}>
+            {isWedding ? "Invitation" : "Obituary"}
+          </p>
+          <h1 className="mt-3 font-[var(--font-serif)] text-3xl font-normal tracking-tight text-[#2c3455] sm:text-4xl">
+            {label}
+          </h1>
+          <p className="mt-3 text-sm text-[#8c8275]">
+            {card.isPublished ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Globe className="h-3.5 w-3.5 text-[#5b8a6b]" />
+                공개 중 · 조회 {card.viewCount.toLocaleString()}회
+              </span>
+            ) : (
+              "비공개 상태입니다. 하단에서 발행하면 공유할 수 있습니다."
+            )}
+          </p>
+        </header>
+
+        {/* Three actions as a clean vertical list */}
+        <div className="divide-y divide-[#e5e2da]">
+          <ActionRow href={`/plans/${id}/mobile-card/edit`} icon={Edit} title="내용 편집" description="문구와 대표 이미지를 다듬습니다." iconWrap={iconWrap} />
+          <ActionRow href={`/plans/${id}/mobile-card/preview`} icon={Eye} title="미리보기" description="공유 전 실제 화면을 확인합니다." iconWrap={iconWrap} />
+          <div className="flex items-center gap-4 py-5">
+            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${iconWrap}`}>
+              <Globe className="h-[18px] w-[18px]" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-[#2c3455]">공유 링크</p>
+              <p className="mt-0.5 text-xs text-[#8c8275]">
+                {card.isPublished ? "발행된 페이지 주소를 복사합니다." : "발행 후 공유 링크가 활성화됩니다."}
               </p>
             </div>
-            <Link
-              href={`/plans/${id}`}
-              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              플랜으로
-            </Link>
+            <ShareLinkButton url={publicUrl} />
           </div>
         </div>
 
-        <div className="mb-6 flex flex-wrap gap-3">
-          <Link
-            href={`/plans/${id}/mobile-card/edit`}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-4 py-2 text-xs font-semibold transition-colors hover:bg-muted/40"
-          >
-            <Edit className="h-3.5 w-3.5" />
-            내용 편집
-          </Link>
-          <Link
-            href={`/plans/${id}/mobile-card/preview`}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-4 py-2 text-xs font-semibold transition-colors hover:bg-muted/40"
-          >
-            <Eye className="h-3.5 w-3.5" />
-            미리보기
-          </Link>
-          <ShareLinkButton url={publicUrl} />
-        </div>
-
-        {!card.isPublished && (
-          <div className="rounded-2xl border border-dashed border-border/60 bg-white/60 p-5 text-center">
-            <p className="mb-1 text-sm font-semibold text-foreground">아직 공개되지 않았습니다</p>
-            <p className="mb-4 text-xs text-muted-foreground">
-              발행하면 공유 링크로 누구나 볼 수 있습니다.
-            </p>
-            <form action={handlePublish}>
-              <button type="submit" className={`rounded-xl px-6 py-2.5 text-sm font-bold transition-colors ${btnCls}`}>
-                지금 발행하기
-              </button>
-            </form>
+        {card.isPublished && (
+          <div className="mt-6 border-l-2 border-[#ebdccf] pl-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8c8275]">공개 링크</p>
+            <p className="mt-1.5 break-all font-mono text-xs text-[#6b6357]">{publicUrl}</p>
           </div>
         )}
 
-        {card.isPublished && (
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-5">
-            <p className="mb-2 text-xs font-bold text-emerald-700">공개 링크</p>
-            <p className="break-all font-mono text-xs text-slate-600">{publicUrl}</p>
-          </div>
+        {/* Publish — prominent full-width at bottom */}
+        {!card.isPublished && (
+          <form action={handlePublish} className="mt-10">
+            <button
+              type="submit"
+              className={`flex h-12 w-full items-center justify-center rounded-xl text-sm font-semibold transition-[background-color] duration-150 ${btnCls}`}
+            >
+              지금 발행하기
+            </button>
+            <p className="mt-3 text-center text-xs text-[#8c8275]">
+              발행하면 공유 링크로 누구나 열람할 수 있습니다.
+            </p>
+          </form>
         )}
       </main>
     </div>
+  );
+}
+
+function ActionRow({
+  href,
+  icon: Icon,
+  title,
+  description,
+  iconWrap
+}: {
+  href: string;
+  icon: typeof Edit;
+  title: string;
+  description: string;
+  iconWrap: string;
+}) {
+  return (
+    <Link href={href} className="group flex items-center gap-4 py-5">
+      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${iconWrap}`}>
+        <Icon className="h-[18px] w-[18px]" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-[#2c3455]">{title}</p>
+        <p className="mt-0.5 text-xs text-[#8c8275]">{description}</p>
+      </div>
+      <ChevronRight className="h-4 w-4 shrink-0 text-[#8c8275] transition-transform duration-150 group-hover:translate-x-0.5" />
+    </Link>
   );
 }
