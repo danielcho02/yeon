@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import Link from "next/link";
 import {
+  ArrowRight,
   CalendarDays,
   Check,
   CheckCheck,
@@ -29,6 +31,7 @@ import type {
 import type { VendorServiceModuleData } from "@/types/vendor-module";
 
 interface Step4BookingDashboardProps {
+  planId?: string;
   eventType: "WEDDING" | "FUNERAL";
   quoteRequestsData: QuoteRequestWithResponses[] | null;
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
@@ -519,6 +522,7 @@ function ProposalRevisionHistory({ response }: { response: QuoteResponseData }) 
 }
 
 export function Step4BookingDashboard({
+  planId,
   eventType,
   quoteRequestsData,
   planReservations,
@@ -869,25 +873,40 @@ export function Step4BookingDashboard({
                 )}
 
                 {activePanel === "reservation" && response && isConfirmed && reservation && (
-                  <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/30 p-4">
-                    <div className="mb-3 flex items-center gap-2">
-                      <Check className="h-4 w-4 text-emerald-700" />
-                      <p className="text-sm font-bold text-emerald-800">예약 확정 완료</p>
+                  <div className="space-y-3">
+                    <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/30 p-4">
+                      <div className="mb-3 flex items-center gap-2">
+                        <Check className="h-4 w-4 text-emerald-700" />
+                        <p className="text-sm font-bold text-emerald-800">예약 확정 완료</p>
+                      </div>
+                      <div className="grid gap-2 text-xs text-[#2c3455] sm:grid-cols-3">
+                        <span className="inline-flex items-center gap-1.5">
+                          <CalendarDays className="h-3.5 w-3.5 text-emerald-700" />
+                          {formatDate(reservation.reservedDate)}
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <Wallet className="h-3.5 w-3.5 text-emerald-700" />
+                          {formatCurrency(reservation.totalAmount)}
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <PackageCheck className="h-3.5 w-3.5 text-emerald-700" />
+                          최종 확정 완료
+                        </span>
+                      </div>
                     </div>
-                    <div className="grid gap-2 text-xs text-[#2c3455] sm:grid-cols-3">
-                      <span className="inline-flex items-center gap-1.5">
-                        <CalendarDays className="h-3.5 w-3.5 text-emerald-700" />
-                        {formatDate(reservation.reservedDate)}
-                      </span>
-                      <span className="inline-flex items-center gap-1.5">
-                        <Wallet className="h-3.5 w-3.5 text-emerald-700" />
-                        {formatCurrency(reservation.totalAmount)}
-                      </span>
-                      <span className="inline-flex items-center gap-1.5">
-                        <PackageCheck className="h-3.5 w-3.5 text-emerald-700" />
-                        최종 확정 완료
-                      </span>
-                    </div>
+                    {planId && (
+                      <Link
+                        href={`/plans/${planId}/support`}
+                        className={`inline-flex items-center gap-1.5 rounded-xl border px-4 py-2.5 text-xs font-semibold shadow-sm transition-all duration-200 ${
+                          eventType === "WEDDING"
+                            ? "border-[#e2d5c3] bg-[#faf8f4] text-[#5c5245] hover:bg-[#faf9f5]"
+                            : "border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
+                        }`}
+                      >
+                        행사 운영 지원 서비스로 이동
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                    )}
                   </div>
                 )}
 
@@ -916,6 +935,19 @@ export function Step4BookingDashboard({
               ? `${confirmedRes.length}개 예약이 최종 확정되었습니다.`
               : "제안 수락 전에는 아직 예약 확정 전입니다."}
           </p>
+          {confirmedRes.length > 0 && planId && (
+            <Link
+              href={`/plans/${planId}/support`}
+              className={`mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl py-3 text-xs font-semibold shadow-sm transition-all duration-200 ${
+                eventType === "WEDDING"
+                  ? "bg-[#e2d5c3] text-[#5c5245] hover:bg-[#d6c7b3]"
+                  : "bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
+              }`}
+            >
+              행사 운영 지원 서비스로 이동
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          )}
         </div>
 
         <div className="rounded-2xl border border-[#e5e2da] bg-white p-5 shadow-sm">

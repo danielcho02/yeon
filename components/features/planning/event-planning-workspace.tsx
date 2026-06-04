@@ -1894,6 +1894,7 @@ export function EventPlanningWorkspace({
         {/* ══ STEP 4: 제안서 확인 및 수락 ══════════════════════════════════ */}
         {activeStep === "booking" && (
           <Step4BookingDashboard
+            planId={selectedPlanId}
             eventType={eventType}
             quoteRequestsData={quoteRequestsData}
             planReservations={planReservations}
