@@ -1,129 +1,324 @@
-# YeON 프로젝트 상태 기록
-> 마지막 업데이트: 2026-04-30
+# yeON Project Status
+
+> Last updated: 2026-06-03
+> Branch: `main`
+> Current HEAD: `3718fad Merge branch 'codex/event-date-domain-model'`
+> Included feature commits: `cb672b6 feat: add event date domain model`, `c7b1720 fix: simplify event date request inputs`
+> Current focus: post-merge documentation sync; no feature implementation is pending in the working tree
 
 ---
 
-## ✅ 완료된 작업
+## What Was Just Implemented
 
-### 라우팅 구조
-- `/planner/wedding/page.tsx` — 생성 완료. WEDDING 플랜 fetch → `EventPlanningWorkspace eventType="WEDDING"` 렌더
-- `/planner/funeral/page.tsx` — 생성 완료. FUNERAL 플랜 fetch → `EventPlanningWorkspace eventType="FUNERAL"` 렌더
-- `/planner/page.tsx` — 라우터로 재작성:
-  - VENDOR → `VendorWorkspace`
-  - GENERAL + wedding 플랜만 → `redirect("/planner/wedding")`
-  - GENERAL + funeral 플랜만 → `redirect("/planner/funeral")`
-  - GENERAL + 둘 다 / 없음 → 결혼/장례 선택 카드 화면
+The **Event Date Domain Model + request UI QA follow-up** is merged into `main`:
 
-### 버그 수정
-- 랜딩 페이지 CTA 버그 수정: 장례 버튼이 `/planner/wedding`으로 가던 문제 → 각각 분리
-- 로그인 후 기본 리다이렉트: `/account` → `/planner`
-- `mvpEventTypes as const` TypeScript 타입 충돌 수정
-- `SummaryChip` 미사용 함수 제거 (ESLint 빌드 오류)
+- Wedding quote requests now distinguish an exact preferred wedding date from a preferred date range.
+- Exact wedding dates remain fixed: vendor proposals cannot casually change the requested wedding date.
+- Wedding range requests let the vendor choose one proposed service date inside the requested range.
+- `QuoteRequest.preferredDateStart` / `preferredDateEnd` store wedding ranges while existing `preferredDate` remains the exact-date field.
+- `QuoteProposalRevision.proposedServiceDate` stores the vendor-confirmed service date for the current proposal.
+- Planner acceptance copies the accepted proposal service date into `Reservation.serviceDate`.
+- Funeral planning labels the plan date as the occurrence/reception start date and defaults new funeral plans to today.
+- Funeral UI displays the 3-day schedule concept: Day 1 빈소/접수, Day 2 조문/의전 진행, Day 3 발인/장지 이동.
+- Funeral quote requests do not expose broad date-range UX; vendors confirm the service schedule from the reception/start date.
+- The visible generic vendor `일정 불가 회신` button was removed from UI.
+- The `declineQuoteRequest` server action and `verify-quote-decline-contract.ts` remain intact for backend contract verification.
+- U09 proposal adjustment, package context, and Reservation creation/confirmation contracts remain unchanged.
 
-### 컴포넌트
-- `event-planning-workspace.tsx` — 신규 생성 (1009줄)
-  - 4단계 스테퍼: 행사 준비 → AI 추천 → 견적 요청 → 예약 확정
-  - WEDDING / FUNERAL THEMES 객체로 색상/텍스트 분기
-  - 플랜 있으면 요약 카드, 없으면 폼 (isEditingPlan 토글)
-  - API 연동: handleSavePlan, handleSendRequest, handleConfirm, handleCancel
+Request-form UI QA follow-up:
 
-### 빌드 상태
-- `npx tsc --noEmit` ✅ 0 errors
-- `npm run lint` ✅ no warnings/errors
-- `npm run build` ✅ 성공
-
----
-
-## ❌ 다음 세션에서 해야 할 작업
-
-### 핵심 문제
-**"색깔만 바뀐 것 같다. UI가 너무 단순하고 폼 위주라 제품답지 않다. 웨딩이면 웨딩다운 비주얼(이미지/이모지/장식 요소)이 있어야 한다."**
+- Wedding Step 3 request form no longer uses the `정확한 날짜 / 날짜 범위` segmented toggle.
+- Wedding request form always shows aligned fields: `희망 시작일`, `희망 종료일`, `하객 수`.
+- Wedding request payload mapping:
+  - start date == end date → send `preferredDate` only.
+  - start date != end date → send `preferredDateStart` / `preferredDateEnd` only.
+- Existing wedding active request prefill:
+  - exact `preferredDate` → start=end=`preferredDate`.
+  - range → start=`preferredDateStart`, end=`preferredDateEnd`.
+- Wedding client validation requires start date, end date, and end date >= start date.
+- Funeral Step 3 request form keeps aligned fields: `빈소 접수일`, `조문객 수`.
+- Funeral helper copy moved out of the input cell into a compact full-width 3-day schedule card below the first row.
+- No schema, migration, or server action changes were made for the UI QA follow-up.
 
 ---
 
-### 작업 1: Landing Page (`app/page.tsx`) 비주얼 강화
-현재: 카드 2개 + 텍스트 나열  
-목표:
-- 웨딩 카드에 💍🌸🥂 이모지 장식, 플로럴 패턴 느낌의 배경
-- 장례 카드에 🕯️🌿 조용하고 무게감 있는 장식
-- Hero 섹션 전체 높이 확대, 큰 타이포 + 분위기 있는 서브카피
-- "How it works" 섹션을 타임라인 스타일로 변경
+## Current Working Tree
 
-### 작업 2: Wedding Workspace (`/planner/wedding`) 대폭 개선
-현재: 흰 카드 + 로즈 색상 정도  
-목표:
-- **Hero 헤더**: 꽃/리본 SVG 패턴 또는 이모지 장식 배경, 큰 웨딩 타이틀
-- **Step 1 (행사 준비)**: 폼 패널을 `결혼식` 분위기로 — 필드 레이블에 💒 📅 👰 💰 이모지, 배경에 미묘한 플로럴 패턴
-- **Step 2 (AI 추천)**: 추천 결과를 "웨딩 무드보드" 스타일 카드로 — 큰 타이틀 + 태그 클라우드 + 타임라인을 수평 스크롤 스텝으로
-- **Step 3 (견적 요청)**: 업체 카드에 서비스 아이콘 (📸 촬영, 🎂 케이터링, 💐 플라워 등)
-- **Step 4 (예약 확정)**: 확정 시 작은 축하 애니메이션 (confetti 느낌)
-- 스테퍼를 숫자 버블이 아닌 아이콘 버블로: 📋 ✨ 🤝 ✅
+- Only documentation files are currently modified for status/roadmap sync.
+- No files are staged.
+- No feature code changes are pending.
+- No Prisma schema or migration changes are pending.
 
-### 작업 3: Funeral Workspace (`/planner/funeral`) 개선
-현재: 슬레이트 색상만  
-목표:
-- **Hero 헤더**: 🕯️ 🌿 조용하고 차분한 장식 (화려하지 않게)
-- **전체 톤**: 네이비/다크슬레이트 + 아이보리 조합, 폰트 weight 조금 더 가볍게
-- 필드 레이블에 관련 이모지: 🗓️ 📍 🌹 등
-- AI 추천을 "준비 체크리스트" 스타일 (타임라인 목록 강조)
-- 업체 카드 아이콘: ⛪ 장례식장, 🌸 화환, 🚗 운구 등
+## Previous Continuity Baseline
 
-### 작업 4: Vendor Workspace 개선
-파일: `components/features/planning/vendor-workspace.tsx`  
-현재: 탭 기반 인박스  
-목표:
-- 헤더에 업체명 + 업종 배지 강조
-- 요청 카드를 더 카드답게 (상태별 컬러 왼쪽 보더)
-- 빈 인박스 상태를 더 예쁘게 (일러스트 스타일 이모지 + 설명)
+The **Package Proposal / Reservation Continuity pass** is now included in the working tree:
 
-### 작업 5: Auth Layout / Login 페이지 개선
-파일: `app/(auth)/layout.tsx`, `app/(auth)/login/page.tsx`  
-현재: 2패널 레이아웃 (왼쪽 브랜드, 오른쪽 폼)  
-목표:
-- 왼쪽 패널에 wedding/funeral 이미지나 이모지 강조 장식
-- 폼 필드 더 크고 여유있게
+- Planner Step 4 shows package snapshot context, package price snapshot rows, and request-estimate vs vendor-final-proposal comparison.
+- Vendor proposal-writing UI shows the original package estimate before final total submission.
+- Vendor proposal memo is labeled and treated as proposal / adjustment memo.
+- Accepted package-backed reservations now carry `selectedPackageSnapshot` and `priceSnapshot` through vendor reservation DTOs.
+- Vendor final confirmation shows accepted package/proposal context: package name, base price, selected add-ons, vendor-specific add-ons, request estimate, final accepted total, event date, guest count, and planner request memo when available.
+- Vendor confirmed reservation cards show a compact accepted package/proposal summary.
+- `verify-vendor-package-contract.ts` now covers package-backed reservation continuity after accept.
+- No Prisma schema changes were made; existing QuoteRequest JSON snapshots are reused.
+
+Deferred for later: negotiation / re-proposal, multiple proposal versions, notification center, broad Step 4 visual polish, and account/profile/vendor info management.
 
 ---
 
-## 파일 구조 현황
+## Canonical Quote Workflow
+
+The **canonical quote workflow baseline** is now the branch default. Changes enforce the correct
+domain contract for the full QuoteRequest → QuoteResponse → Reservation lifecycle:
+
+- `createQuoteRequest` now creates **only** QuoteRequest(PENDING) + notification + activity log.
+  No Reservation is created at this step.
+- `acceptQuoteResponse` creates Reservation(PENDING) for the first time.
+- Default `npm run db:seed` produces **0 QuoteRequests, 0 QuoteResponses, 0 Reservations**.
+- A 4-state scenario seed (`seed-demo-scenario.ts`) covers States A/B/C/D for targeted QA.
+- `verify-demo-data-integrity.ts` updated to assert the 0/0/0 clean baseline.
+- `verify-quote-flow.ts` updated to test the canonical accept-creates-Reservation path.
+- `verify-demo-scenario.ts` (new) validates per-state scenario seed output.
+- `package.json` gained `db:seed:scenario`, `db:seed:scenario:A/B/C/D` scripts.
+- `/planner` is now a first-time entry router: existing planners are sent to `/plans`, while `/planner?create=1` always shows the event-type chooser.
+- `/plans/new` is now a compatibility redirect into `/planner?create=1` or `/planner/{type}?create=1`; the flat generic form is no longer part of the main flow.
+- Step 3 now keeps planners on the request screen after submit, locks duplicate active requests per vendor/plan with stable CTA feedback, and refreshes the sent-request panel in place.
+- Vendor dashboard custom items now read/write `VendorServiceModule` so planner Step 3 sees vendor-added custom modules directly.
+- Current package handling is a single derived package per vendor from active `isBaseIncluded` modules. True multi-package support remains deferred until a package schema exists.
+
+---
 
 ```
-app/
-  page.tsx                          ← 랜딩 (완료, 비주얼 강화 필요)
-  (auth)/
-    layout.tsx                      ← 인증 레이아웃 (완료, 개선 필요)
-    login/page.tsx                  ← 로그인 (완료)
-    signup/page.tsx                 ← 회원가입
-  planner/
-    page.tsx                        ← 라우터 (완료)
-    wedding/page.tsx                ← 웨딩 워크스페이스 (완료, UI 개선 필요)
-    funeral/page.tsx                ← 장례 워크스페이스 (완료, UI 개선 필요)
-
-components/features/planning/
-  event-planning-workspace.tsx      ← 핵심 워크스페이스 컴포넌트 (완료, UI 개선 핵심)
-  vendor-workspace.tsx              ← 업체 워크스페이스
-  planner-general-workspace.tsx     ← 구버전 (더 이상 /planner에서 안 쓰임, 삭제 검토)
-  planning-workspace.tsx            ← 구버전 (삭제 검토)
-  workspace-types.ts                ← 공용 타입
+createQuoteRequest  → QuoteRequest(PENDING) + notification + activity    [NO Reservation]
+submitQuoteResponse → QuoteRequest(RESPONDED) + QuoteResponse            [NO Reservation]
+requestQuoteAdjustment → current QuoteProposalRevision(ADJUSTMENT_REQUESTED) [NO Reservation]
+submitQuoteRevision → new QuoteProposalRevision(REVISED)                 [NO Reservation]
+acceptQuoteResponse → QuoteRequest(ACCEPTED) + Reservation(PENDING)      [Reservation created HERE]
+confirmReservation  → Reservation(CONFIRMED) + confirmedAmount set
 ```
 
+Never create a Reservation in `createQuoteRequest`.
+Never skip Reservation creation in `acceptQuoteResponse`.
+Any deviation from this contract is a bug.
+
+Package-backed reservation continuity rules:
+
+- `QuoteRequest.selectedPackageSnapshot` is the source of truth for accepted package name, base price, and included package modules.
+- `QuoteRequest.priceSnapshot` is the source of truth for selected optional add-ons, vendor-specific add-ons, request estimate, guest count, and line-item grouping.
+- Vendor reservation DTOs may expose those existing snapshots through the linked accepted QuoteRequest.
+- `QuoteProposalRevision` is the source of truth for current/revised proposal totals and adjustment memos after the first vendor response.
+- `QuoteProposalRevision.plannerRequestedTotalPrice` stores the planner's requested target total for adjustment requests.
+- `QuoteProposalRevision.proposedServiceDate` stores the vendor-confirmed service date for the proposal; revised price-only proposals carry this date forward.
+- `Reservation.quoteProposalRevisionId` identifies the accepted proposal revision when a revision exists.
+- `Reservation.serviceDate` is the final accepted service date copied using this precedence:
+  `QuoteProposalRevision.proposedServiceDate` → `QuoteRequest.preferredDate` → `QuoteRequest.preferredDateStart` → `EventPlan.scheduledAt`.
+- Do not add Reservation schema fields for package context unless the existing JSON snapshots become insufficient.
+- Vendor final confirmation must keep one actual final confirmation CTA.
+
+Event-date request rules:
+
+- Wedding exact date is represented by `QuoteRequest.preferredDate`.
+- Wedding preferred range is represented by `QuoteRequest.preferredDateStart` and `QuoteRequest.preferredDateEnd`.
+- The planner UI infers exact vs range from start/end equality; do not reintroduce a separate exact/range toggle.
+- Vendor proposal date is represented by `QuoteProposalRevision.proposedServiceDate`.
+- Revised price-only proposals should carry the previous proposal service date forward.
+- Funeral request date is the reception/service start date; funeral must not expose broad date range controls.
+- Visible generic vendor `일정 불가 회신` remains removed; backend decline contract remains for verification.
+
 ---
 
-## 다음 세션 시작 시 우선순위
+## Clean Seed Baseline
 
-1. `event-planning-workspace.tsx` — WEDDING Hero 헤더 + Step 비주얼 전면 개선 (가장 임팩트 큼)
-2. `app/page.tsx` — 랜딩 카드 비주얼 강화
-3. 구버전 컴포넌트 정리 (`planner-general-workspace.tsx`, `planning-workspace.tsx`)
-4. Funeral 특화 비주얼
-5. Vendor workspace
+After `npm run db:seed`:
+
+| Table               | Count | Notes                                                  |
+|---------------------|-------|--------------------------------------------------------|
+| User                | 6     | planner, venue, catering (isActive:false), memorial, guest, admin |
+| EventPlan           | 2     | spring-garden-wedding (WEDDING), family-funeral-guidance (FUNERAL) |
+| VendorServiceModule | 18    | 8 venue, 4 floral (inactive vendor), 6 funeral         |
+| QuoteRequest        | **0** | clean baseline                                         |
+| QuoteResponse       | **0** | clean baseline                                         |
+| Reservation         | **0** | clean baseline                                         |
+
+Planner lands on **Step 3** (vendors) ready to send their first request.
+If browser QA still shows prior activity after reseeding, stop any scenario seed, run `npm run db:seed`,
+then hard refresh or sign out/in before checking `/plans` or `/planner`.
 
 ---
 
-## 기술 스택 메모
+## Scenario Seeds
+
+| Command                    | State     | QuoteRequest | QuoteResponse | Reservation       |
+|----------------------------|-----------|-------------|---------------|-------------------|
+| `npm run db:seed:scenario:A` | Requested | PENDING     | —             | — (none)          |
+| `npm run db:seed:scenario:B` | Responded | RESPONDED   | exists        | — (canonical)     |
+| `npm run db:seed:scenario:C` | Accepted  | ACCEPTED    | exists        | PENDING           |
+| `npm run db:seed:scenario:D` | Confirmed | ACCEPTED    | exists        | CONFIRMED         |
+
+State B has **no Reservation** — this is the canonical state. Treat it as a regression/dev
+validation state for Step 4 routing and proposal visibility. The workspace must auto-navigate
+to Step 4 based on quoteRequestsData RESPONDED detection (not Reservation existence).
+
+General-user Step 4 is a **proposal → reservation workflow** screen:
+
+- Before accept: selected modules, vendor proposal, amount, response message, and explicit "아직 예약 확정 전입니다" state.
+- After accept: "업체 최종 확정 대기", accepted proposal summary, and vendor final confirmation due date.
+- After vendor confirm: "예약 확정 완료" and final reservation summary.
+- Step 4 detail panels should follow the same module workflow model. Category-lane status is internal validation data and should not render in the general-user UI.
+
+Step 3 package/module rules:
+
+- Base package included items are shown in the included-spec area and must not reappear as optional adjustment rows.
+- Additional selection rows are only for active non-included modules.
+- Standard catalog-backed modules, package-included modules, optional add-ons, and vendor-specific add-ons should be labeled distinctly. Vendor-specific add-ons are non-catalog vendor modules, not renamed standard essentials.
+- The current UI has one derived base package from active `VendorServiceModule.isBaseIncluded` rows. True multi-package behavior requires a future schema change and is not part of this phase.
+- QuoteRequest does not persist guest count or region. Step 3 displays guest count and region from the selected EventPlan, while preferred date and budget can come from the active QuoteRequest.
+
+Vendor quote response framing:
+
+- Vendor responses are a **single final total** over the selected module scope.
+- Zero-priced included module entries inside `QuoteResponse.modules` are identity markers only and should not be shown to users as `0원` line items.
+
+Category-level preparation status may remain as internal/collapsed detail, but it must not be the
+primary user-facing Step 4 IA for the core integrated-vendor demo.
+
+---
+
+## Demo Accounts
+
+| Account                | Password | Role                                                 |
+|------------------------|----------|------------------------------------------------------|
+| planner@yeon.local     | demo1234 | GENERAL (planner) — owns wedding + funeral plans     |
+| venue@yeon.local       | demo1234 | VENDOR — 모먼트 가든 (WEDDING, isActive: true)         |
+| memorial@yeon.local    | demo1234 | VENDOR — 한결 의전 (FUNERAL, isActive: true)           |
+| catering@yeon.local    | demo1234 | VENDOR — 오르세 플로럴 (isActive: **false**, inactive) |
+
+`catering@yeon.local` is intentionally excluded from the core 3-role demo.
+Do not reactivate it unless the specialist-vendor UX is fully built.
+
+---
+
+## Validation Suite (must all pass before commit)
+
+```bash
+npm run db:seed
+npx tsx scripts/verify-vendor-package-contract.ts
+npx tsx scripts/verify-demo-data-integrity.ts
+npx tsx scripts/verify-quote-flow.ts
+npx tsx scripts/verify-quote-decline-contract.ts
+npx tsx scripts/verify-service-category-contract.ts
+npx tsx scripts/verify-role-routing-contract.ts
+npx tsx scripts/verify-planner-auth-redirect.ts
+npx tsc --noEmit
+npm run lint
+npm run build
+npm run db:seed
+```
+
+Scenario seed validation (required after Step 4 routing or planner workflow changes):
+```bash
+npm run db:seed:scenario:B
+npx tsx scripts/verify-demo-scenario.ts --state=B
+```
+
+### Last Known Validation Results
+
+2026-06-03 Event Date UI QA follow-up:
+
+- `npx tsc --noEmit`: PASS.
+- `npm run lint`: PASS.
+- `git diff --check`: PASS.
+- `npm run db:seed`: PASS, restored 0 QuoteRequests / 0 QuoteResponses / 0 Reservations.
+- `npx tsx scripts/verify-quote-flow.ts`: PASS.
+- `npm run build`: PASS.
+- Final `npm run db:seed`: PASS, restored clean 0/0/0 quote baseline.
+
+2026-06-03 Event Date Domain Model pass:
+
+- `npm run db:seed`: PASS, restored 0 QuoteRequests / 0 QuoteResponses / 0 Reservations.
+- `npx tsx scripts/verify-demo-data-integrity.ts`: PASS.
+- `npx tsx scripts/verify-vendor-package-contract.ts`: PASS.
+- `npx tsx scripts/verify-quote-flow.ts`: PASS.
+- `npx tsx scripts/verify-quote-decline-contract.ts`: PASS.
+- `npx tsx scripts/verify-service-category-contract.ts`: PASS.
+- `npx tsx scripts/verify-role-routing-contract.ts`: PASS.
+- `npx tsx scripts/verify-planner-auth-redirect.ts`: PASS.
+- `npx tsc --noEmit`: PASS.
+- `npm run lint`: PASS.
+- `npm run build`: PASS.
+- Final `npm run db:seed`: PASS, restored clean 0/0/0 quote baseline.
+
+2026-06-02 Package Proposal / Reservation Continuity pass:
+
+- `npm run db:seed`: PASS, restored 0 QuoteRequests / 0 QuoteResponses / 0 Reservations.
+- Short vendor package continuity smoke: PASS, server-rendered DOM harness confirmed final-confirm and confirmed package summary fields plus one final confirmation CTA.
+- `npx tsx scripts/verify-vendor-package-contract.ts`: PASS.
+- `npx tsx scripts/verify-demo-data-integrity.ts`: PASS.
+- `npx tsx scripts/verify-quote-flow.ts`: PASS.
+- `npx tsx scripts/verify-quote-decline-contract.ts`: PASS.
+- `npx tsx scripts/verify-service-category-contract.ts`: PASS.
+- `npx tsx scripts/verify-role-routing-contract.ts`: PASS.
+- `npx tsx scripts/verify-planner-auth-redirect.ts`: PASS.
+- `npx tsc --noEmit`: PASS.
+- `npm run lint`: PASS.
+- `npm run build`: PASS.
+- Final `npm run db:seed`: PASS, restored clean 0/0/0 quote baseline.
+
+---
+
+## Remaining Browser QA Before Commit
+
+These items require manual browser testing against `npm run dev`:
+
+1. **Fresh seed Step 3 landing**: `npm run db:seed` → login planner → `/planner/wedding` → confirm Step 3 active, "보낸 요청 현황" empty.
+2. **Wedding request row alignment**: `/planner/wedding` Step 3 request form shows `희망 시작일`, `희망 종료일`, `하객 수` aligned in one row on desktop; no segmented exact/range toggle appears.
+3. **Wedding exact-date mapping**: set same start/end date, submit request, confirm DB stores `preferredDate` and not a range.
+4. **Wedding range mapping**: set different start/end dates, submit request, confirm DB stores `preferredDateStart` / `preferredDateEnd`.
+5. **Wedding validation**: empty start/end and end-before-start show client error before request submission.
+6. **Funeral request row alignment**: `/planner/funeral` Step 3 request form shows only `빈소 접수일`, `조문객 수` in the first row.
+7. **Funeral 3-day card**: funeral helper copy and Day 1/2/3 schedule appear in a compact full-width card below the first row, not under the input.
+8. **Step 3 request prefill**: seeded wedding/funeral plans show saved date, guest count, budget, and region context before sending a request.
+9. **Inline sent-request status**: submit a request and confirm `보낸 요청 현황` appears inside the main Step 3 flow without relying on the sidebar.
+10. **No Reservation after request**: submit quote request → DB check: 1 QuoteRequest(PENDING), 0 Reservations.
+11. **State B auto-navigate when Step 4 routing/proposal rendering changes**: after vendor responds (State B seed), planner opens workspace → confirm workspace auto-jumps to Step 4 without manual click.
+12. **Reservation created at accept**: click "이 견적 수락하기" → DB check: Reservation(PENDING) now exists for the first time; `vendorConfirmationDueAt` set.
+13. **Vendor confirm flow**: vendor logs in → `최종 확정` panel has the single primary confirmation CTA → Reservation(CONFIRMED) → planner sees "예약 확정 완료".
+14. **Vendor service clarity**: service manager visibly separates standard modules, base included items, optional add-ons, and 업체 전용 항목 using the current `isBaseIncluded` model.
+15. **Custom module visibility**: vendor-added custom wedding/funeral modules appear in Step 3, optional customs are selectable, and base-included customs stay only in the included-spec area.
+
+---
+
+## Tech Stack
+
 - Next.js 14 App Router, TypeScript strict
-- Tailwind CSS (커스텀 animate-fade-in, animate-slide-up in globals.css)
+- Tailwind CSS
 - Prisma + SQLite (better-sqlite3)
 - NextAuth v4 JWT
-- Lucide React 아이콘
-- `npm run build` 통과 유지 필수 (tsc + eslint)
-- Demo 계정: `planner@yeon.local` / `venue@yeon.local` / `catering@yeon.local`, pw: `demo1234`
+- Framer Motion, Lucide React
+- WSL Linux environment
+
+---
+
+## Agent Operating Model
+
+All agents working on yeON are **full-stack by default**.
+See [`docs/AGENT_OPERATING_MODEL.md`](docs/AGENT_OPERATING_MODEL.md) for the complete rules.
+The prior Claude=frontend / Codex=backend split is retired.
+
+---
+
+## Safe to Commit?
+
+Before committing the current UI QA follow-up, rerun at minimum:
+
+```bash
+npx tsc --noEmit
+npm run lint
+git diff --check
+npm run db:seed
+npx tsx scripts/verify-quote-flow.ts
+npm run build
+npm run db:seed
+```
+
+Then complete the browser QA items above.

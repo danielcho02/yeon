@@ -46,8 +46,13 @@ enum ReservationStatus {
   REJECTED
   CHANGED
   CANCELED
-  CANCELLED
   COMPLETED
+}
+
+enum ReservationRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum QuoteStatus {
@@ -55,6 +60,13 @@ enum QuoteStatus {
   RESPONDED
   ACCEPTED
   CANCELED
+}
+
+enum QuoteProposalRevisionStatus {
+  SUBMITTED
+  ADJUSTMENT_REQUESTED
+  REVISED
+  ACCEPTED
 }
 
 enum TransactionStatus {
@@ -93,6 +105,11 @@ enum ModuleCategory {
   OBITUARY
 }
 
+enum VendorPackageModuleSelectionType {
+  INCLUDED
+  OPTIONAL
+}
+
 enum PostCategory {
   NOTICE
   STORY
@@ -107,6 +124,11 @@ enum InvitationStatus {
   VIEWED
   RSVP_ACCEPTED
   RSVP_DECLINED
+}
+
+enum CardType {
+  WEDDING
+  FUNERAL
 }
 
 model User {
@@ -130,6 +152,10 @@ model User {
   updatedAt               DateTime              @updatedAt
   ownedEventPlans         EventPlan[]           @relation("EventOwner")
   vendorReservations      Reservation[]         @relation("ReservationVendor")
+  plannerReservationChangeRequests ReservationChangeRequest[] @relation("ReservationChangeRequestPlanner")
+  vendorReservationChangeRequests  ReservationChangeRequest[] @relation("ReservationChangeRequestVendor")
+  plannerReservationCancellationRequests ReservationCancellationRequest[] @relation("ReservationCancellationRequestPlanner")
+  vendorReservationCancellationRequests  ReservationCancellationRequest[] @relation("ReservationCancellationRequestVendor")
   authoredPosts           Post[]                @relation("PostAuthor")
   writtenReviews          Review[]              @relation("ReviewAuthor")
   receivedReviews         Review[]              @relation("ReviewVendor")
@@ -138,8 +164,13 @@ model User {
   receivedInvitations     Invitation[]          @relation("InvitationRecipient")
   vendorServices          VendorService[]       @relation("VendorServices")
   vendorServiceModules    VendorServiceModule[] @relation("VendorServiceModules")
+  vendorPackages          VendorPackage[]       @relation("VendorPackages")
   quoteRequests           QuoteRequest[]        @relation("QuoteRequestVendor")
   quoteResponses          QuoteResponse[]       @relation("QuoteResponseVendor")
+  quoteProposalRevisions  QuoteProposalRevision[] @relation("QuoteProposalRevisionVendor")
+  notifications           Notification[]        @relation("UserNotifications")
+  activityLogs            ActivityLog[]         @relation("ActivityActor")
+  mobileCards             MobileCard[]          @relation("OwnedMobileCards")
 
   @@index([role, isActive])
 }
@@ -170,38 +201,89 @@ model EventPlan {
   reviews          Review[]       @relation("EventReviews")
   invitations      Invitation[]
   planTransactions Transaction[]  @relation("PlanTransactions")
+  mobileCard       MobileCard?    @relation("PlanMobileCard")
 
   @@index([ownerId, status])
   @@index([type, scheduledAt])
 }
 
 model Reservation {
-  id                     String            @id @default(cuid())
-  eventPlanId            String
-  vendorId               String
-  serviceName            String
-  serviceCategory        String?
-  description            String?
-  serviceDate            DateTime?
-  guestCount             Int?
-  quotedAmount           Int?
-  confirmedAmount        Int?
-  selectedServiceOptions Json?
-  quoteRequestId         String?           @unique
-  quoteResponseId        String?           @unique
-  status                 ReservationStatus @default(PENDING)
-  notes                  String?
-  createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @updatedAt
-  eventPlan              EventPlan         @relation(fields: [eventPlanId], references: [id], onDelete: Cascade)
-  vendor                 User              @relation("ReservationVendor", fields: [vendorId], references: [id])
-  quoteRequest           QuoteRequest?     @relation(fields: [quoteRequestId], references: [id], onDelete: SetNull)
-  quoteResponse          QuoteResponse?    @relation(fields: [quoteResponseId], references: [id], onDelete: SetNull)
-  transaction            Transaction?
-  reviews                Review[]          @relation("ReservationReviews")
+  id                      String            @id @default(cuid())
+  eventPlanId             String
+  vendorId                String
+  serviceName             String
+  serviceCategory         String?
+  description             String?
+  serviceDate             DateTime?
+  guestCount              Int?
+  quotedAmount            Int?
+  confirmedAmount         Int?
+  selectedServiceOptions  Json?
+  quoteRequestId          String?           @unique
+  quoteResponseId         String?           @unique
+  quoteProposalRevisionId String?           @unique
+  vendorConfirmationDueAt DateTime?
+  status                  ReservationStatus @default(PENDING)
+  notes                   String?
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  eventPlan               EventPlan         @relation(fields: [eventPlanId], references: [id], onDelete: Cascade)
+  vendor                  User              @relation("ReservationVendor", fields: [vendorId], references: [id])
+  quoteRequest            QuoteRequest?     @relation(fields: [quoteRequestId], references: [id], onDelete: SetNull)
+  quoteResponse           QuoteResponse?    @relation(fields: [quoteResponseId], references: [id], onDelete: SetNull)
+  quoteProposalRevision   QuoteProposalRevision? @relation(fields: [quoteProposalRevisionId], references: [id], onDelete: SetNull)
+  transaction             Transaction?
+  reviews                 Review[]          @relation("ReservationReviews")
+  changeRequests          ReservationChangeRequest[]
+  cancellationRequests    ReservationCancellationRequest[]
+  mobileCard              MobileCard?       @relation("CardSourceReservation")
 
   @@index([eventPlanId, status])
   @@index([vendorId, status])
+}
+
+model ReservationChangeRequest {
+  id                              String                   @id @default(cuid())
+  reservationId                   String
+  plannerId                       String
+  vendorId                        String
+  requestedServiceDate            DateTime?
+  requestedGuestCount             Int?
+  requestedNotes                  String?
+  requestedReason                 String
+  requestedSelectedServiceOptions Json?
+  status                          ReservationRequestStatus @default(PENDING)
+  vendorDecisionMemo              String?
+  decidedAt                       DateTime?
+  createdAt                       DateTime                 @default(now())
+  updatedAt                       DateTime                 @updatedAt
+  reservation                     Reservation              @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  planner                         User                     @relation("ReservationChangeRequestPlanner", fields: [plannerId], references: [id], onDelete: Cascade)
+  vendor                          User                     @relation("ReservationChangeRequestVendor", fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([reservationId, status])
+  @@index([vendorId, status, createdAt])
+  @@index([plannerId, status, createdAt])
+}
+
+model ReservationCancellationRequest {
+  id                 String                   @id @default(cuid())
+  reservationId      String
+  plannerId          String
+  vendorId           String
+  reason             String
+  status             ReservationRequestStatus @default(PENDING)
+  vendorDecisionMemo String?
+  decidedAt          DateTime?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  reservation        Reservation              @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  planner            User                     @relation("ReservationCancellationRequestPlanner", fields: [plannerId], references: [id], onDelete: Cascade)
+  vendor             User                     @relation("ReservationCancellationRequestVendor", fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([reservationId, status])
+  @@index([vendorId, status, createdAt])
+  @@index([plannerId, status, createdAt])
 }
 
 model Post {
@@ -271,6 +353,45 @@ model Transaction {
   @@index([planId, type])
 }
 
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  href      String?
+  readAt    DateTime?
+  metadata  Json?
+  createdAt DateTime  @default(now())
+  user      User      @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+}
+
+model ActivityLog {
+  id              String   @id @default(cuid())
+  actorId         String?
+  planId          String?
+  vendorId        String?
+  quoteRequestId  String?
+  quoteResponseId String?
+  reservationId   String?
+  type            String
+  message         String
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  actor           User?    @relation("ActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([planId, createdAt])
+  @@index([vendorId, createdAt])
+  @@index([quoteRequestId, createdAt])
+  @@index([reservationId, createdAt])
+  @@index([type, createdAt])
+}
+
 model Invitation {
   id             String           @id @default(cuid())
   eventPlanId    String
@@ -305,6 +426,7 @@ model VendorServiceModule {
   name           String
   category       ModuleCategory
   price          Int
+  pricingType    String         @default("FLAT")
   description    String?
   isBaseIncluded Boolean        @default(false)
   isActive       Boolean        @default(true)
@@ -312,24 +434,69 @@ model VendorServiceModule {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   vendor         User           @relation("VendorServiceModules", fields: [vendorId], references: [id], onDelete: Cascade)
+  packageItems   VendorPackageModule[]
 
   @@index([vendorId, category, isActive])
+}
+
+model VendorPackage {
+  id          String                @id @default(cuid())
+  vendorId    String
+  eventType   EventType
+  name        String
+  description String?
+  basePrice   Int
+  isActive    Boolean               @default(false)
+  sortOrder   Int                   @default(0)
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  vendor      User                  @relation("VendorPackages", fields: [vendorId], references: [id], onDelete: Cascade)
+  items       VendorPackageModule[]
+  quoteRequests QuoteRequest[]
+
+  @@index([vendorId, eventType, isActive])
+  @@index([vendorId, eventType, sortOrder])
+}
+
+model VendorPackageModule {
+  id                    String                           @id @default(cuid())
+  packageId             String
+  vendorServiceModuleId String
+  selectionType         VendorPackageModuleSelectionType
+  quantity              Int                              @default(1)
+  priceOverride         Int?
+  sortOrder             Int                              @default(0)
+  createdAt             DateTime                         @default(now())
+  updatedAt             DateTime                         @updatedAt
+  package               VendorPackage                    @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  vendorServiceModule   VendorServiceModule              @relation(fields: [vendorServiceModuleId], references: [id], onDelete: Cascade)
+
+  @@unique([packageId, vendorServiceModuleId])
+  @@index([packageId, selectionType])
+  @@index([vendorServiceModuleId])
 }
 
 model QuoteRequest {
   id              String          @id @default(cuid())
   planId          String
   vendorId        String
+  selectedPackageId String?
   requirements    String
   selectedModules Json?
+  selectedPackageSnapshot Json?
+  priceSnapshot   Json?
   preferredDate   DateTime?
+  preferredDateStart DateTime?
+  preferredDateEnd DateTime?
   budget          Int?
   status          QuoteStatus     @default(PENDING)
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   plan            EventPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)
   vendor          User            @relation("QuoteRequestVendor", fields: [vendorId], references: [id], onDelete: Cascade)
+  selectedPackage VendorPackage?  @relation(fields: [selectedPackageId], references: [id], onDelete: SetNull)
   responses       QuoteResponse[]
+  proposalRevisions QuoteProposalRevision[]
   reservation     Reservation?
 
   @@index([planId, status])
@@ -349,9 +516,35 @@ model QuoteResponse {
   request     QuoteRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   vendor      User         @relation("QuoteResponseVendor", fields: [vendorId], references: [id], onDelete: Cascade)
   reservation Reservation?
+  revisions   QuoteProposalRevision[]
 
+  @@unique([requestId, vendorId])
   @@index([requestId])
   @@index([vendorId])
+}
+
+model QuoteProposalRevision {
+  id                    String                      @id @default(cuid())
+  quoteResponseId       String
+  requestId             String
+  vendorId              String
+  version               Int
+  totalPrice            Int
+  memo                  String?
+  adjustmentRequestMemo String?
+  plannerRequestedTotalPrice Int?
+  proposedServiceDate  DateTime?
+  status                QuoteProposalRevisionStatus @default(SUBMITTED)
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  quoteResponse         QuoteResponse               @relation(fields: [quoteResponseId], references: [id], onDelete: Cascade)
+  request               QuoteRequest                @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  vendor                User                        @relation("QuoteProposalRevisionVendor", fields: [vendorId], references: [id], onDelete: Cascade)
+  reservation           Reservation?
+
+  @@unique([quoteResponseId, version])
+  @@index([requestId, createdAt])
+  @@index([vendorId, status])
 }
 
 model VendorService {
@@ -391,4 +584,24 @@ model VendorServiceOption {
   vendorService   VendorService @relation(fields: [vendorServiceId], references: [id], onDelete: Cascade)
 
   @@index([vendorServiceId, isActive])
+}
+
+model MobileCard {
+  id                  String       @id @default(cuid())
+  planId              String       @unique
+  sourceReservationId String?      @unique
+  ownerId             String
+  cardType            CardType
+  slug                String       @unique
+  content             Json
+  isPublished         Boolean      @default(false)
+  viewCount           Int          @default(0)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  plan                EventPlan    @relation("PlanMobileCard", fields: [planId], references: [id], onDelete: Cascade)
+  sourceReservation   Reservation? @relation("CardSourceReservation", fields: [sourceReservationId], references: [id], onDelete: SetNull)
+  owner               User         @relation("OwnedMobileCards", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, cardType])
+  @@index([slug, isPublished])
 }

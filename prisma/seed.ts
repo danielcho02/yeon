@@ -3,10 +3,7 @@ import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import {
   EventType,
   ModuleCategory,
-  Prisma,
   PrismaClient,
-  QuoteStatus,
-  ReservationStatus,
   UserRole,
   VendorApprovalStatus
 } from "../generated/prisma/client";
@@ -17,23 +14,13 @@ import {
   ensureDemoData
 } from "../lib/demo/ensure-demo-data";
 
-import type { QuoteResponseModules } from "../types/quote";
-
 const prisma = new PrismaClient({
   adapter: new PrismaBetterSqlite3({
-    url: process.env.DATABASE_URL ?? "file:./prisma/yeon.db"
+    url: process.env.DATABASE_URL ?? "file:./prisma/yeon.db",
+    timeout: 10000
   })
 });
 
-const day = 24 * 60 * 60 * 1000;
-
-function plusDays(days: number) {
-  return new Date(Date.now() + days * day);
-}
-
-function asJson(value: QuoteResponseModules): Prisma.InputJsonValue {
-  return value as unknown as Prisma.InputJsonValue;
-}
 
 async function createVendorModules(
   vendorId: string,
@@ -41,6 +28,7 @@ async function createVendorModules(
     name: string;
     category: ModuleCategory;
     price: number;
+    pricingType?: "FLAT" | "PER_GUEST";
     description: string;
     isBaseIncluded?: boolean;
     sortOrder: number;
@@ -56,6 +44,7 @@ async function createVendorModules(
           name: module.name,
           category: module.category,
           price: module.price,
+          pricingType: module.pricingType ?? "FLAT",
           description: module.description,
           isBaseIncluded: module.isBaseIncluded ?? false,
           sortOrder: module.sortOrder,
@@ -68,31 +57,79 @@ async function createVendorModules(
   return created;
 }
 
+async function createVendorPackages(
+  vendorId: string,
+  eventType: EventType,
+  modules: Array<{ id: string; name: string }>,
+  packages: Array<{
+    name: string;
+    description: string;
+    basePrice: number;
+    sortOrder: number;
+    included: string[];
+    optional?: string[];
+  }>
+) {
+  const moduleByName = new Map(modules.map((module) => [module.name, module]));
+
+  for (const pkg of packages) {
+    const created = await prisma.vendorPackage.create({
+      data: {
+        vendorId,
+        eventType,
+        name: pkg.name,
+        description: pkg.description,
+        basePrice: pkg.basePrice,
+        sortOrder: pkg.sortOrder,
+        isActive: true
+      }
+    });
+
+    const packageItems = [
+      ...pkg.included.map((name, index) => ({ name, selectionType: "INCLUDED" as const, sortOrder: index + 1 })),
+      ...(pkg.optional ?? []).map((name, index) => ({
+        name,
+        selectionType: "OPTIONAL" as const,
+        sortOrder: pkg.included.length + index + 1
+      }))
+    ];
+
+    for (const item of packageItems) {
+      const module = moduleByName.get(item.name);
+      if (!module) {
+        throw new Error(`Missing module for package ${pkg.name}: ${item.name}`);
+      }
+
+      await prisma.vendorPackageModule.create({
+        data: {
+          packageId: created.id,
+          vendorServiceModuleId: module.id,
+          selectionType: item.selectionType,
+          sortOrder: item.sortOrder
+        }
+      });
+    }
+  }
+}
+
 async function seedModularQuoteData() {
   await prisma.review.deleteMany();
   await prisma.transaction.deleteMany();
   await prisma.reservation.deleteMany();
   await prisma.quoteResponse.deleteMany();
   await prisma.quoteRequest.deleteMany();
+  await prisma.vendorPackageModule.deleteMany();
+  await prisma.vendorPackage.deleteMany();
   await prisma.vendorServiceModule.deleteMany();
 
-  const planner = await prisma.user.findUniqueOrThrow({
-    where: { email: demoAccountCredentials.planner }
-  });
   const venueVendor = await prisma.user.findUniqueOrThrow({
     where: { email: demoAccountCredentials.venue }
   });
-  const cateringVendor = await prisma.user.findUniqueOrThrow({
+  const floralVendor = await prisma.user.findUniqueOrThrow({
     where: { email: demoAccountCredentials.catering }
   });
-  const studioVendor = await prisma.user.findUniqueOrThrow({
+  const funeralVendor = await prisma.user.findUniqueOrThrow({
     where: { email: demoAccountCredentials.memorial }
-  });
-  const weddingPlan = await prisma.eventPlan.findUniqueOrThrow({
-    where: { slug: "spring-garden-wedding" }
-  });
-  const funeralPlan = await prisma.eventPlan.findUniqueOrThrow({
-    where: { slug: "family-funeral-guidance" }
   });
 
   await prisma.user.update({
@@ -103,37 +140,38 @@ async function seedModularQuoteData() {
       role: UserRole.VENDOR,
       vendorApprovalStatus: VendorApprovalStatus.APPROVED,
       supportedEventTypes: [EventType.WEDDING],
-      supportedServiceModules: ["venue"],
+      supportedServiceModules: ["venue", "floral"],
       bio: "가든 웨딩과 프라이빗 예식을 운영하는 예식장입니다.",
       location: "서울 강남구"
     }
   });
 
   await prisma.user.update({
-    where: { id: cateringVendor.id },
+    where: { id: floralVendor.id },
     data: {
-      name: "테이블앤코 케이터링",
-      companyName: "테이블앤코 케이터링",
+      name: "오르세 플로럴",
+      companyName: "오르세 플로럴",
       role: UserRole.VENDOR,
       vendorApprovalStatus: VendorApprovalStatus.APPROVED,
-      supportedEventTypes: [EventType.WEDDING, EventType.FUNERAL],
-      supportedServiceModules: ["venue", "funeralHall"],
-      bio: "웨딩 피로연과 조문객 식사를 모두 지원하는 케이터링 업체입니다.",
-      location: "서울 성동구"
+      supportedEventTypes: [EventType.WEDDING],
+      supportedServiceModules: ["floral"],
+      bio: "웨딩 부케·예식장 꽃장식 전문, 화이트·보타니컬 스타일 시그니처",
+      location: "서울 성동구",
+      isActive: false
     }
   });
 
   await prisma.user.update({
-    where: { id: studioVendor.id },
+    where: { id: funeralVendor.id },
     data: {
-      name: "블루필름 스튜디오",
-      companyName: "블루필름 스튜디오",
+      name: "한결 의전",
+      companyName: "한결 의전",
       role: UserRole.VENDOR,
       vendorApprovalStatus: VendorApprovalStatus.APPROVED,
-      supportedEventTypes: [EventType.WEDDING],
-      supportedServiceModules: ["studio"],
-      bio: "본식 스냅, 영상, 앨범 제작을 제공하는 스튜디오입니다.",
-      location: "서울 마포구"
+      supportedEventTypes: [EventType.FUNERAL],
+      supportedServiceModules: ["funeralHall", "altarFloral", "hearse"],
+      bio: "장례 진행 동선과 조문 안내를 돕는 의전 운영 전문 업체입니다.",
+      location: "인천 남동구"
     }
   });
 
@@ -151,6 +189,7 @@ async function seedModularQuoteData() {
       category: ModuleCategory.VENUE,
       price: 250_000,
       description: "전용 대기실과 웰컴 드링크",
+      isBaseIncluded: true,
       sortOrder: 2
     },
     {
@@ -172,6 +211,7 @@ async function seedModularQuoteData() {
       name: "하객 식사 1인",
       category: ModuleCategory.CATERING,
       price: 42_000,
+      pricingType: "PER_GUEST",
       description: "한식·양식 혼합 코스 1인",
       sortOrder: 5
     },
@@ -181,319 +221,162 @@ async function seedModularQuoteData() {
       price: 120_000,
       description: "사진 8장과 지도 링크 포함",
       sortOrder: 6
-    }
-  ]);
-
-  const cateringModules = await createVendorModules(cateringVendor.id, [
-    {
-      name: "프리미엄 웨딩 뷔페",
-      category: ModuleCategory.CATERING,
-      price: 55_000,
-      description: "스테이크 라이브 스테이션 포함 1인",
-      isBaseIncluded: true,
-      sortOrder: 1
     },
     {
-      name: "음료 바",
-      category: ModuleCategory.CATERING,
-      price: 9_000,
-      description: "논알코올 음료와 커피 1인",
-      sortOrder: 2
-    },
-    {
-      name: "웨딩 케이크",
-      category: ModuleCategory.CATERING,
-      price: 320_000,
-      description: "3단 커스텀 케이크",
-      sortOrder: 3
-    },
-    {
-      name: "조문객 식사",
-      category: ModuleCategory.MEAL,
-      price: 15_000,
-      description: "국밥·반찬 세트 1인",
-      isBaseIncluded: true,
-      sortOrder: 4
-    },
-    {
-      name: "장례 접객 스태프",
-      category: ModuleCategory.CEREMONY,
-      price: 280_000,
-      description: "접객 안내 인력 2인",
-      sortOrder: 5
-    }
-  ]);
-
-  const studioModules = await createVendorModules(studioVendor.id, [
-    {
-      name: "본식 스냅 2인 작가",
-      category: ModuleCategory.PHOTO,
-      price: 1_200_000,
-      description: "본식 전체 촬영과 원본 제공",
-      isBaseIncluded: true,
-      sortOrder: 1
-    },
-    {
-      name: "웨딩 영상",
-      category: ModuleCategory.PHOTO,
-      price: 900_000,
-      description: "하이라이트 영상 1편",
-      sortOrder: 2
-    },
-    {
-      name: "앨범 제작",
-      category: ModuleCategory.PHOTO,
-      price: 380_000,
-      description: "30페이지 프리미엄 앨범",
-      sortOrder: 3
-    },
-    {
-      name: "야외 촬영",
-      category: ModuleCategory.PHOTO,
-      price: 650_000,
-      description: "서울 근교 야외 로케이션 1곳",
-      sortOrder: 4
-    },
-    {
-      name: "드레스 리터칭",
-      category: ModuleCategory.DRESS,
+      name: "웰컴 사인보드 커스텀 제작",
+      category: ModuleCategory.DECORATION,
       price: 180_000,
-      description: "촬영 컷 색감·드레스 라인 보정",
-      sortOrder: 5
+      description: "행사명과 동선을 반영한 현장 사인보드 제작",
+      sortOrder: 7
+    },
+    {
+      name: "야외 버진로드 런너 추가",
+      category: ModuleCategory.DECORATION,
+      price: 220_000,
+      description: "잔디 및 야외 동선용 추가 런너 설치",
+      sortOrder: 8
     }
   ]);
 
-  const venuePending = await prisma.quoteRequest.create({
-    data: {
-      planId: weddingPlan.id,
-      vendorId: venueVendor.id,
-      requirements: "가든 예식홀과 기본 장식 견적을 요청합니다.",
-      selectedModules: venueModules.slice(0, 3).map((module) => module.id),
-      preferredDate: plusDays(45),
-      budget: 4_000_000,
-      status: QuoteStatus.PENDING
+  const floralModules = await createVendorModules(floralVendor.id, [
+    {
+      name: "신부 부케",
+      category: ModuleCategory.DECORATION,
+      price: 180_000,
+      description: "계절꽃 핸드타이드 부케, 화이트·크림 톤",
+      isBaseIncluded: true,
+      sortOrder: 1
+    },
+    {
+      name: "예식장 꽃장식",
+      category: ModuleCategory.DECORATION,
+      price: 650_000,
+      description: "버진로드·메인 아치·양쪽 스탠드 꽃장식 풀세트",
+      sortOrder: 2
+    },
+    {
+      name: "피로연 테이블 장식",
+      category: ModuleCategory.DECORATION,
+      price: 350_000,
+      description: "테이블당 센터피스 10테이블 기준",
+      sortOrder: 3
+    },
+    {
+      name: "신랑 부토니에",
+      category: ModuleCategory.DECORATION,
+      price: 35_000,
+      description: "부케와 같은 컬러 톤의 부토니에",
+      sortOrder: 4
     }
-  });
+  ]);
 
-  await prisma.reservation.create({
-    data: {
-      eventPlanId: weddingPlan.id,
-      vendorId: venueVendor.id,
-      quoteRequestId: venuePending.id,
-      serviceName: "가든 예식홀 대관 외 2개",
-      serviceCategory: "VENUE",
-      serviceDate: plusDays(45),
-      guestCount: 160,
-      quotedAmount: 4_000_000,
-      confirmedAmount: null,
-      selectedServiceOptions: venueModules.slice(0, 3).map((module) => ({
-        catalogKey: module.id,
-        name: module.name,
-        price: module.price,
-        pricingType: "FLAT"
-      })),
-      status: ReservationStatus.PENDING,
-      notes: "가든 예식홀과 기본 장식 견적을 요청합니다."
+  const funeralModules = await createVendorModules(funeralVendor.id, [
+    {
+      name: "빈소 기본 3일",
+      category: ModuleCategory.FUNERAL_HALL,
+      price: 950_000,
+      description: "빈소 공간 3일 운영과 조문 접수 지원",
+      isBaseIncluded: true,
+      sortOrder: 1
+    },
+    {
+      name: "문상객 식사",
+      category: ModuleCategory.MEAL,
+      price: 12_000,
+      pricingType: "PER_GUEST",
+      description: "국밥·반찬 세트 1인",
+      sortOrder: 2
+    },
+    {
+      name: "장례 지도사",
+      category: ModuleCategory.OBITUARY,
+      price: 300_000,
+      description: "전문 장례 지도사 1인, 절차 안내 전체 동행",
+      sortOrder: 3
+    },
+    {
+      name: "기본 제단꽃 세트",
+      category: ModuleCategory.WREATH,
+      price: 380_000,
+      description: "영정 사진 액자, 국화 꽃 장식, 향초 포함",
+      sortOrder: 4
+    },
+    {
+      name: "시내 운구",
+      category: ModuleCategory.TRANSPORT,
+      price: 350_000,
+      description: "수도권·인천 기준 편도 운구 차량 1대",
+      sortOrder: 5
+    },
+    {
+      name: "추모 동선 안내 사인물",
+      category: ModuleCategory.OBITUARY,
+      price: 90_000,
+      description: "빈소 내 조문 동선 및 안내 표지 세트",
+      sortOrder: 6
     }
-  });
+  ]);
 
-  const studioResponded = await prisma.quoteRequest.create({
-    data: {
-      planId: weddingPlan.id,
-      vendorId: studioVendor.id,
-      requirements: "본식 스냅과 영상 촬영 패키지가 필요합니다.",
-      selectedModules: studioModules.slice(0, 3).map((module) => module.id),
-      preferredDate: plusDays(45),
-      budget: 2_500_000,
-      status: QuoteStatus.RESPONDED
+  await createVendorPackages(venueVendor.id, EventType.WEDDING, venueModules, [
+    {
+      name: "Basic",
+      description: "가든 예식 공간과 핵심 진행 설비를 포함한 기본 패키지",
+      basePrice: 2_300_000,
+      sortOrder: 1,
+      included: ["가든 예식홀 대관", "신부 대기실", "음향·조명 패키지"],
+      optional: ["모바일 청첩장 기본형", "웰컴 사인보드 커스텀 제작"]
+    },
+    {
+      name: "Premium",
+      description: "기본 예식 구성에 플라워 연출과 식사 옵션을 더한 균형형 패키지",
+      basePrice: 3_100_000,
+      sortOrder: 2,
+      included: ["가든 예식홀 대관", "신부 대기실", "음향·조명 패키지", "플라워 버진로드"],
+      optional: ["하객 식사 1인", "모바일 청첩장 기본형", "야외 버진로드 런너 추가"]
+    },
+    {
+      name: "Full Care",
+      description: "공간, 연출, 안내물까지 한 번에 준비하는 풀 케어 패키지",
+      basePrice: 3_650_000,
+      sortOrder: 3,
+      included: ["가든 예식홀 대관", "신부 대기실", "음향·조명 패키지", "플라워 버진로드", "웰컴 사인보드 커스텀 제작"],
+      optional: ["하객 식사 1인", "모바일 청첩장 기본형", "야외 버진로드 런너 추가"]
     }
-  });
-  const studioResponse = await prisma.quoteResponse.create({
-    data: {
-      requestId: studioResponded.id,
-      vendorId: studioVendor.id,
-      basePrice: 1_200_000,
-      modules: asJson({
-        basePackage: {
-          name: "스냅 기본 패키지",
-          price: 1_200_000,
-          description: "본식 스냅 2인 작가"
-        },
-        includedModules: [
-          {
-            id: studioModules[1].id,
-            name: studioModules[1].name,
-            category: studioModules[1].category,
-            price: studioModules[1].price
-          }
-        ],
-        optionalModules: [
-          {
-            id: studioModules[2].id,
-            name: studioModules[2].name,
-            category: studioModules[2].category,
-            price: studioModules[2].price
-          }
-        ],
-        excludedModules: []
-      }),
-      totalPrice: 2_100_000,
-      note: "촬영 원본은 2주 내 전달됩니다."
-    }
-  });
+  ]);
 
-  await prisma.reservation.create({
-    data: {
-      eventPlanId: weddingPlan.id,
-      vendorId: studioVendor.id,
-      quoteRequestId: studioResponded.id,
-      quoteResponseId: studioResponse.id,
-      serviceName: "스냅 기본 패키지",
-      serviceCategory: "PHOTO",
-      serviceDate: plusDays(45),
-      guestCount: 160,
-      quotedAmount: 2_100_000,
-      confirmedAmount: 2_100_000,
-      status: ReservationStatus.PENDING,
-      notes: "촬영 원본은 2주 내 전달됩니다."
+  await createVendorPackages(funeralVendor.id, EventType.FUNERAL, funeralModules, [
+    {
+      name: "Essential",
+      description: "빈소 운영과 기본 제단, 시내 운구를 갖춘 필수 의전 패키지",
+      basePrice: 1_680_000,
+      sortOrder: 1,
+      included: ["빈소 기본 3일", "기본 제단꽃 세트", "시내 운구"],
+      optional: ["추모 동선 안내 사인물"]
+    },
+    {
+      name: "Standard",
+      description: "필수 의전에 장례 지도사와 조문객 식사 선택을 더한 표준 패키지",
+      basePrice: 1_980_000,
+      sortOrder: 2,
+      included: ["빈소 기본 3일", "기본 제단꽃 세트", "시내 운구", "장례 지도사"],
+      optional: ["문상객 식사", "추모 동선 안내 사인물"]
+    },
+    {
+      name: "Dignified",
+      description: "가족 안내와 현장 동선까지 차분하게 정리하는 품격 의전 패키지",
+      basePrice: 2_120_000,
+      sortOrder: 3,
+      included: ["빈소 기본 3일", "기본 제단꽃 세트", "시내 운구", "장례 지도사", "추모 동선 안내 사인물"],
+      optional: ["문상객 식사"]
     }
-  });
+  ]);
 
-  const cateringAccepted = await prisma.quoteRequest.create({
-    data: {
-      planId: weddingPlan.id,
-      vendorId: cateringVendor.id,
-      requirements: "160명 기준 식사와 음료 견적을 받고 싶습니다.",
-      selectedModules: cateringModules.slice(0, 3).map((module) => module.id),
-      preferredDate: plusDays(45),
-      budget: 9_000_000,
-      status: QuoteStatus.ACCEPTED
-    }
-  });
-  const acceptedResponse = await prisma.quoteResponse.create({
-    data: {
-      requestId: cateringAccepted.id,
-      vendorId: cateringVendor.id,
-      basePrice: 8_800_000,
-      modules: asJson({
-        basePackage: {
-          name: "160인 웨딩 케이터링",
-          price: 8_800_000,
-          description: "프리미엄 뷔페 160인"
-        },
-        includedModules: [
-          {
-            id: cateringModules[1].id,
-            name: cateringModules[1].name,
-            category: cateringModules[1].category,
-            price: 1_440_000
-          }
-        ],
-        optionalModules: [
-          {
-            id: cateringModules[2].id,
-            name: cateringModules[2].name,
-            category: cateringModules[2].category,
-            price: cateringModules[2].price
-          }
-        ],
-        excludedModules: []
-      }),
-      totalPrice: 10_240_000,
-      note: "음료 바는 인원 확정 후 최종 조정 가능합니다."
-    }
-  });
-
-  await prisma.quoteRequest.create({
-    data: {
-      planId: funeralPlan.id,
-      vendorId: cateringVendor.id,
-      requirements: "조문객 50명 기준 식사와 접객 스태프 견적이 필요합니다.",
-      selectedModules: cateringModules.slice(3, 5).map((module) => module.id),
-      preferredDate: plusDays(12),
-      budget: 1_500_000,
-      status: QuoteStatus.CANCELED
-    }
-  });
-
-  const funeralResponded = await prisma.quoteRequest.create({
-    data: {
-      planId: funeralPlan.id,
-      vendorId: cateringVendor.id,
-      requirements: "장례식장 식사만 별도 견적을 요청합니다.",
-      selectedModules: [cateringModules[3].id],
-      preferredDate: plusDays(12),
-      budget: 900_000,
-      status: QuoteStatus.RESPONDED
-    }
-  });
-  await prisma.quoteResponse.create({
-    data: {
-      requestId: funeralResponded.id,
-      vendorId: cateringVendor.id,
-      basePrice: 750_000,
-      modules: asJson({
-        basePackage: {
-          name: "조문객 식사 50인",
-          price: 750_000,
-          description: "국밥·반찬 세트 50인"
-        },
-        includedModules: [],
-        optionalModules: [
-          {
-            id: cateringModules[4].id,
-            name: cateringModules[4].name,
-            category: cateringModules[4].category,
-            price: cateringModules[4].price
-          }
-        ],
-        excludedModules: []
-      }),
-      totalPrice: 750_000,
-      note: "당일 10명 단위 증감 가능합니다."
-    }
-  });
-
-  await prisma.reservation.create({
-    data: {
-      eventPlanId: weddingPlan.id,
-      vendorId: cateringVendor.id,
-      quoteRequestId: cateringAccepted.id,
-      quoteResponseId: acceptedResponse.id,
-      serviceName: "160인 웨딩 케이터링",
-      serviceCategory: "CATERING",
-      serviceDate: plusDays(45),
-      guestCount: 160,
-      quotedAmount: 10_240_000,
-      confirmedAmount: null,
-      status: ReservationStatus.PENDING,
-      notes: "견적 수락 완료, 업체 최종 확정 대기"
-    }
-  });
-
-  const funeralResponse = await prisma.quoteResponse.findFirstOrThrow({
-    where: { requestId: funeralResponded.id }
-  });
-
-  await prisma.reservation.create({
-    data: {
-      eventPlanId: funeralPlan.id,
-      vendorId: cateringVendor.id,
-      quoteRequestId: funeralResponded.id,
-      quoteResponseId: funeralResponse.id,
-      serviceName: "조문객 식사 50인",
-      serviceCategory: "MEAL",
-      serviceDate: plusDays(12),
-      guestCount: 50,
-      quotedAmount: 750_000,
-      confirmedAmount: 750_000,
-      status: ReservationStatus.PENDING,
-      notes: "당일 10명 단위 증감 가능합니다."
-    }
-  });
 }
 
 async function main() {
+  await prisma.$executeRawUnsafe("PRAGMA journal_mode = WAL");
+  await prisma.$executeRawUnsafe("PRAGMA busy_timeout = 10000");
+
   await prisma.review.deleteMany();
   await prisma.transaction.deleteMany();
   await prisma.invitation.deleteMany();
@@ -502,6 +385,8 @@ async function main() {
   await prisma.quoteResponse.deleteMany();
   await prisma.quoteRequest.deleteMany();
   await prisma.eventPlan.deleteMany();
+  await prisma.vendorPackageModule.deleteMany();
+  await prisma.vendorPackage.deleteMany();
   await prisma.vendorServiceOption.deleteMany();
   await prisma.vendorService.deleteMany();
   await prisma.vendorServiceModule.deleteMany();

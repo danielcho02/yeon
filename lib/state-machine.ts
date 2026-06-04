@@ -13,7 +13,8 @@ const RESERVATION_TRANSITIONS: Record<ReservationStatus, ReservationStatus[]> = 
   CONFIRMED: ["CHANGED", "CANCELED"],
   REJECTED: [],
   CHANGED: ["CONFIRMED"],
-  CANCELED: []
+  CANCELED: [],
+  COMPLETED: []
 };
 
 export class InvalidTransitionError extends Error {

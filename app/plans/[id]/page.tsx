@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { CalendarDays, Edit, MapPin, Trash2, Users, Wallet } from "lucide-react";
+import { CalendarDays, Edit, MapPin, Trash2, Users, Wallet, Layers } from "lucide-react";
 
 import { Nav } from "@/components/nav";
 import { buttonVariants } from "@/components/ui/button";
@@ -31,7 +31,10 @@ export default async function PlanDetailPage({
     where: { id, ownerId: session.user.id },
     include: {
       reservations: {
-        include: { vendor: { select: { companyName: true, name: true } } },
+        include: {
+          vendor: { select: { companyName: true, name: true } },
+          quoteRequest: { select: { status: true } }
+        },
         orderBy: { createdAt: "desc" },
       },
     },
@@ -42,10 +45,15 @@ export default async function PlanDetailPage({
   const deletePlanById = deletePlan.bind(null, id);
 
   const stats = {
-    requesting: plan.reservations.filter((r) => r.status === "PENDING" && !r.confirmedAmount).length,
-    proposed: plan.reservations.filter((r) => r.status === "PENDING" && r.confirmedAmount !== null).length,
+    requesting: plan.reservations.filter((r) => r.status === "PENDING" && r.quoteResponseId == null).length,
+    proposed: plan.reservations.filter(
+      (r) =>
+        r.status === "PENDING" &&
+        r.quoteResponseId != null &&
+        r.quoteRequest?.status !== "ACCEPTED"
+    ).length,
     confirmed: plan.reservations.filter((r) => r.status === "CONFIRMED").length,
-    cancelled: plan.reservations.filter((r) => r.status === "CANCELLED").length,
+    cancelled: plan.reservations.filter((r) => r.status === "CANCELED").length,
   };
 
   return (
@@ -102,15 +110,24 @@ export default async function PlanDetailPage({
           <StatCard label="취소" count={stats.cancelled} tone="neutral" />
         </div>
 
-        {/* 플래너 빠른 진입 */}
+        {/* 플래너 빠른 진입 및 행사 운영 지원 바로가기 */}
         {plan.type && (
-          <div className="mb-6">
+          <div className="mb-6 flex flex-wrap gap-3">
             <Link
               href={`/planner/${plan.type.toLowerCase()}?planId=${plan.id}`}
               className="inline-flex items-center gap-1.5 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm font-semibold text-primary transition-all duration-200 hover:bg-primary/10"
             >
               이 행사로 업체 찾기 →
             </Link>
+            {(plan.type === "WEDDING" || plan.type === "FUNERAL") && (
+              <Link
+                href={`/plans/${plan.id}/support`}
+                className="inline-flex items-center gap-1.5 rounded-2xl border border-emerald-600/30 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition-all duration-200 hover:bg-emerald-100/50"
+              >
+                <Layers className="mr-1.5 h-4 w-4" />
+                행사 운영 지원 서비스 →
+              </Link>
+            )}
           </div>
         )}
 
@@ -161,7 +178,22 @@ export default async function PlanDetailPage({
             ) : (
               <div className="space-y-3">
                 {plan.reservations.map((res) => {
-                  const displayMeta = getQuoteStatusMeta(res);
+                  const displayMeta = getQuoteStatusMeta({
+                    ...res,
+                    quoteRequestStatus: res.quoteRequest?.status ?? null
+                  });
+                  const confirmedAmount =
+                    res.status === "CONFIRMED" ? res.confirmedAmount : null;
+                  const proposedAmount =
+                    res.status !== "CONFIRMED" &&
+                    res.quoteResponseId &&
+                    res.quotedAmount != null
+                      ? res.quotedAmount
+                      : null;
+                  const requestedBudget =
+                    res.quoteResponseId == null ? res.quotedAmount : null;
+                  const vendorConfirmationDueAt =
+                    res.quoteRequest?.status === "ACCEPTED" ? res.vendorConfirmationDueAt : null;
 
                   return (
                     <div
@@ -188,14 +220,24 @@ export default async function PlanDetailPage({
                           희망일: {formatDate(res.serviceDate)}
                         </p>
                       )}
-                      {res.quotedAmount && (
+                      {requestedBudget != null && (
                         <p className="mt-0.5 text-xs text-muted-foreground">
-                          예산: {res.quotedAmount.toLocaleString()}원
+                          요청 예산: {requestedBudget.toLocaleString()}원
                         </p>
                       )}
-                      {res.confirmedAmount && (
-                        <p className={`mt-0.5 text-xs ${res.status === "CONFIRMED" ? "font-semibold text-emerald-700" : "font-semibold text-primary"}`}>
-                          {res.status === "CONFIRMED" ? "확정 금액" : "제안 금액"}: {res.confirmedAmount.toLocaleString()}원
+                      {proposedAmount != null && (
+                        <p className="mt-0.5 text-xs font-semibold text-primary">
+                          제안 금액: {proposedAmount.toLocaleString()}원
+                        </p>
+                      )}
+                      {confirmedAmount != null && (
+                        <p className="mt-0.5 text-xs font-semibold text-emerald-700">
+                          확정 금액: {confirmedAmount.toLocaleString()}원
+                        </p>
+                      )}
+                      {vendorConfirmationDueAt && (
+                        <p className="mt-0.5 text-xs font-semibold text-[#8c8275]">
+                          업체 확정 요청 기한: {formatDate(vendorConfirmationDueAt)}
                         </p>
                       )}
                     </div>

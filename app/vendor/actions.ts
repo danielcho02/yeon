@@ -4,22 +4,32 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
+  EventType,
   Prisma,
   QuoteStatus,
   ReservationStatus,
   UserRole,
-  VendorApprovalStatus
+  VendorApprovalStatus,
+  VendorPackageModuleSelectionType
 } from "@/generated/prisma/client";
 import { getServerAuthSession } from "@/lib/auth/session";
+import { getActionError, isPrismaUniqueConstraintError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { assertQuoteTransition } from "@/lib/state-machine";
 import {
   getCatalogItem,
   getQuoteServiceModuleEventType,
+  vendorServiceModuleCategoryMatchesEventType,
   getVendorSupportedEventTypes,
   getVendorSupportedServiceModules,
   quoteServiceModuleValues
 } from "@/lib/step3.shared";
+import {
+  getCatalogKeyForVendorModule,
+  getVendorModuleCategoryForCatalogItem,
+  getVendorModuleCategoryForCustomSection,
+  isStandardVendorModule
+} from "@/lib/vendor-service-modules";
 
 async function requireVendor() {
   const session = await getServerAuthSession();
@@ -79,13 +89,13 @@ function mapQuoteStatus(status: QuoteStatus) {
 
 function buildLegacyResponseModules(
   reservation: Awaited<ReturnType<typeof requireOwnedReservation>>,
-  confirmedAmount: number
+  proposalAmount: number
 ) {
   return {
     basePackage: {
       name: reservation.serviceName,
-      price: confirmedAmount,
-      description: reservation.notes ?? reservation.description ?? "업체가 제출한 견적 제안입니다."
+      price: proposalAmount,
+      description: "업체가 제출한 견적 제안입니다."
     },
     includedModules: [],
     optionalModules: [],
@@ -103,7 +113,202 @@ function revalidateReservationViews(eventPlanId: string) {
   revalidatePath("/planner/funeral");
 }
 
-export async function acceptReservation(reservationId: string, confirmedAmount: number) {
+function isDuplicateQuoteResponse(error: unknown) {
+  return isPrismaUniqueConstraintError(error, [
+    "QuoteResponse_requestId_vendorId_key",
+    "requestId",
+    "vendorId"
+  ]);
+}
+
+function parsePositiveInt(value: FormDataEntryValue | null, fallback = 0) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function parsePackageEventType(value: FormDataEntryValue | null): EventType | null {
+  return value === EventType.WEDDING || value === EventType.FUNERAL ? value : null;
+}
+
+async function getPackageModulesForVendor(input: {
+  vendorId: string;
+  eventType: EventType;
+  includedModuleIds: string[];
+  optionalModuleIds: string[];
+}) {
+  const requestedIds = Array.from(new Set([...input.includedModuleIds, ...input.optionalModuleIds]));
+  if (requestedIds.length === 0) {
+    throw new Error("패키지에는 최소 1개 이상의 포함 항목이 필요합니다.");
+  }
+
+  const modules = await prisma.vendorServiceModule.findMany({
+    where: {
+      id: { in: requestedIds },
+      vendorId: input.vendorId,
+      isActive: true
+    },
+    select: { id: true, category: true }
+  });
+
+  if (modules.length !== requestedIds.length) {
+    throw new Error("패키지 항목 중 유효하지 않은 서비스가 있습니다.");
+  }
+
+  if (
+    modules.some((module) =>
+      !vendorServiceModuleCategoryMatchesEventType(input.eventType, module.category)
+    )
+  ) {
+    throw new Error("행사 유형과 맞지 않는 서비스는 패키지에 포함할 수 없습니다.");
+  }
+
+  const includedIds = new Set(input.includedModuleIds);
+  const optionalIds = input.optionalModuleIds.filter((id) => !includedIds.has(id));
+
+  return [
+    ...input.includedModuleIds.map((id, index) => ({
+      vendorServiceModuleId: id,
+      selectionType: VendorPackageModuleSelectionType.INCLUDED,
+      sortOrder: index + 1
+    })),
+    ...optionalIds.map((id, index) => ({
+      vendorServiceModuleId: id,
+      selectionType: VendorPackageModuleSelectionType.OPTIONAL,
+      sortOrder: input.includedModuleIds.length + index + 1
+    }))
+  ];
+}
+
+function revalidateVendorPackageViews(vendorId: string) {
+  revalidatePath("/vendor/dashboard");
+  revalidatePath("/vendors");
+  revalidatePath(`/vendors/${vendorId}`);
+  revalidatePath("/planner/wedding");
+  revalidatePath("/planner/funeral");
+}
+
+export async function createVendorPackage(formData: FormData) {
+  const vendorId = await requireVendor();
+  const eventType = parsePackageEventType(formData.get("eventType"));
+  const name = (formData.get("name") as string | null)?.trim() || "";
+  const description = (formData.get("description") as string | null)?.trim() || null;
+  const basePrice = parsePositiveInt(formData.get("basePrice"), -1);
+  const sortOrder = parsePositiveInt(formData.get("sortOrder"), 0);
+
+  if (!eventType || !name || basePrice <= 0) {
+    redirect("/vendor/dashboard");
+  }
+
+  const highestSortOrder = await prisma.vendorPackage.findFirst({
+    where: { vendorId, eventType },
+    orderBy: { sortOrder: "desc" },
+    select: { sortOrder: true }
+  });
+
+  await prisma.vendorPackage.create({
+    data: {
+      vendorId,
+      eventType,
+      name,
+      description,
+      basePrice,
+      sortOrder: sortOrder || (highestSortOrder?.sortOrder ?? 0) + 1,
+      isActive: false
+    }
+  });
+
+  revalidateVendorPackageViews(vendorId);
+}
+
+export async function updateVendorPackage(formData: FormData) {
+  const vendorId = await requireVendor();
+  const packageId = (formData.get("packageId") as string | null)?.trim() || "";
+  const eventType = parsePackageEventType(formData.get("eventType"));
+  const name = (formData.get("name") as string | null)?.trim() || "";
+  const description = (formData.get("description") as string | null)?.trim() || null;
+  const basePrice = parsePositiveInt(formData.get("basePrice"), -1);
+  const sortOrder = parsePositiveInt(formData.get("sortOrder"), 0);
+  const includedModuleIds = formData.getAll("includedModuleIds")
+    .map(String)
+    .filter(Boolean);
+  const optionalModuleIds = formData.getAll("optionalModuleIds")
+    .map(String)
+    .filter(Boolean);
+
+  if (!packageId || !eventType || !name || basePrice <= 0 || includedModuleIds.length === 0) {
+    redirect("/vendor/dashboard");
+  }
+
+  const existing = await prisma.vendorPackage.findFirst({
+    where: { id: packageId, vendorId },
+    select: { id: true }
+  });
+
+  if (!existing) {
+    throw new Error("권한 없음");
+  }
+
+  const items = await getPackageModulesForVendor({
+    vendorId,
+    eventType,
+    includedModuleIds,
+    optionalModuleIds
+  });
+
+  await prisma.$transaction(async (tx) => {
+    await tx.vendorPackage.update({
+      where: { id: packageId },
+      data: {
+        eventType,
+        name,
+        description,
+        basePrice,
+        sortOrder
+      }
+    });
+
+    await tx.vendorPackageModule.deleteMany({
+      where: { packageId }
+    });
+
+    for (const item of items) {
+      await tx.vendorPackageModule.create({
+        data: {
+          packageId,
+          ...item
+        }
+      });
+    }
+  });
+
+  revalidateVendorPackageViews(vendorId);
+}
+
+export async function toggleVendorPackage(packageId: string, isActive: boolean) {
+  const vendorId = await requireVendor();
+
+  const existing = await prisma.vendorPackage.findFirst({
+    where: { id: packageId, vendorId },
+    include: { items: true }
+  });
+
+  if (!existing) {
+    throw new Error("권한 없음");
+  }
+
+  if (isActive && !existing.items.some((item) => item.selectionType === "INCLUDED")) {
+    throw new Error("포함 항목이 없는 패키지는 활성화할 수 없습니다.");
+  }
+
+  await prisma.vendorPackage.update({
+    where: { id: packageId },
+    data: { isActive }
+  });
+
+  revalidateVendorPackageViews(vendorId);
+}
+
+export async function acceptReservation(reservationId: string, proposalAmount: number) {
   const vendorId = await requireVendor();
   const reservation = await requireOwnedReservation(reservationId, vendorId);
 
@@ -111,70 +316,94 @@ export async function acceptReservation(reservationId: string, confirmedAmount: 
     throw new Error("응답 가능한 요청이 아닙니다.");
   }
 
-  if (!Number.isFinite(confirmedAmount) || confirmedAmount <= 0) {
-    throw new Error("확정 금액을 입력해 주세요.");
+  if (!Number.isFinite(proposalAmount) || proposalAmount <= 0) {
+    throw new Error("견적 금액을 입력해 주세요.");
   }
 
-  await prisma.$transaction(async (tx) => {
-    let quoteResponseId = reservation.quoteResponseId;
+  try {
+    await prisma.$transaction(async (tx) => {
+      let quoteResponseId = reservation.quoteResponseId;
 
-    if (reservation.quoteRequestId) {
-      const quoteRequest = await tx.quoteRequest.findFirst({
-        where: { id: reservation.quoteRequestId, vendorId },
-        select: { id: true, status: true }
-      });
-
-      if (quoteRequest) {
-        const quoteStatus = mapQuoteStatus(quoteRequest.status);
-
-        if (quoteStatus === "PENDING") {
-          assertQuoteTransition(quoteStatus, "RESPONDED");
-        } else if (quoteStatus !== "RESPONDED") {
-          throw new Error("응답 가능한 견적 요청이 아닙니다.");
-        }
-
-        const modules = buildLegacyResponseModules(reservation, confirmedAmount);
-        const quoteResponse = quoteResponseId
-          ? await tx.quoteResponse.update({
-              where: { id: quoteResponseId },
-              data: {
-                basePrice: confirmedAmount,
-                modules: modules as Prisma.InputJsonValue,
-                totalPrice: confirmedAmount,
-                note: reservation.notes
-              },
-              select: { id: true }
-            })
-          : await tx.quoteResponse.create({
-              data: {
-                requestId: quoteRequest.id,
-                vendorId,
-                basePrice: confirmedAmount,
-                modules: modules as Prisma.InputJsonValue,
-                totalPrice: confirmedAmount,
-                note: reservation.notes
-              },
-              select: { id: true }
-            });
-
-        quoteResponseId = quoteResponse.id;
-
-        await tx.quoteRequest.update({
-          where: { id: quoteRequest.id },
-          data: { status: QuoteStatus.RESPONDED }
+      if (reservation.quoteRequestId) {
+        const quoteRequest = await tx.quoteRequest.findFirst({
+          where: { id: reservation.quoteRequestId, vendorId },
+          select: { id: true, status: true }
         });
+
+        if (quoteRequest) {
+          const quoteStatus = mapQuoteStatus(quoteRequest.status);
+
+          if (quoteStatus === "PENDING") {
+            assertQuoteTransition(quoteStatus, "RESPONDED");
+          } else if (quoteStatus !== "RESPONDED") {
+            throw new Error("응답 가능한 견적 요청이 아닙니다.");
+          }
+
+          const modules = buildLegacyResponseModules(reservation, proposalAmount);
+          const existingQuoteResponse = quoteResponseId
+            ? null
+            : await tx.quoteResponse.findFirst({
+                where: { requestId: quoteRequest.id, vendorId },
+                select: { id: true }
+              });
+          const quoteResponse = quoteResponseId
+            ? await tx.quoteResponse.update({
+                where: { id: quoteResponseId },
+                data: {
+                  basePrice: proposalAmount,
+                  modules: modules as Prisma.InputJsonValue,
+                  totalPrice: proposalAmount
+                },
+                select: { id: true }
+              })
+            : existingQuoteResponse
+            ? await tx.quoteResponse.update({
+                where: { id: existingQuoteResponse.id },
+                data: {
+                  basePrice: proposalAmount,
+                  modules: modules as Prisma.InputJsonValue,
+                  totalPrice: proposalAmount
+                },
+                select: { id: true }
+              })
+            : await tx.quoteResponse.create({
+                data: {
+                  requestId: quoteRequest.id,
+                  vendorId,
+                  basePrice: proposalAmount,
+                  modules: modules as Prisma.InputJsonValue,
+                  totalPrice: proposalAmount,
+                  note: null
+                },
+                select: { id: true }
+              });
+
+          quoteResponseId = quoteResponse.id;
+
+          await tx.quoteRequest.update({
+            where: { id: quoteRequest.id },
+            data: { status: QuoteStatus.RESPONDED }
+          });
+        }
       }
+
+      await tx.reservation.update({
+        where: { id: reservation.id },
+        data: {
+          quoteResponseId,
+          status: ReservationStatus.PENDING,
+          quotedAmount: proposalAmount,
+          confirmedAmount: null,
+        },
+      });
+    });
+  } catch (error) {
+    if (isDuplicateQuoteResponse(error)) {
+      throw new Error("이미 제출한 견적 응답이 있습니다.");
     }
 
-    await tx.reservation.update({
-      where: { id: reservation.id },
-      data: {
-        quoteResponseId,
-        status: ReservationStatus.PENDING,
-        confirmedAmount,
-      },
-    });
-  });
+    throw new Error(getActionError(error));
+  }
 
   revalidateReservationViews(reservation.eventPlanId);
 }
@@ -206,7 +435,8 @@ export async function rejectReservation(reservationId: string, reason: string) {
     await tx.reservation.update({
       where: { id: reservation.id },
       data: {
-        status: ReservationStatus.CANCELLED,
+        status: ReservationStatus.CANCELED,
+        vendorConfirmationDueAt: null,
         notes: reason,
       },
     });
@@ -220,11 +450,9 @@ export async function setStandardItemPrice(formData: FormData) {
 
   const catalogKey = (formData.get("catalogKey") as string | null)?.trim() || "";
   const basePriceRaw = (formData.get("basePrice") as string | null)?.trim() || "";
-  const maxGuestsRaw = (formData.get("maxGuests") as string | null)?.trim() || "";
 
   const catalogItem = getCatalogItem(catalogKey);
   const basePrice = Number.parseInt(basePriceRaw, 10);
-  const maxGuests = maxGuestsRaw ? Number.parseInt(maxGuestsRaw, 10) : null;
 
   if (!catalogItem || !Number.isFinite(basePrice) || basePrice <= 0) {
     redirect("/vendor/dashboard");
@@ -237,33 +465,50 @@ export async function setStandardItemPrice(formData: FormData) {
     redirect("/vendor/dashboard");
   }
 
-  const existing = await prisma.vendorService.findFirst({
-    where: { vendorId, catalogKey },
-    select: { id: true }
+  const category = getVendorModuleCategoryForCatalogItem(catalogKey, serviceModule);
+
+  if (!category) {
+    redirect("/vendor/dashboard");
+  }
+
+  const standardCandidates = await prisma.vendorServiceModule.findMany({
+    where: {
+      vendorId,
+      category,
+      pricingType: catalogItem.pricingType
+    },
+    select: { id: true, name: true, category: true, pricingType: true }
   });
+  const existing = standardCandidates.find(
+    (module) => getCatalogKeyForVendorModule(module) === catalogKey
+  );
 
   if (existing) {
-    await prisma.vendorService.update({
+    await prisma.vendorServiceModule.update({
       where: { id: existing.id },
       data: {
-        basePrice,
-        maxGuests: catalogItem.pricingType === "PER_GUEST" && maxGuests && maxGuests > 0 ? maxGuests : null,
+        price: basePrice,
         isActive: true
       }
     });
   } else {
-    await prisma.vendorService.create({
+    const highestSortOrder = await prisma.vendorServiceModule.findFirst({
+      where: { vendorId, category },
+      orderBy: { sortOrder: "desc" },
+      select: { sortOrder: true }
+    });
+
+    await prisma.vendorServiceModule.create({
       data: {
         vendorId,
-        eventType,
-        module: serviceModule,
-        catalogKey,
-        pricingType: catalogItem.pricingType,
         name: catalogItem.name,
+        category,
+        price: basePrice,
+        pricingType: catalogItem.pricingType,
         description: null,
-        basePrice,
-        maxGuests: catalogItem.pricingType === "PER_GUEST" && maxGuests && maxGuests > 0 ? maxGuests : null,
-        isActive: true
+        isBaseIncluded: false,
+        isActive: true,
+        sortOrder: (highestSortOrder?.sortOrder ?? 0) + 1
       }
     });
   }
@@ -284,10 +529,8 @@ export async function addCustomItem(formData: FormData) {
   const description = (formData.get("description") as string | null)?.trim() || null;
   const pricingType = (formData.get("pricingType") as string | null)?.trim() || "FLAT";
   const basePriceRaw = (formData.get("basePrice") as string | null)?.trim() || "";
-  const maxGuestsRaw = (formData.get("maxGuests") as string | null)?.trim() || "";
 
   const basePrice = Number.parseInt(basePriceRaw, 10);
-  const maxGuests = maxGuestsRaw ? Number.parseInt(maxGuestsRaw, 10) : null;
 
   const expectedEventType = getQuoteServiceModuleEventType(serviceModule);
 
@@ -303,8 +546,15 @@ export async function addCustomItem(formData: FormData) {
     redirect("/vendor/dashboard");
   }
 
-  const duplicate = await prisma.vendorService.findFirst({
-    where: { vendorId, eventType, module: serviceModule, name, catalogKey: null },
+  const category = getVendorModuleCategoryForCustomSection(serviceModule);
+  const isBaseIncluded = formData.get("isBaseIncluded") === "on";
+
+  if (!category) {
+    redirect("/vendor/dashboard");
+  }
+
+  const duplicate = await prisma.vendorServiceModule.findFirst({
+    where: { vendorId, category, name },
     select: { id: true }
   });
 
@@ -312,18 +562,23 @@ export async function addCustomItem(formData: FormData) {
     redirect("/vendor/dashboard");
   }
 
-  await prisma.vendorService.create({
+  const highestSortOrder = await prisma.vendorServiceModule.findFirst({
+    where: { vendorId, category },
+    orderBy: { sortOrder: "desc" },
+    select: { sortOrder: true }
+  });
+
+  await prisma.vendorServiceModule.create({
     data: {
       vendorId,
-      eventType,
-      module: serviceModule,
-      catalogKey: null,
-      pricingType: pricingType === "PER_GUEST" ? "PER_GUEST" : "FLAT",
       name,
+      category,
+      price: basePrice,
+      pricingType: pricingType === "PER_GUEST" ? "PER_GUEST" : "FLAT",
       description,
-      basePrice,
-      maxGuests: pricingType === "PER_GUEST" && maxGuests && maxGuests > 0 ? maxGuests : null,
-      isActive: true
+      isBaseIncluded,
+      isActive: true,
+      sortOrder: (highestSortOrder?.sortOrder ?? 0) + 1
     }
   });
 
@@ -337,14 +592,17 @@ export async function addCustomItem(formData: FormData) {
 export async function deleteCustomItem(serviceId: string) {
   const vendorId = await requireVendor();
 
-  const service = await prisma.vendorService.findFirst({
-    where: { id: serviceId, vendorId, catalogKey: null },
-    select: { id: true }
+  const service = await prisma.vendorServiceModule.findFirst({
+    where: { id: serviceId, vendorId },
+    select: { id: true, name: true, category: true, pricingType: true }
   });
 
   if (!service) throw new Error("권한 없음 또는 표준 항목은 삭제할 수 없습니다.");
+  if (isStandardVendorModule(service)) {
+    throw new Error("표준 항목은 삭제할 수 없습니다.");
+  }
 
-  await prisma.vendorService.delete({ where: { id: serviceId } });
+  await prisma.vendorServiceModule.delete({ where: { id: serviceId } });
 
   revalidatePath("/vendor/dashboard");
   revalidatePath("/vendors");
@@ -356,14 +614,14 @@ export async function deleteCustomItem(serviceId: string) {
 export async function toggleVendorService(serviceId: string, isActive: boolean) {
   const vendorId = await requireVendor();
 
-  const service = await prisma.vendorService.findFirst({
+  const service = await prisma.vendorServiceModule.findFirst({
     where: { id: serviceId, vendorId },
     select: { id: true }
   });
 
   if (!service) throw new Error("권한 없음");
 
-  await prisma.vendorService.update({
+  await prisma.vendorServiceModule.update({
     where: { id: serviceId },
     data: { isActive }
   });
@@ -391,6 +649,15 @@ export async function completeVendorOnboarding(formData: FormData) {
 
   if (supportedEventTypes.length === 0 || supportedServiceModules.length === 0) {
     redirect("/vendor/dashboard");
+  }
+
+  const userExists = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true }
+  });
+
+  if (!userExists) {
+    redirect("/login");
   }
 
   await prisma.user.update({

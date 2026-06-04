@@ -6,20 +6,19 @@ import { z } from "zod";
 import { EventStatus, EventType as PrismaEventType, UserRole } from "@/generated/prisma/client";
 import { actionError, actionSuccess, getActionError } from "@/lib/errors";
 import { generateMockAIRecommendation } from "@/lib/mocks/ai-recommendation";
-import { prisma } from "@/lib/prisma";
+import { resolvePlanNextAction, resolveQuoteRequestNextAction } from "@/lib/plan-dashboard-status";
+import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { buildEventPlanSlug } from "@/lib/step3.server";
 
 import type { ActionResult } from "@/types/common";
 import type {
   CreatePlanPayload,
   PlanDashboardData,
-  PlanDashboardNextAction,
   PlanQuoteStatusData,
   EventPlanData,
   EventPlanWithDetails,
   UpdatePlanPayload
 } from "@/types/plan";
-import type { QuoteStatus } from "@/types/quote";
 import type { ReservationStatus } from "@/types/reservation";
 
 import {
@@ -61,34 +60,6 @@ function revalidatePlanViews(id?: string) {
   revalidatePath("/planner");
   revalidatePath("/planner/wedding");
   revalidatePath("/planner/funeral");
-}
-
-function getQuoteRequestNextAction(
-  status: QuoteStatus,
-  reservationStatus: ReservationStatus | null,
-  hasResponse: boolean
-): PlanDashboardNextAction {
-  if (status === "ACCEPTED") {
-    if (reservationStatus === "CONFIRMED") return "confirmed";
-    return "reservation_pending";
-  }
-  if (status === "RESPONDED" && hasResponse) return "accept_quote";
-  if (status === "PENDING") return "waiting_for_vendor";
-  if (reservationStatus === "CONFIRMED") return "confirmed";
-  return "canceled";
-}
-
-function getPlanNextAction(items: PlanQuoteStatusData[]): PlanDashboardNextAction {
-  if (items.some((item) => item.nextAction === "confirmed")) return "confirmed";
-  if (items.some((item) => item.nextAction === "reservation_pending")) {
-    return "reservation_pending";
-  }
-  if (items.some((item) => item.status === "RESPONDED" && item.latestResponse)) {
-    return "compare_quotes";
-  }
-  if (items.some((item) => item.status === "PENDING")) return "waiting_for_vendor";
-  if (items.length === 0) return "create_quote_request";
-  return "canceled";
 }
 
 export async function createPlan(
@@ -185,14 +156,15 @@ export async function getPlanById(
       return actionError("플랜 ID가 필요합니다.", "VALIDATION_ERROR");
     }
 
-    const plan = await prisma.eventPlan.findFirst({
+    const plan = await withPrismaRetry(() => prisma.eventPlan.findFirst({
       where: { id: planId, ownerId: user.id },
       include: {
         quoteRequests: {
           include: {
             responses: {
               include: {
-                vendor: true
+                vendor: true,
+                revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
               },
               orderBy: { createdAt: "desc" }
             }
@@ -202,9 +174,11 @@ export async function getPlanById(
         reservations: {
           include: {
             vendor: true,
+            quoteProposalRevision: true,
             quoteResponse: {
               include: {
-                vendor: true
+                vendor: true,
+                revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
               }
             }
           },
@@ -218,7 +192,7 @@ export async function getPlanById(
           take: 1
         }
       }
-    });
+    }));
 
     if (!plan) {
       return actionError("플랜을 찾을 수 없습니다.", "NOT_FOUND");
@@ -244,7 +218,7 @@ export async function getPlansWithQuoteStatus(): Promise<ActionResult<PlanDashbo
       return actionError("권한이 없습니다.", "FORBIDDEN");
     }
 
-    const plans = await prisma.eventPlan.findMany({
+    const plans = await withPrismaRetry(() => prisma.eventPlan.findMany({
       where: {
         ownerId: user.id,
         type: { in: [PrismaEventType.WEDDING, PrismaEventType.FUNERAL] }
@@ -256,9 +230,11 @@ export async function getPlansWithQuoteStatus(): Promise<ActionResult<PlanDashbo
             reservation: {
               include: {
                 vendor: true,
+                quoteProposalRevision: true,
                 quoteResponse: {
                   include: {
-                    vendor: true
+                    vendor: true,
+                    revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
                   }
                 }
               }
@@ -266,12 +242,15 @@ export async function getPlansWithQuoteStatus(): Promise<ActionResult<PlanDashbo
             responses: {
               include: {
                 vendor: true,
+                revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] },
                 reservation: {
                   include: {
                     vendor: true,
+                    quoteProposalRevision: true,
                     quoteResponse: {
                       include: {
-                        vendor: true
+                        vendor: true,
+                        revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
                       }
                     }
                   }
@@ -285,9 +264,11 @@ export async function getPlansWithQuoteStatus(): Promise<ActionResult<PlanDashbo
         reservations: {
           include: {
             vendor: true,
+            quoteProposalRevision: true,
             quoteResponse: {
               include: {
-                vendor: true
+                vendor: true,
+                revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
               }
             }
           },
@@ -295,12 +276,13 @@ export async function getPlansWithQuoteStatus(): Promise<ActionResult<PlanDashbo
         }
       },
       orderBy: { createdAt: "desc" }
-    });
+    }));
 
     return actionSuccess(
       plans.map((plan) => {
         const quoteRequests = plan.quoteRequests.map((request): PlanQuoteStatusData => {
           const latestResponse = request.responses[0] ?? null;
+          const mappedLatestResponse = latestResponse ? mapQuoteResponse(latestResponse) : null;
           const responseIds = new Set(request.responses.map((response) => response.id));
           const linkedReservation =
             request.responses.find((response) => response.reservation)?.reservation ??
@@ -322,14 +304,15 @@ export async function getPlansWithQuoteStatus(): Promise<ActionResult<PlanDashbo
           return {
             request: mapQuoteRequest(request),
             vendor: mapVendorProfile(request.vendor),
-            latestResponse: latestResponse ? mapQuoteResponse(latestResponse) : null,
+            latestResponse: mappedLatestResponse,
             reservation: visibleReservation ? mapReservation(visibleReservation) : null,
             status,
-            nextAction: getQuoteRequestNextAction(
-              status,
+            nextAction: resolveQuoteRequestNextAction({
+              quoteStatus: status,
               reservationStatus,
-              latestResponse !== null
-            )
+              currentRevisionStatus: mappedLatestResponse?.currentRevision?.status ?? null,
+              hasResponse: latestResponse !== null
+            })
           };
         });
 
@@ -353,7 +336,7 @@ export async function getPlansWithQuoteStatus(): Promise<ActionResult<PlanDashbo
             acceptedQuoteResponseId:
               acceptedQuote?.latestResponse?.id ?? acceptedQuote?.reservation?.quoteResponseId ?? null,
             reservationId: acceptedReservation?.id ?? null,
-            nextAction: getPlanNextAction(quoteRequests)
+            nextAction: resolvePlanNextAction(quoteRequests)
           }
         };
       })
@@ -375,10 +358,10 @@ export async function getUserPlans(): Promise<ActionResult<EventPlanData[]>> {
       return actionError("권한이 없습니다.", "FORBIDDEN");
     }
 
-    const plans = await prisma.eventPlan.findMany({
+    const plans = await withPrismaRetry(() => prisma.eventPlan.findMany({
       where: { ownerId: user.id, type: { in: [PrismaEventType.WEDDING, PrismaEventType.FUNERAL] } },
       orderBy: { createdAt: "desc" }
-    });
+    }));
 
     return actionSuccess(plans.map(mapEventPlan));
   } catch (error) {

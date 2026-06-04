@@ -39,7 +39,9 @@ const nextActionMeta: Record<PlanDashboardNextAction, { label: string; badge: st
   waiting_for_vendor: { label: "응답 대기", badge: "bg-amber-100 text-amber-700" },
   compare_quotes: { label: "견적 비교", badge: "bg-blue-100 text-blue-700" },
   accept_quote: { label: "견적 비교", badge: "bg-blue-100 text-blue-700" },
-  reservation_pending: { label: "업체 확정 대기", badge: "bg-violet-100 text-violet-700" },
+  adjustment_requested: { label: "조정 요청 중", badge: "bg-amber-100 text-amber-700" },
+  revised_quote_received: { label: "수정 제안 도착", badge: "bg-blue-100 text-blue-700" },
+  reservation_pending: { label: "업체 확정 대기", badge: "bg-[#faf8f4] text-[#8c8275]" },
   confirmed: { label: "예약 확정", badge: "bg-emerald-100 text-emerald-700" },
   canceled: { label: "취소됨", badge: "bg-gray-100 text-gray-500" },
 };
@@ -137,7 +139,7 @@ export default async function AccountPage() {
       <nav className="flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 group">
           <div className="relative h-8 w-[52px] overflow-hidden transition-transform duration-200 group-hover:scale-105">
-            <Image src="/yeon-logo.png" alt="YeON" fill className="object-contain" />
+            <Image src="/yeon-logo.png" alt="YeON" fill sizes="52px" className="object-contain" />
           </div>
           <span className="font-[var(--font-display)] text-sm font-semibold text-foreground">YeON</span>
         </Link>
@@ -260,7 +262,7 @@ export default async function AccountPage() {
               ) : (
                 <>
                   <QuickLink href="/plans" title="내 행사 현황" icon={CalendarDays} />
-                  <QuickLink href="/plans/new" title="새 행사 만들기" icon={Plus} />
+                  <QuickLink href="/planner?create=1" title="새 행사 만들기" icon={Plus} />
                   <QuickLink href="/vendors" title="업체 찾기" icon={Building2} />
                 </>
               )}
@@ -334,7 +336,7 @@ export default async function AccountPage() {
               <p className="mb-4 text-sm text-muted-foreground">
                 아직 행사 플랜이 없습니다.
               </p>
-              <Link href="/plans/new" className={buttonVariants({ variant: "default", size: "sm" })}>
+              <Link href="/planner?create=1" className={buttonVariants({ variant: "default", size: "sm" })}>
                 <Plus className="mr-1.5 h-4 w-4" />
                 첫 행사 만들기
               </Link>

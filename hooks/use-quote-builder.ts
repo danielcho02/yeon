@@ -13,6 +13,7 @@ export interface QuoteModule {
   categoryLabel: string
   price: number
   pricingType: 'FLAT' | 'PER_GUEST'
+  isVendorSpecific?: boolean
 }
 
 // UI-extended base package (compatible with ApiBasePackage + UI-only fields)
@@ -28,6 +29,7 @@ interface UseQuoteBuilderReturn {
   toggleModule: (module: QuoteModule) => void
   setBasePackage: (pkg: BasePackage | null) => void
   isSelected: (key: string) => boolean
+  pruneSelectedModules: (predicate: (module: QuoteModule) => boolean) => void
   reset: () => void
 }
 
@@ -51,6 +53,10 @@ export function useQuoteBuilder(guestCount = 100): UseQuoteBuilderReturn {
     [selectedModules]
   )
 
+  const pruneSelectedModules = useCallback((predicate: (module: QuoteModule) => boolean) => {
+    setSelectedModules((prev) => prev.filter((module) => !predicate(module)))
+  }, [])
+
   const totalPrice = useMemo(() => {
     const base = basePackage?.price ?? 0
     const extra = selectedModules.reduce((sum, m) => {
@@ -65,7 +71,16 @@ export function useQuoteBuilder(guestCount = 100): UseQuoteBuilderReturn {
     setBasePackageState(null)
   }, [])
 
-  return { selectedModules, basePackage, totalPrice, toggleModule, setBasePackage, isSelected, reset }
+  return {
+    selectedModules,
+    basePackage,
+    totalPrice,
+    toggleModule,
+    setBasePackage,
+    isSelected,
+    pruneSelectedModules,
+    reset
+  }
 }
 
 // Helper: build QuoteModule[] from VendorServiceModuleData (real DB records)
@@ -95,18 +110,24 @@ export function buildModulesFromVendorData(modules: VendorServiceModuleData[]): 
       category: m.category as string,
       categoryLabel: MODULE_CATEGORY_LABELS[m.category as string] ?? m.category,
       price: m.price,
-      pricingType: 'FLAT' as const,
+      pricingType: m.pricingType,
+      isVendorSpecific: m.catalogKey === null,
     }))
 }
 
-export function buildBasePackageFromVendorData(modules: VendorServiceModuleData[]): BasePackage | null {
+export function buildBasePackageFromVendorData(
+  modules: VendorServiceModuleData[],
+  guestCount = 1
+): BasePackage | null {
   const baseModules = modules.filter((m) => m.isBaseIncluded && m.isActive)
   if (baseModules.length === 0) return null
-  const price = baseModules.reduce((sum, m) => sum + m.price, 0)
+  const price = baseModules.reduce((sum, m) => {
+    return sum + (m.pricingType === 'PER_GUEST' ? m.price * guestCount : m.price)
+  }, 0)
   return {
     id: 'vendor-base',
-    name: '기본 패키지',
-    description: baseModules.map((m) => m.name).join(' + '),
+    name: '업체 기본 패키지',
+    description: `기본 포함 항목: ${baseModules.map((m) => m.name).join(' + ')}`,
     price,
     includedModuleKeys: baseModules.map((m) => m.id),
   }

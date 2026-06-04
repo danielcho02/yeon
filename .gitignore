@@ -22,6 +22,8 @@ prisma/dev.db
 prisma/dev.db-journal
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 
 # Python
 .venv/
@@ -35,3 +37,10 @@ __pycache__/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Claude Code local settings (machine-specific, may contain secrets)
+.claude/settings.local.json
+
+# Mobile card uploads (local dev only — not for production/CDN)
+public/uploads/mobile-cards/*
+!public/uploads/mobile-cards/.gitkeep

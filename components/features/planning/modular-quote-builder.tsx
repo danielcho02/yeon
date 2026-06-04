@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, ChevronDown, X, ShoppingBag } from 'lucide-react'
+import { Check, ChevronDown, X, ShoppingBag, ClipboardList } from 'lucide-react'
 import { type EventTheme, getThemeConfig } from '@/hooks/use-theme'
 import {
   useQuoteBuilder,
@@ -12,6 +12,7 @@ import {
   type BasePackage,
 } from '@/hooks/use-quote-builder'
 import type { VendorServiceModuleData } from '@/types/vendor-module'
+import type { VendorPackageData } from '@/types/vendor-package'
 import { PriceCountUp } from '@/components/ui/motion'
 import { quoteServiceModules, serviceCatalog, type MvpQuoteEventType } from '@/lib/step3.shared'
 
@@ -19,6 +20,7 @@ import { quoteServiceModules, serviceCatalog, type MvpQuoteEventType } from '@/l
 
 const MOCK_PRICES: Record<string, number> = {
   venue_hall: 3000000, venue_sound: 500000, venue_photo: 300000, venue_bridal: 200000,
+  mobile_invitation_basic: 120000,
   catering_meal: 55000, catering_drink: 15000, catering_cake: 400000,
   studio_snap: 1200000, studio_outdoor: 500000, studio_album: 800000, studio_video: 1500000,
   dress_wedding: 1500000, dress_fitting: 0, dress_accessory: 300000, dress_hanbok: 500000,
@@ -71,9 +73,9 @@ function buildCatalogModules(eventType: MvpQuoteEventType): QuoteModule[] {
   return modules
 }
 
-// ─── Module Tile ──────────────────────────────────────────────────────────────
+// ─── Module Row (Elegant 1-row layout with high readability) ──────────────────
 
-function ModuleTile({
+function ModuleRow({
   module,
   isSelected,
   onToggle,
@@ -89,42 +91,56 @@ function ModuleTile({
   const config = getThemeConfig(theme)
   const displayPrice = module.pricingType === 'PER_GUEST' ? module.price * guestCount : module.price
   const priceLabel = module.pricingType === 'PER_GUEST'
-    ? `${module.price.toLocaleString('ko-KR')}원/명`
+    ? `${module.price.toLocaleString('ko-KR')}원/인`
     : `${displayPrice.toLocaleString('ko-KR')}원`
 
   return (
-    <motion.button
-      layout
+    <button
       type="button"
       onClick={onToggle}
-      className="relative flex flex-col gap-2 rounded-xl border p-3 text-left transition-all"
+      className="group relative flex w-full items-center justify-between gap-4 border-b border-[#e5e2da]/70 px-2 py-2.5 text-left transition-all duration-150 hover:bg-[#faf9f5]/50"
       style={{
-        borderColor: isSelected ? config.primary : '#e5e7eb',
-        backgroundColor: isSelected ? config.surface : 'white',
+        borderBottomColor: isSelected ? config.primary : '#ebdccf/40',
       }}
-      whileTap={{ scale: 0.97 }}
     >
-      <div className="flex items-start justify-between gap-1">
-        <span className="text-sm font-medium leading-tight" style={{ color: isSelected ? config.primaryDark : '#111827' }}>
-          {module.name}
-        </span>
-        <div
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all"
-          style={{
-            borderColor: isSelected ? config.primary : '#d1d5db',
-            backgroundColor: isSelected ? config.primary : 'white',
+      <div className="flex flex-col min-w-0 pr-2">
+        <span 
+          className="text-xs font-semibold leading-tight text-[#2c3455] group-hover:text-foreground transition-colors break-keep"
+          style={{ 
+            color: isSelected ? config.primaryDark : '#2c3455',
+            wordBreak: 'keep-all'
           }}
         >
-          {isSelected && <Check size={11} color="white" strokeWidth={3} />}
-        </div>
-      </div>
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-400">{module.categoryLabel}</span>
-        <span className="text-xs font-semibold" style={{ color: isSelected ? config.primary : '#6b7280' }}>
-          {priceLabel}
+          {module.name}
+        </span>
+        <span className="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground/60 font-normal">
+          <span>{module.categoryLabel}</span>
+          {module.isVendorSpecific && (
+            <span className="rounded-full border border-[#ebdccf]/60 bg-white px-1.5 py-0.5 text-[9px] font-semibold text-[#8c8275]">
+              업체 전용
+            </span>
+          )}
         </span>
       </div>
-    </motion.button>
+
+      <div className="flex items-center gap-3.5 shrink-0 ml-auto">
+        <span 
+          className="text-xs font-bold font-mono tracking-tight whitespace-nowrap" 
+          style={{ color: isSelected ? config.primary : '#8c8275' }}
+        >
+          {priceLabel}
+        </span>
+        <div
+          className="flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all duration-150"
+          style={{
+            borderColor: isSelected ? config.primary : '#e5e2da',
+            backgroundColor: isSelected ? config.primary : 'transparent',
+          }}
+        >
+          {isSelected && <Check size={10} color="white" strokeWidth={3.5} />}
+        </div>
+      </div>
+    </button>
   )
 }
 
@@ -134,36 +150,54 @@ function SummaryPanel({
   builder,
   theme,
   guestCount,
+  isSubmitting = false,
+  isAlreadyRequested = false,
   onRequestQuote,
+  validationMessage,
+  requestStatusLabel,
+  requestStatusDescription,
 }: {
   builder: ReturnType<typeof useQuoteBuilder>
   theme: EventTheme
   guestCount: number
+  isSubmitting?: boolean
+  isAlreadyRequested?: boolean
   onRequestQuote?: () => void
+  validationMessage?: string | null
+  requestStatusLabel?: string | null
+  requestStatusDescription?: string | null
 }) {
   const config = getThemeConfig(theme)
   const { selectedModules, basePackage, totalPrice } = builder
+  const isWedding = theme === 'wedding'
+  const statusTitle = requestStatusLabel === '업체 응답 대기' ? '견적 요청 완료' : requestStatusLabel
+  const statusDescription =
+    requestStatusLabel === '업체 응답 대기'
+      ? '업체 응답을 기다리는 중입니다.'
+      : requestStatusDescription
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <ShoppingBag size={16} style={{ color: config.primary }} />
-        <span className="text-sm font-semibold" style={{ color: config.primaryDark }}>견적 요약</span>
+      <div className="flex items-center gap-2 pb-2 border-b border-[#f2ece4]">
+        <ShoppingBag size={13} style={{ color: config.primary }} />
+        <span className="text-xs font-bold uppercase tracking-wider text-[#2c3455] whitespace-nowrap">
+          {isWedding ? '추천 견적 구성 요약' : '추모 의례 준비 항목 요약'}
+        </span>
       </div>
 
       {basePackage && (
-        <div className="rounded-xl p-3" style={{ backgroundColor: config.muted }}>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium" style={{ color: config.primaryDark }}>{basePackage.name}</span>
-            <span className="text-xs font-semibold" style={{ color: config.primary }}>
+        <div className="rounded-xl p-3 border border-border/40 bg-[#faf9f5]/70">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-bold text-[#2c3455] break-keep">{basePackage.name}</span>
+            <span className="text-xs font-bold font-mono whitespace-nowrap" style={{ color: config.primary }}>
               {basePackage.price.toLocaleString('ko-KR')}원
             </span>
           </div>
-          <p className="mt-0.5 text-xs text-gray-500">{basePackage.description}</p>
+          <p className="mt-1 text-[10px] text-[#8c8275] leading-relaxed break-keep">{basePackage.description}</p>
         </div>
       )}
 
-      <div className="flex-1 space-y-2 overflow-y-auto">
+      <div className="flex-1 space-y-2 overflow-y-auto max-h-[220px]">
         <AnimatePresence>
           {selectedModules.map((m) => {
             const price = m.pricingType === 'PER_GUEST' ? m.price * guestCount : m.price
@@ -173,19 +207,19 @@ function SummaryPanel({
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.18 }}
+                transition={{ duration: 0.15 }}
                 className="overflow-hidden"
               >
-                <div className="flex items-center justify-between py-1">
+                <div className="flex items-center justify-between py-1 border-b border-[#f2ece4]/40 gap-2">
                   <button
                     type="button"
                     onClick={() => builder.toggleModule(m)}
-                    className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-red-500"
+                    className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-red-500 font-medium whitespace-nowrap overflow-hidden text-ellipsis"
                   >
-                    <X size={12} />
-                    {m.name}
+                    <X size={10} className="shrink-0" />
+                    <span className="truncate">{m.name}</span>
                   </button>
-                  <span className="text-xs font-medium text-gray-700">
+                  <span className="text-[11px] font-bold font-mono text-[#2c3455] whitespace-nowrap shrink-0">
                     {price.toLocaleString('ko-KR')}원
                   </span>
                 </div>
@@ -194,29 +228,61 @@ function SummaryPanel({
           })}
         </AnimatePresence>
         {selectedModules.length === 0 && !basePackage && (
-          <p className="py-4 text-center text-xs text-gray-400">서비스를 선택하면 여기에 표시됩니다</p>
+          <p className="py-8 text-center text-xs text-muted-foreground/60 font-normal leading-relaxed break-keep">
+            {isWedding 
+              ? '추천 구성에서 필요한 항목을 선택하면 요청 내용을 정리해드립니다.' 
+              : '기본 준비 항목을 확인한 뒤 상담 요청을 보낼 수 있습니다.'}
+          </p>
         )}
       </div>
 
-      <div className="border-t border-gray-100 pt-3">
+      {validationMessage && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50/50 px-3.5 py-2.5 text-[10px] font-semibold text-amber-800 leading-normal break-keep" role="status">
+          {validationMessage}
+        </p>
+      )}
+
+      <div className="border-t border-[#f2ece4] pt-3">
         <div className="flex items-baseline justify-between">
-          <span className="text-sm font-medium text-gray-600">예상 총액</span>
-          <div className="text-xl font-bold" style={{ color: config.primary }}>
+          <span className="text-xs font-semibold text-muted-foreground">
+            {isWedding ? '예상 제안 합계액' : '예상 제안 금액'}
+          </span>
+          <div className="text-base font-bold font-mono" style={{ color: config.primary }}>
             <PriceCountUp value={totalPrice} />
           </div>
         </div>
-        <p className="mt-0.5 text-xs text-gray-400">실제 견적은 업체 확인 후 달라질 수 있습니다</p>
+        <p className="mt-1 text-[10px] text-muted-foreground/60 leading-normal break-keep">상세 조율 결과에 따라 금액이 달라질 수 있습니다.</p>
       </div>
+
+      <p className="rounded-xl border border-[#e5e2da] bg-[#fcfaf7] px-3.5 py-2.5 text-[10px] leading-normal text-[#8c8275] break-keep">
+        승인된 파트너에게만 요청이 전달되며, 견적 요청 단계에서는 결제가 진행되지 않습니다.
+      </p>
 
       <button
         type="button"
-        disabled={selectedModules.length === 0 && !basePackage}
+        disabled={isSubmitting || isAlreadyRequested || (selectedModules.length === 0 && !basePackage)}
         onClick={onRequestQuote}
-        className="w-full rounded-xl py-3 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-40"
+        className="w-full rounded-xl py-2.5 text-xs font-bold text-white transition-all duration-150 hover:opacity-95 disabled:opacity-40 whitespace-nowrap shadow-sm hover:shadow"
         style={{ backgroundColor: config.primary }}
       >
-        견적 요청하기
+        {isSubmitting 
+          ? '전송 중...' 
+          : isAlreadyRequested
+            ? requestStatusLabel ?? '업체 응답 대기'
+          : isWedding 
+            ? '이 구성으로 견적 요청' 
+            : '의전 맞춤 상담 요청하기'}
       </button>
+      {isAlreadyRequested && (statusTitle || statusDescription) && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 px-3.5 py-3 text-[10px] text-emerald-800">
+          <p className="font-semibold">
+            {statusTitle}
+          </p>
+          {statusDescription && (
+            <p className="mt-1 leading-relaxed text-emerald-700/90">{statusDescription}</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -227,42 +293,75 @@ function MobileBottomBar({
   builder,
   theme,
   onOpen,
+  isSubmitting = false,
+  isAlreadyRequested = false,
   onRequestQuote,
+  validationMessage,
+  requestStatusLabel,
+  requestStatusDescription,
 }: {
   builder: ReturnType<typeof useQuoteBuilder>
   theme: EventTheme
   onOpen: () => void
+  isSubmitting?: boolean
+  isAlreadyRequested?: boolean
   onRequestQuote?: () => void
+  validationMessage?: string | null
+  requestStatusLabel?: string | null
+  requestStatusDescription?: string | null
 }) {
   const config = getThemeConfig(theme)
   const count = builder.selectedModules.length + (builder.basePackage ? 1 : 0)
+  const isWedding = theme === 'wedding'
+  const statusTitle = requestStatusLabel === '업체 응답 대기' ? '견적 요청 완료' : requestStatusLabel
+  const statusDescription =
+    requestStatusLabel === '업체 응답 대기'
+      ? '업체 응답을 기다리는 중입니다.'
+      : requestStatusDescription
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-100 bg-white p-4 shadow-lg lg:hidden">
+    <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#e5e2da] bg-white p-4 shadow-md lg:hidden">
+      {validationMessage && (
+        <p className="mb-2 rounded-xl border border-amber-200 bg-amber-50/50 px-3 py-2 text-[10px] font-semibold text-amber-800 break-keep" role="status">
+          {validationMessage}
+        </p>
+      )}
+      {isAlreadyRequested && (statusTitle || statusDescription) && (
+        <p className="mb-2 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-2 text-[10px] font-semibold text-emerald-800 break-keep" role="status">
+          {statusTitle}
+          {statusDescription ? ` · ${statusDescription}` : ''}
+        </p>
+      )}
       <div className="flex items-center justify-between gap-3">
         <button type="button" onClick={onOpen} className="flex items-center gap-2">
           <div
-            className="flex h-7 w-7 items-center justify-center rounded-full text-white text-xs font-bold"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-white text-[10px] font-bold shrink-0"
             style={{ backgroundColor: config.primary }}
           >
             {count}
           </div>
-          <div className="text-left">
-            <p className="text-xs text-gray-500">선택한 서비스</p>
-            <p className="text-base font-bold" style={{ color: config.primary }}>
+          <div className="text-left min-w-0 pr-1">
+            <p className="text-[10px] text-[#8c8275]">선택한 서비스</p>
+            <p className="text-sm font-bold font-mono truncate" style={{ color: config.primary }}>
               <PriceCountUp value={builder.totalPrice} />
             </p>
           </div>
-          <ChevronDown size={14} className="text-gray-400" />
+          <ChevronDown size={12} className="text-[#8c8275] shrink-0" />
         </button>
         <button
           type="button"
-          disabled={count === 0}
+          disabled={isSubmitting || isAlreadyRequested || count === 0}
           onClick={onRequestQuote}
-          className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+          className="rounded-xl px-4 py-2 text-xs font-bold text-white disabled:opacity-40 shrink-0 whitespace-nowrap shadow-sm hover:shadow"
           style={{ backgroundColor: config.primary }}
         >
-          견적 요청
+          {isSubmitting 
+            ? '전송 중...' 
+            : isAlreadyRequested
+              ? requestStatusLabel ?? '업체 응답 대기'
+            : isWedding 
+              ? '견적 요청' 
+              : '상담 요청하기'}
         </button>
       </div>
     </div>
@@ -276,6 +375,12 @@ interface ModularQuoteBuilderProps {
   guestCount?: number
   /** Real vendor service modules from DB — when provided, replaces catalog+mock data */
   vendorModules?: VendorServiceModuleData[]
+  /** Real vendor packages from DB — when provided, replaces synthetic derived base package */
+  vendorPackages?: VendorPackageData[]
+  isSubmitting?: boolean
+  isAlreadyRequested?: boolean
+  requestStatusLabel?: string | null
+  requestStatusDescription?: string | null
   onRequestQuote?: (modules: QuoteModule[], base: BasePackage | null) => void
 }
 
@@ -283,10 +388,20 @@ export function ModularQuoteBuilder({
   theme,
   guestCount = 100,
   vendorModules,
+  vendorPackages,
+  isSubmitting = false,
+  isAlreadyRequested = false,
+  requestStatusLabel,
+  requestStatusDescription,
   onRequestQuote,
 }: ModularQuoteBuilderProps) {
   const config = getThemeConfig(theme)
   const eventType: MvpQuoteEventType = theme === 'wedding' ? 'WEDDING' : 'FUNERAL'
+  const isWedding = theme === 'wedding'
+  const usesVendorModules = Boolean(vendorModules && vendorModules.length > 0)
+  const usesVendorPackages = Boolean(vendorPackages && vendorPackages.length > 0)
+
+  const [showCustomizer, setShowCustomizer] = useState(false)
 
   // When real vendor modules are provided, use them; otherwise fall back to catalog
   const allModules = useMemo(() => {
@@ -314,54 +429,161 @@ export function ModularQuoteBuilder({
 
   // Base packages: from real data (isBaseIncluded) or fallback MOCK
   const basePackages = useMemo((): BasePackage[] => {
+    if (vendorPackages && vendorPackages.length > 0) {
+      return vendorPackages.map((pkg) => ({
+        id: pkg.id,
+        name: pkg.name,
+        description: pkg.description ?? '업체가 구성한 패키지입니다.',
+        price: pkg.basePrice,
+        includedModuleKeys: pkg.items
+          .filter((item) => item.selectionType === 'INCLUDED')
+          .map((item) => item.vendorServiceModuleId),
+      }))
+    }
+    if (vendorPackages !== undefined) return []
     if (vendorModules && vendorModules.length > 0) {
-      const derived = buildBasePackageFromVendorData(vendorModules)
+      const derived = buildBasePackageFromVendorData(vendorModules, guestCount)
       return derived ? [derived] : []
     }
     return MOCK_BASE_PACKAGES[eventType]
-  }, [vendorModules, eventType])
+  }, [vendorModules, vendorPackages, guestCount, eventType])
 
   const builder = useQuoteBuilder(guestCount)
   const [activeCategory, setActiveCategory] = useState<string>('all')
   const [sheetOpen, setSheetOpen] = useState(false)
+  const { basePackage, setBasePackage, pruneSelectedModules } = builder
+  const requiresVendorPackage = vendorPackages !== undefined && usesVendorModules
+  const packageUnavailable = requiresVendorPackage && !usesVendorPackages
+  const hasQuoteSelection = packageUnavailable
+    ? false
+    : builder.selectedModules.length > 0 || Boolean(builder.basePackage)
+
+  useEffect(() => {
+    const firstPackage = basePackages[0] ?? null
+    if (!firstPackage) {
+      if (basePackage) setBasePackage(null)
+      return
+    }
+
+    if (!basePackage) {
+      setBasePackage(firstPackage)
+      return
+    }
+
+    const refreshed = basePackages.find((pkg) => pkg.id === basePackage.id) ?? null
+    if (!refreshed) {
+      setBasePackage(firstPackage)
+      return
+    }
+
+    const hasChanged =
+      refreshed.price !== basePackage.price ||
+      refreshed.description !== basePackage.description ||
+      refreshed.includedModuleKeys.join('|') !== basePackage.includedModuleKeys.join('|')
+
+    if (hasChanged) setBasePackage(refreshed)
+  }, [basePackage, basePackages, setBasePackage])
+
+  const selectionValidationMessage = useMemo(() => {
+    if (isAlreadyRequested) return null
+    if (hasQuoteSelection) return null
+    return isWedding
+      ? '견적을 요청하려면 1개 이상의 구성 항목을 선택해 주세요.'
+      : '상담을 진행하려면 1개 이상의 준비 항목을 선택해 주세요.'
+  }, [hasQuoteSelection, isAlreadyRequested, isWedding])
 
   const filtered = activeCategory === 'all'
     ? allModules
     : allModules.filter((m) => m.category === activeCategory)
 
+  // Compute what modules are implicitly included in the active base package
+  const baseIncludedModules = useMemo(() => {
+    if (!basePackage) return []
+    return allModules.filter((m) => basePackage.includedModuleKeys.includes(m.key))
+  }, [basePackage, allModules])
+
+  const baseIncludedKeys = useMemo(
+    () => new Set(basePackage?.includedModuleKeys ?? []),
+    [basePackage]
+  )
+
+  const adjustableModules = useMemo(
+    () => filtered.filter((module) => !baseIncludedKeys.has(module.key)),
+    [baseIncludedKeys, filtered]
+  )
+
+  useEffect(() => {
+    if (baseIncludedKeys.size === 0) return
+    pruneSelectedModules((module) => baseIncludedKeys.has(module.key))
+  }, [baseIncludedKeys, pruneSelectedModules])
+
   const handleRequestQuote = () => {
+    if (isAlreadyRequested || !hasQuoteSelection) return
     onRequestQuote?.(builder.selectedModules, builder.basePackage)
   }
 
   return (
-    <div className="relative">
-      {/* Base Packages */}
+    <div className="relative space-y-5">
       {basePackages.length > 0 && (
-        <div className="mb-6">
-          <p className="mb-3 text-sm font-semibold text-gray-700">베이스 패키지 (선택)</p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e5e2da] pb-2">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[#2c3455]">
+              {usesVendorPackages
+                ? '업체 패키지 선택'
+                : usesVendorModules
+                  ? '업체 기본 패키지'
+                : isWedding
+                  ? 'yeON 엄선 웨딩 권장 패키지'
+                  : 'yeON 정립 정중 의전 상담 패키지'}
+            </h3>
+            <span className="text-[10px] text-muted-foreground/60 leading-normal">
+              {usesVendorPackages
+                ? '업체가 공개한 패키지 중 하나를 선택한 뒤 필요한 옵션만 추가하세요.'
+                : usesVendorModules
+                  ? '업체가 기본 포함으로 등록한 항목을 하나의 구성으로 묶어 보여드립니다.'
+                : isWedding
+                  ? '번거로운 구성 조립 없이, 검증된 세트로 아름답고 확실하게 준비합니다.'
+                  : '갑작스러운 슬픔 속에서, 경건하고 품격 있게 배웅을 보좌할 필수 구성 절차안입니다.'}
+            </span>
+          </div>
+
+          <div className={`grid grid-cols-1 gap-3 ${basePackages.length > 1 ? 'sm:grid-cols-3' : ''}`}>
             {basePackages.map((pkg) => {
-              const active = builder.basePackage?.id === pkg.id
+              const activePackageId = builder.basePackage?.id ?? null
+              const active = activePackageId === pkg.id
               return (
                 <button
                   key={pkg.id}
                   type="button"
-                  onClick={() => builder.setBasePackage(active ? null : pkg)}
-                  className="rounded-xl border p-4 text-left transition-all"
-                  style={{
-                    borderColor: active ? config.primary : '#e5e7eb',
-                    backgroundColor: active ? config.surface : 'white',
-                  }}
+                  onClick={() => builder.setBasePackage(active && !usesVendorModules && !usesVendorPackages ? null : pkg)}
+                  className={`group relative overflow-hidden rounded-xl border p-4 text-left transition-all duration-150 animate-fade-in ${
+                    active
+                      ? 'shadow-sm'
+                      : 'border-[#e5e2da] bg-white ring-0 hover:bg-[#faf9f5]/30'
+                  }`}
+                  style={active ? { borderColor: config.primary, backgroundColor: config.surface } : undefined}
                 >
-                  <div className="flex items-start justify-between gap-1">
-                    <p className="text-sm font-semibold" style={{ color: active ? config.primaryDark : '#111827' }}>
+                  {active && (
+                    <div 
+                      className="absolute right-0 top-0 rounded-bl-lg px-2 py-0.5 text-[8px] font-bold text-white whitespace-nowrap"
+                      style={{ backgroundColor: config.primary }}
+                    >
+                      {usesVendorModules || usesVendorPackages ? '선택됨' : isWedding ? '기본 선택됨' : '상담 기준'}
+                    </div>
+                  )}
+                  <div className="flex items-start justify-between gap-2 pr-4">
+                    <p className="text-xs font-bold text-[#2c3455] break-keep group-hover:text-foreground">
                       {pkg.name}
                     </p>
-                    {active && <Check size={14} style={{ color: config.primary }} />}
                   </div>
-                  <p className="mt-1 text-xs text-gray-500">{pkg.description}</p>
-                  <p className="mt-2 text-sm font-bold" style={{ color: config.primary }}>
-                    {pkg.price.toLocaleString('ko-KR')}원~
+                  <p className="mt-1.5 text-[10px] text-[#8c8275] leading-relaxed break-keep">{pkg.description}</p>
+                  <p
+                    className="mt-3.5 text-xs font-extrabold font-mono"
+                    style={{ color: active ? config.primary : '#8c8275' }}
+                  >
+                    {usesVendorModules || usesVendorPackages
+                      ? `${pkg.price.toLocaleString('ko-KR')}원`
+                      : `${pkg.price.toLocaleString('ko-KR')}원~`}
                   </p>
                 </button>
               )
@@ -370,70 +592,156 @@ export function ModularQuoteBuilder({
         </div>
       )}
 
-      {/* Category Tabs */}
-      <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-        <button
-          type="button"
-          onClick={() => setActiveCategory('all')}
-          className="shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-all"
-          style={{
-            backgroundColor: activeCategory === 'all' ? config.primary : '#f3f4f6',
-            color: activeCategory === 'all' ? 'white' : '#374151',
-          }}
-        >
-          전체
-        </button>
-        {categories.map((cat) => (
-          <button
-            key={cat.value}
-            type="button"
-            onClick={() => setActiveCategory(cat.value)}
-            className="shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-all"
-            style={{
-              backgroundColor: activeCategory === cat.value ? config.primary : '#f3f4f6',
-              color: activeCategory === cat.value ? 'white' : '#374151',
-            }}
-          >
-            {cat.label}
-          </button>
-        ))}
-      </div>
+      {packageUnavailable && (
+        <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50/60 px-4 py-5 text-center">
+          <p className="text-sm font-bold text-amber-800">아직 활성화된 업체 패키지가 없습니다.</p>
+          <p className="mt-1 text-xs leading-5 text-amber-700/80">
+            업체가 패키지를 공개하면 포함 항목과 선택 추가 옵션을 확인한 뒤 견적을 요청할 수 있습니다.
+          </p>
+        </div>
+      )}
 
-      {/* Desktop: 2-col layout */}
-      <div className="flex gap-6">
-        {/* Module Grid */}
-        <div className="flex-1">
-          {allModules.length === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-400">등록된 서비스 모듈이 없습니다.</p>
-          ) : (
-            <motion.div layout className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <AnimatePresence>
-                {filtered.map((m) => (
-                  <ModuleTile
-                    key={m.key}
-                    module={m}
-                    isSelected={builder.isSelected(m.key)}
-                    onToggle={() => builder.toggleModule(m)}
-                    theme={theme}
-                    guestCount={guestCount}
-                  />
-                ))}
-              </AnimatePresence>
-            </motion.div>
-          )}
+      {basePackage && baseIncludedModules.length > 0 && (
+        <div className="rounded-2xl border border-dashed border-[#e5e2da] bg-[#faf9f5]/30 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <ClipboardList size={13} style={{ color: config.primary }} />
+            <h4 className="text-xs font-bold text-[#2c3455]">
+              {basePackage.name} 포함 항목
+            </h4>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {baseIncludedModules.map((m) => (
+              <div 
+                key={m.key} 
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e2da] bg-white px-3 py-1.5 text-[11px] text-[#2c3455] font-medium whitespace-nowrap"
+              >
+                <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: config.primary }} />
+                <span>{m.name}</span>
+                <span className="text-[9px] text-[#8c8275]/50">({m.categoryLabel})</span>
+                {m.isVendorSpecific && (
+                  <span className="rounded-full border border-[#ebdccf]/60 bg-white px-1.5 py-0.5 text-[9px] font-semibold text-[#8c8275]">
+                    업체 전용
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground/60 leading-normal">
+            기본 포함 항목은 아래 추가 선택 목록에 다시 나타나지 않습니다.
+          </p>
+        </div>
+      )}
+
+      <div className="border-t border-[#ebdccf]/40 pt-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-0.5">
+            <h4 className="text-xs font-bold text-[#2c3455] flex items-center gap-1">
+              <span>추가 선택 항목</span>
+              <span className="text-[9px] font-normal text-muted-foreground/50">(선택 사항)</span>
+            </h4>
+            <p className="text-[10px] text-muted-foreground/60 leading-normal break-keep">
+              업체 기본 패키지 외에 필요한 표준 항목과 업체 전용 옵션만 더 선택할 수 있습니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowCustomizer(!showCustomizer)}
+            className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e5e2da] bg-white hover:bg-[#faf9f5]/50 text-xs font-semibold transition-all duration-150`}
+            style={{ color: config.primary }}
+          >
+            <span>{showCustomizer ? "추가 선택 접기" : "추가 선택 열기"}</span>
+            <span className="text-[9px]">{showCustomizer ? "▲" : "▼"}</span>
+          </button>
         </div>
 
-        {/* Desktop Summary Panel */}
-        <div className="hidden w-72 shrink-0 lg:block">
-          <div className="sticky top-4 rounded-2xl border border-gray-100 p-4 shadow-sm">
-            <SummaryPanel builder={builder} theme={theme} guestCount={guestCount} onRequestQuote={handleRequestQuote} />
+        {showCustomizer && (
+          <div className="mt-4 space-y-4 animate-fade-in">
+            <div className="flex gap-1.5 overflow-x-auto pb-1.5 border-b border-[#e5e2da] scrollbar-none">
+              <button
+                type="button"
+                onClick={() => setActiveCategory('all')}
+                className="shrink-0 rounded-lg px-3 py-1 text-[10px] font-bold transition-all duration-150 whitespace-nowrap"
+                style={{
+                  backgroundColor: activeCategory === 'all' ? config.primary : '#faf9f5',
+                  color: activeCategory === 'all' ? 'white' : '#2c3455',
+                  border: `1px solid ${activeCategory === 'all' ? config.primary : '#e5e2da'}`
+                }}
+              >
+                전체 보기
+              </button>
+              {categories.map((cat) => (
+                <button
+                  key={cat.value}
+                  type="button"
+                  onClick={() => setActiveCategory(cat.value)}
+                  className="shrink-0 rounded-lg px-3 py-1 text-[10px] font-bold transition-all duration-150 whitespace-nowrap"
+                  style={{
+                    backgroundColor: activeCategory === cat.value ? config.primary : '#faf9f5',
+                    color: activeCategory === cat.value ? 'white' : '#2c3455',
+                    border: `1px solid ${activeCategory === cat.value ? config.primary : '#e5e2da'}`
+                  }}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1">
+              {allModules.length === 0 ? (
+                <p className="py-8 text-center text-xs text-muted-foreground/60">등록된 서비스 모듈이 없습니다.</p>
+              ) : (
+                <div className="flex flex-col rounded-xl border border-[#ebdccf]/40 bg-white p-3 divide-y divide-[#f2ece4]/40">
+                  {adjustableModules.map((m) => (
+                    <ModuleRow
+                      key={m.key}
+                      module={m}
+                      isSelected={builder.isSelected(m.key)}
+                      onToggle={() => builder.toggleModule(m)}
+                      theme={theme}
+                      guestCount={guestCount}
+                    />
+                  ))}
+                  {adjustableModules.length === 0 && (
+                    <div className="px-3 py-8 text-center text-xs leading-relaxed text-muted-foreground/70">
+                      기본 패키지에 포함된 항목은 위 포함 품목에서 확인됩니다.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
+        )}
+      </div>
+
+      <div className="hidden border-t border-[#e5e2da] pt-4 lg:block">
+        <div className="rounded-2xl border border-[#e5e2da] bg-white p-4 shadow-sm sm:p-5">
+          <SummaryPanel
+            builder={builder}
+            theme={theme}
+            guestCount={guestCount}
+            isSubmitting={isSubmitting}
+            isAlreadyRequested={isAlreadyRequested}
+            onRequestQuote={handleRequestQuote}
+            validationMessage={selectionValidationMessage}
+            requestStatusLabel={requestStatusLabel}
+            requestStatusDescription={requestStatusDescription}
+          />
         </div>
       </div>
 
       {/* Mobile Bottom Bar */}
       <div className="h-24 lg:hidden" />
-      <MobileBottomBar builder={builder} theme={theme} onOpen={() => setSheetOpen(true)} onRequestQuote={handleRequestQuote} />
+      <MobileBottomBar
+        builder={builder}
+        theme={theme}
+        onOpen={() => setSheetOpen(true)}
+        isSubmitting={isSubmitting}
+        isAlreadyRequested={isAlreadyRequested}
+        onRequestQuote={handleRequestQuote}
+        validationMessage={selectionValidationMessage}
+        requestStatusLabel={requestStatusLabel}
+        requestStatusDescription={requestStatusDescription}
+      />
 
       {/* Mobile Bottom Sheet */}
       <AnimatePresence>
@@ -454,17 +762,22 @@ export function ModularQuoteBuilder({
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
               style={{ maxHeight: '80vh', overflowY: 'auto' }}
             >
-              <div className="mb-4 flex items-center justify-between">
-                <span className="font-semibold">견적 요약</span>
+              <div className="mb-4 flex items-center justify-between border-b border-[#f2ece4] pb-2">
+                <span className="text-xs font-bold text-[#2c3455] uppercase tracking-wider">의례 구성안 요약</span>
                 <button type="button" onClick={() => setSheetOpen(false)}>
-                  <X size={20} className="text-gray-400" />
+                  <X size={18} className="text-[#8c8275]" />
                 </button>
               </div>
               <SummaryPanel
                 builder={builder}
                 theme={theme}
                 guestCount={guestCount}
+                isSubmitting={isSubmitting}
+                isAlreadyRequested={isAlreadyRequested}
                 onRequestQuote={() => { setSheetOpen(false); handleRequestQuote() }}
+                validationMessage={selectionValidationMessage}
+                requestStatusLabel={requestStatusLabel}
+                requestStatusDescription={requestStatusDescription}
               />
             </motion.div>
           </>

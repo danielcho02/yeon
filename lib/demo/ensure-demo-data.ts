@@ -1,9 +1,6 @@
 import {
   EventStatus,
   EventType,
-  Prisma,
-  ReservationStatus,
-  TransactionStatus,
   UserRole,
   VendorApprovalStatus,
   type PrismaClient
@@ -83,39 +80,6 @@ async function ensureVendorService(
   });
 }
 
-async function ensureReservation(
-  prisma: PrismaClient,
-  data: {
-    eventPlanId: string;
-    vendorId: string;
-    serviceName: string;
-    serviceCategory: string | null;
-    description: string | null;
-    serviceDate: Date | null;
-    guestCount: number | null;
-    quotedAmount: number | null;
-    confirmedAmount: number | null;
-    selectedServiceOptions?: Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
-    status: ReservationStatus;
-    notes: string | null;
-  }
-) {
-  const existing = await prisma.reservation.findFirst({
-    where: {
-      eventPlanId: data.eventPlanId,
-      vendorId: data.vendorId,
-      serviceName: data.serviceName
-    },
-    select: { id: true }
-  });
-
-  if (existing) {
-    return prisma.reservation.findUniqueOrThrow({ where: { id: existing.id } });
-  }
-
-  return prisma.reservation.create({ data });
-}
-
 export async function ensureDemoData(prisma: PrismaClient) {
   const passwordHash = await hashPassword(demoAccountPassword);
 
@@ -162,7 +126,7 @@ export async function ensureDemoData(prisma: PrismaClient) {
       vendorApprovalStatus: VendorApprovalStatus.APPROVED,
       location: "서울 강남구",
       supportedEventTypes: [EventType.WEDDING],
-      supportedServiceModules: ["venue"],
+      supportedServiceModules: ["venue", "floral"],
       bio: "웨딩과 프라이빗 가족연을 위한 공간 연출 전문 업체입니다."
     },
     create: {
@@ -177,7 +141,7 @@ export async function ensureDemoData(prisma: PrismaClient) {
       vendorApprovalStatus: VendorApprovalStatus.APPROVED,
       location: "서울 강남구",
       supportedEventTypes: [EventType.WEDDING],
-      supportedServiceModules: ["venue"],
+      supportedServiceModules: ["venue", "floral"],
       bio: "웨딩과 프라이빗 가족연을 위한 공간 연출 전문 업체입니다."
     }
   });
@@ -192,7 +156,7 @@ export async function ensureDemoData(prisma: PrismaClient) {
       role: UserRole.VENDOR,
       phone: "010-5555-6666",
       phoneVerifiedAt: new Date(),
-      isActive: true,
+      isActive: false,
       vendorApprovalStatus: VendorApprovalStatus.APPROVED,
       location: "서울 성동구",
       supportedEventTypes: [EventType.WEDDING],
@@ -207,7 +171,7 @@ export async function ensureDemoData(prisma: PrismaClient) {
       role: UserRole.VENDOR,
       phone: "010-5555-6666",
       phoneVerifiedAt: new Date(),
-      isActive: true,
+      isActive: false,
       vendorApprovalStatus: VendorApprovalStatus.APPROVED,
       location: "서울 성동구",
       supportedEventTypes: [EventType.WEDDING],
@@ -585,115 +549,6 @@ export async function ensureDemoData(prisma: PrismaClient) {
     }
   });
 
-  // ── Reservations ────────────────────────────────────────────────────────
-
-  // 모먼트 가든 예약: 예식홀 + 음향 + 포토존 + 식대 선택
-  const venueReservation = await ensureReservation(prisma, {
-    eventPlanId: springWedding.id,
-    vendorId: venueVendor.id,
-    serviceName: "venue — 모먼트 가든",
-    serviceCategory: "venue",
-    description: "예식홀 대관 + 음향/조명 + 포토존 + 식대·음료 패키지",
-    serviceDate: plusDays(45),
-    guestCount: 160,
-    quotedAmount: 9_730_000,
-    confirmedAmount: 9_730_000,
-    selectedServiceOptions: [
-      { catalogKey: "venue_hall",     name: "예식홀 기본 대관",  price: 1_500_000, pricingType: "FLAT"      },
-      { catalogKey: "venue_sound",    name: "음향/조명 시스템",   price:   350_000, pricingType: "FLAT"      },
-      { catalogKey: "venue_photo",    name: "포토존 설치",        price:   200_000, pricingType: "FLAT"      },
-      { catalogKey: "catering_meal",  name: "기본 식대",          price:    35_000, pricingType: "PER_GUEST", quantity: 160, subtotal: 5_600_000 },
-      { catalogKey: "catering_drink", name: "음료 패키지",        price:     8_000, pricingType: "PER_GUEST", quantity: 160, subtotal: 1_280_000 },
-      { catalogKey: "catering_cake",  name: "웨딩 케이크",        price:   280_000, pricingType: "FLAT"      }
-    ],
-    status: ReservationStatus.CONFIRMED,
-    notes: "우천 시 실내 전환 옵션 별도 조율"
-  });
-
-  // 오르세 플로럴 견적 요청: 부케 + 예식장 꽃장식 + 테이블 장식 (대기 중)
-  const cateringReservation = await ensureReservation(prisma, {
-    eventPlanId: springWedding.id,
-    vendorId: cateringVendor.id,
-    serviceName: "floral — 오르세 플로럴",
-    serviceCategory: "floral",
-    description: "신부 부케 + 예식장 꽃장식 + 피로연 테이블 장식",
-    serviceDate: plusDays(45),
-    guestCount: null,
-    quotedAmount: 1_180_000,
-    confirmedAmount: null,
-    selectedServiceOptions: [
-      { catalogKey: "floral_bouquet",   name: "신부 부케",         price: 180_000, pricingType: "FLAT" },
-      { catalogKey: "floral_ceremony",  name: "예식장 꽃장식",     price: 650_000, pricingType: "FLAT" },
-      { catalogKey: "floral_table",     name: "피로연 테이블 장식", price: 350_000, pricingType: "FLAT" }
-    ],
-    status: ReservationStatus.PENDING,
-    notes: "화이트·크림 컬러 통일, 부케 리스 추가 여부 상담 요청"
-  });
-
-  // 모먼트 가든 추가 문의: 브라이덜 룸
-  const venueInquiryReservation = await ensureReservation(prisma, {
-    eventPlanId: springWedding.id,
-    vendorId: venueVendor.id,
-    serviceName: "venue — 모먼트 가든 (신부 대기실)",
-    serviceCategory: "venue",
-    description: "신부 대기실 이용 + 테이블 코디네이션 추가 문의",
-    serviceDate: plusDays(45),
-    guestCount: null,
-    quotedAmount: 600_000,
-    confirmedAmount: null,
-    selectedServiceOptions: [
-      { catalogKey: "venue_bridal", name: "신부 대기실 이용", price: 150_000, pricingType: "FLAT" },
-      { catalogKey: null, name: "웨딩 테이블 코디네이션", price: 450_000, pricingType: "FLAT" }
-    ],
-    status: ReservationStatus.PENDING,
-    notes: "브라이덜 샤워 애프터 세션 가능 여부 확인 요청"
-  });
-
-  // 한결 의전 예약: 빈소 3일 + 제단꽃 기본 + 시내 운구 선택
-  const memorialReservation = await ensureReservation(prisma, {
-    eventPlanId: familyFuneral.id,
-    vendorId: memorialVendor.id,
-    serviceName: "funeralHall+altarFloral+hearse — 한결 의전",
-    serviceCategory: "funeralHall",
-    description: "빈소 3일 + 문상객 식사 + 기본 제단꽃 + 시내 운구 선택",
-    serviceDate: plusDays(12),
-    guestCount: 48,
-    quotedAmount: 2_186_000,
-    confirmedAmount: 2_186_000,
-    selectedServiceOptions: [
-      { catalogKey: "funeral_hall_3d", name: "빈소 기본 3일", price: 950_000, pricingType: "FLAT" },
-      { catalogKey: "funeral_food", name: "문상객 식사", price: 12_000, pricingType: "PER_GUEST", quantity: 48, subtotal: 576_000 },
-      { catalogKey: "funeral_staff", name: "장례 지도사", price: 300_000, pricingType: "FLAT" },
-      { catalogKey: "altar_basic", name: "기본 제단꽃 세트", price: 380_000, pricingType: "FLAT" },
-      { catalogKey: "hearse_local", name: "시내 운구 (50km 이내)", price: 350_000, pricingType: "FLAT" }
-    ],
-    status: ReservationStatus.CONFIRMED,
-    notes: "안내 표지와 조문 순서 브리핑 포함"
-  });
-
-  // ── Transactions ────────────────────────────────────────────────────────
-
-  await prisma.transaction.upsert({
-    where: { reservationId: venueReservation.id },
-    update: {
-      payerId: planner.id,
-      amount: 9_730_000,
-      status: TransactionStatus.SUCCEEDED,
-      method: "MOCK",
-      gatewayReference: "mock_txn_20260419_001",
-      paidAt: plusDays(-1)
-    },
-    create: {
-      reservationId: venueReservation.id,
-      payerId: planner.id,
-      amount: 9_730_000,
-      status: TransactionStatus.SUCCEEDED,
-      method: "MOCK",
-      gatewayReference: "mock_txn_20260419_001",
-      paidAt: plusDays(-1)
-    }
-  });
-
   // ── Posts ────────────────────────────────────────────────────────────────
 
   await prisma.post.upsert({
@@ -745,38 +600,6 @@ export async function ensureDemoData(prisma: PrismaClient) {
       publishedAt: plusDays(-1)
     }
   });
-
-  // ── Reviews ──────────────────────────────────────────────────────────────
-
-  const existingReview = await prisma.review.findFirst({
-    where: { authorId: planner.id, reservationId: venueReservation.id },
-    select: { id: true }
-  });
-
-  if (existingReview) {
-    await prisma.review.update({
-      where: { id: existingReview.id },
-      data: {
-        vendorId: venueVendor.id,
-        eventPlanId: springWedding.id,
-        rating: 5,
-        title: "동선 관리가 편했던 공간",
-        content: "현장 응대가 빠르고 우천 대안까지 명확해서 일정 설계가 수월했습니다."
-      }
-    });
-  } else {
-    await prisma.review.create({
-      data: {
-        authorId: planner.id,
-        vendorId: venueVendor.id,
-        eventPlanId: springWedding.id,
-        reservationId: venueReservation.id,
-        rating: 5,
-        title: "동선 관리가 편했던 공간",
-        content: "현장 응대가 빠르고 우천 대안까지 명확해서 일정 설계가 수월했습니다."
-      }
-    });
-  }
 
   // ── Invitations ──────────────────────────────────────────────────────────
 
@@ -872,7 +695,6 @@ export async function ensureDemoData(prisma: PrismaClient) {
 
   return {
     users: { planner, venueVendor, cateringVendor, memorialVendor, guest, admin },
-    plans: { springWedding, familyFuneral },
-    reservations: { venueReservation, cateringReservation, venueInquiryReservation, memorialReservation }
+    plans: { springWedding, familyFuneral }
   };
 }

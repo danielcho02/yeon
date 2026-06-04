@@ -16,9 +16,11 @@ export type ModuleCategory =
 export interface VendorServiceModuleData {
   id: string;
   vendorId: string;
+  catalogKey?: string | null;
   name: string;
   category: ModuleCategory;
   price: number;
+  pricingType: "FLAT" | "PER_GUEST";
   description: string | null;
   isBaseIncluded: boolean;
   isActive: boolean;

@@ -1,4 +1,9 @@
 import { Heart, Shield, Sparkles, type LucideIcon } from "lucide-react";
+import type {
+  ReservationCancellationRequestData,
+  ReservationChangeRequestData
+} from "@/types/reservation";
+import type { VendorPackagePriceSnapshot, VendorPackageSnapshot } from "@/types/vendor-package";
 
 export type Recommendation = {
   conceptTitle: string;
@@ -45,6 +50,24 @@ export type VendorOption = {
   services?: VendorServiceOption[];
 };
 
+export type VendorPackageOption = {
+  id: string;
+  vendorId: string;
+  eventType: string;
+  name: string;
+  description: string | null;
+  basePrice: number;
+  isActive: boolean;
+  sortOrder: number;
+  items: Array<{
+    id: string;
+    vendorServiceModuleId: string;
+    selectionType: "INCLUDED" | "OPTIONAL";
+    quantity: number;
+    priceOverride: number | null;
+  }>;
+};
+
 export type ReservationItem = {
   id: string;
   serviceName: string;
@@ -53,8 +76,16 @@ export type ReservationItem = {
   guestCount: number | null;
   quotedAmount: number | null;
   confirmedAmount: number | null;
+  vendorConfirmationDueAt: string | null;
   notes: string | null;
-  status: "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
+  requestMemo?: string | null;
+  responseMessage?: string | null;
+  status: "PENDING" | "CONFIRMED" | "REJECTED" | "CHANGED" | "CANCELED" | "COMPLETED";
+  quoteRequestId?: string | null;
+  quoteResponseId?: string | null;
+  quoteRequestStatus?: "PENDING" | "RESPONDED" | "ACCEPTED" | "CANCELED" | null;
+  selectedPackageSnapshot?: VendorPackageSnapshot | null;
+  priceSnapshot?: VendorPackagePriceSnapshot | null;
   selectedServiceOptions?: Array<{
     catalogKey: string | null;
     name: string;
@@ -63,6 +94,8 @@ export type ReservationItem = {
     quantity?: number;
     subtotal?: number;
   }> | null;
+  pendingChangeRequests?: ReservationChangeRequestData[];
+  pendingCancellationRequests?: ReservationCancellationRequestData[];
   eventPlan: {
     id: string;
     title: string;
