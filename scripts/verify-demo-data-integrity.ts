@@ -14,27 +14,102 @@ const prisma = new PrismaClient({
   })
 });
 
-type Counts = {
+type ProgressDataCounts = {
+  eventPlans: number;
+  quoteProposalRevisions: number;
   reservations: number;
+  reservationChangeRequests: number;
+  reservationCancellationRequests: number;
   quoteRequests: number;
   quoteResponses: number;
+  transactions: number;
+  mobileCards: number;
+  notifications: number;
+  activityLogs: number;
+  invitations: number;
+  posts: number;
+  reviews: number;
 };
 
-async function readCounts(): Promise<Counts> {
-  const [reservations, quoteRequests, quoteResponses] = await Promise.all([
+async function readProgressDataCounts(): Promise<ProgressDataCounts> {
+  const [
+    eventPlans,
+    quoteProposalRevisions,
+    reservations,
+    reservationChangeRequests,
+    reservationCancellationRequests,
+    quoteRequests,
+    quoteResponses,
+    transactions,
+    mobileCards,
+    notifications,
+    activityLogs,
+    invitations,
+    posts,
+    reviews
+  ] = await Promise.all([
+    prisma.eventPlan.count(),
+    prisma.quoteProposalRevision.count(),
     prisma.reservation.count(),
+    prisma.reservationChangeRequest.count(),
+    prisma.reservationCancellationRequest.count(),
     prisma.quoteRequest.count(),
-    prisma.quoteResponse.count()
+    prisma.quoteResponse.count(),
+    prisma.transaction.count(),
+    prisma.mobileCard.count(),
+    prisma.notification.count(),
+    prisma.activityLog.count(),
+    prisma.invitation.count(),
+    prisma.post.count(),
+    prisma.review.count()
   ]);
 
-  return { reservations, quoteRequests, quoteResponses };
+  return {
+    eventPlans,
+    quoteProposalRevisions,
+    reservations,
+    reservationChangeRequests,
+    reservationCancellationRequests,
+    quoteRequests,
+    quoteResponses,
+    transactions,
+    mobileCards,
+    notifications,
+    activityLogs,
+    invitations,
+    posts,
+    reviews
+  };
 }
 
-function assertStableCounts(label: string, expected: Counts, actual: Counts) {
+function assertNoProgressData(label: string, counts: ProgressDataCounts) {
+  assert.deepEqual(
+    counts,
+    {
+      eventPlans: 0,
+      quoteProposalRevisions: 0,
+      reservations: 0,
+      reservationChangeRequests: 0,
+      reservationCancellationRequests: 0,
+      quoteRequests: 0,
+      quoteResponses: 0,
+      transactions: 0,
+      mobileCards: 0,
+      notifications: 0,
+      activityLogs: 0,
+      invitations: 0,
+      posts: 0,
+      reviews: 0
+    },
+    `${label}: default demo seed must contain only demo accounts, vendors, services, modules, and packages`
+  );
+}
+
+function assertStableCounts(label: string, expected: ProgressDataCounts, actual: ProgressDataCounts) {
   assert.deepEqual(
     actual,
     expected,
-    `${label}: ensureDemoData must not inject legacy reservations or mutate quote workflow counts`
+    `${label}: ensureDemoData must not inject planner progress or mutate workflow counts`
   );
 }
 
@@ -199,23 +274,19 @@ async function assertVendorModulesExist() {
 }
 
 async function main() {
-  const baseline = await readCounts();
+  const baseline = await readProgressDataCounts();
 
-  assert.deepEqual(
-    baseline,
-    { reservations: 0, quoteRequests: 0, quoteResponses: 0 },
-    "verify-demo-data-integrity: expects clean npm run db:seed baseline"
-  );
+  assertNoProgressData("verify-demo-data-integrity baseline", baseline);
 
   await assertVendorModulesExist();
   await assertVendorContractIgnoresLegacyPendingRows();
   await assertPlansAndStep4UseSameWorkflowScenario();
 
   await ensureDemoData(prisma);
-  assertStableCounts("first ensureDemoData call", baseline, await readCounts());
+  assertStableCounts("first ensureDemoData call", baseline, await readProgressDataCounts());
 
   await ensureDemoData(prisma);
-  assertStableCounts("second ensureDemoData call", baseline, await readCounts());
+  assertStableCounts("second ensureDemoData call", baseline, await readProgressDataCounts());
 
   await assertVendorContractIgnoresLegacyPendingRows();
   await assertPlansAndStep4UseSameWorkflowScenario();

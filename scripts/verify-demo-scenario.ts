@@ -9,6 +9,8 @@ const prisma = new PrismaClient({
   })
 });
 
+const scenarioPlanSlugs = ["spring-garden-wedding", "family-funeral-guidance"];
+
 function stringArrayFromJson(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
@@ -32,11 +34,16 @@ async function main() {
   const stateArg = process.argv.find(a => a.startsWith("--state="))?.replace("--state=", "") ?? "C";
   const state = stateArg.toUpperCase() as "A" | "B" | "C" | "D";
 
-  const [qrCount, qrespCount, resCount] = await Promise.all([
+  const [eventPlanCount, scenarioPlanCount, qrCount, qrespCount, resCount] = await Promise.all([
+    prisma.eventPlan.count(),
+    prisma.eventPlan.count({ where: { slug: { in: scenarioPlanSlugs } } }),
     prisma.quoteRequest.count(),
     prisma.quoteResponse.count(),
     prisma.reservation.count()
   ]);
+
+  assert.equal(eventPlanCount, 2, `State ${state}: expected scenario-only 2 EventPlans, got ${eventPlanCount}`);
+  assert.equal(scenarioPlanCount, 2, `State ${state}: expected 2 scenario EventPlans, got ${scenarioPlanCount}`);
 
   if (state === "A") {
     assert.equal(qrCount, 2, `State A: expected 2 QuoteRequests, got ${qrCount}`);

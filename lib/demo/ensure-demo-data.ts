@@ -1,5 +1,4 @@
 import {
-  EventStatus,
   EventType,
   UserRole,
   VendorApprovalStatus,
@@ -7,9 +6,6 @@ import {
 } from "../../generated/prisma/client";
 
 import { hashPassword } from "../auth/password";
-import { generateStep3MockAIRecommendation } from "../mocks/step3-ai-recommendation";
-
-const day = 24 * 60 * 60 * 1000;
 
 export const demoAccountCredentials = {
   planner: "planner@yeon.local",
@@ -21,10 +17,6 @@ export const demoAccountCredentials = {
 } as const;
 
 export const demoAccountPassword = "demo1234";
-
-function plusDays(days: number) {
-  return new Date(Date.now() + days * day);
-}
 
 export function isDemoCredentialEmail(email: string) {
   return Object.values(demoAccountCredentials).includes(
@@ -493,208 +485,7 @@ export async function ensureDemoData(prisma: PrismaClient) {
     basePrice: 650_000
   });
 
-  // ── Event Plans ──────────────────────────────────────────────────────────
-
-  const springWedding = await prisma.eventPlan.upsert({
-    where: { slug: "spring-garden-wedding" },
-    update: {},
-    create: {
-      ownerId: planner.id,
-      title: "봄빛 가든 웨딩",
-      slug: "spring-garden-wedding",
-      type: EventType.WEDDING,
-      status: EventStatus.PLANNING,
-      hostName: "김연우",
-      honoreeName: "김연우 · 최하준",
-      venueName: "모먼트 가든",
-      region: "서울",
-      scheduledAt: plusDays(45),
-      guestTarget: 160,
-      budget: 4_800_000,
-      description: "따뜻한 정원 결혼식을 위한 메인 행사 플랜입니다.",
-      aiRecommendation: generateStep3MockAIRecommendation({
-        budget: 4_800_000,
-        guestCount: 160,
-        region: "서울",
-        eventType: EventType.WEDDING,
-        description: "소프트 로즈와 샴페인 톤, 가족 중심 동선, 자연광 포토존"
-      })
-    }
-  });
-
-  const familyFuneral = await prisma.eventPlan.upsert({
-    where: { slug: "family-funeral-guidance" },
-    update: {},
-    create: {
-      ownerId: planner.id,
-      title: "가족 장례 안내",
-      slug: "family-funeral-guidance",
-      type: EventType.FUNERAL,
-      status: EventStatus.PUBLISHED,
-      hostName: "김연우",
-      honoreeName: "故 김정훈",
-      venueName: "한결 추모관",
-      region: "인천",
-      scheduledAt: plusDays(12),
-      guestTarget: 48,
-      budget: 2_500_000,
-      description: "조용하고 안정적인 조문 동선과 안내가 중요한 가족 장례 일정입니다.",
-      aiRecommendation: generateStep3MockAIRecommendation({
-        budget: 2_500_000,
-        guestCount: 48,
-        region: "인천",
-        eventType: EventType.FUNERAL,
-        description: "차분한 안내, 주차 동선, 접객 인력 최소화, 정보 전달 명확성"
-      })
-    }
-  });
-
-  // ── Posts ────────────────────────────────────────────────────────────────
-
-  await prisma.post.upsert({
-    where: { slug: "venue-confirmed-notice" },
-    update: {
-      authorId: planner.id,
-      eventPlanId: springWedding.id,
-      title: "예식장 확정 안내",
-      excerpt: "가든 홀 대관이 확정되어 하객 안내 준비를 시작합니다.",
-      content: "예식장과 기본 동선이 확정되어 모바일 초대장 문안 작업을 시작합니다.",
-      category: "NOTICE",
-      isPublished: true,
-      publishedAt: plusDays(-2)
-    },
-    create: {
-      authorId: planner.id,
-      eventPlanId: springWedding.id,
-      title: "예식장 확정 안내",
-      slug: "venue-confirmed-notice",
-      excerpt: "가든 홀 대관이 확정되어 하객 안내 준비를 시작합니다.",
-      content: "예식장과 기본 동선이 확정되어 모바일 초대장 문안 작업을 시작합니다.",
-      category: "NOTICE",
-      isPublished: true,
-      publishedAt: plusDays(-2)
-    }
-  });
-
-  await prisma.post.upsert({
-    where: { slug: "funeral-schedule-share" },
-    update: {
-      authorId: planner.id,
-      eventPlanId: familyFuneral.id,
-      title: "장례 일정 및 안내 공유",
-      excerpt: "조문 시간과 주차 안내를 간단히 정리했습니다.",
-      content: "조문객 동선을 줄이기 위해 주차 및 접객 안내를 먼저 전달합니다.",
-      category: "STORY",
-      isPublished: true,
-      publishedAt: plusDays(-1)
-    },
-    create: {
-      authorId: planner.id,
-      eventPlanId: familyFuneral.id,
-      title: "장례 일정 및 안내 공유",
-      slug: "funeral-schedule-share",
-      excerpt: "조문 시간과 주차 안내를 간단히 정리했습니다.",
-      content: "조문객 동선을 줄이기 위해 주차 및 접객 안내를 먼저 전달합니다.",
-      category: "STORY",
-      isPublished: true,
-      publishedAt: plusDays(-1)
-    }
-  });
-
-  // ── Invitations ──────────────────────────────────────────────────────────
-
-  await prisma.invitation.upsert({
-    where: { invitationCode: "INV-SPRING-001" },
-    update: {
-      eventPlanId: springWedding.id,
-      senderId: planner.id,
-      recipientId: guest.id,
-      recipientName: guest.name,
-      recipientPhone: guest.phone,
-      recipientEmail: guest.email,
-      message: "모바일 초대장 테스트를 위해 먼저 공유드려요.",
-      rsvpStatus: "RSVP_ACCEPTED",
-      attendees: 2,
-      sentAt: plusDays(-3),
-      viewedAt: plusDays(-3),
-      respondedAt: plusDays(-2)
-    },
-    create: {
-      eventPlanId: springWedding.id,
-      senderId: planner.id,
-      recipientId: guest.id,
-      recipientName: guest.name,
-      recipientPhone: guest.phone,
-      recipientEmail: guest.email,
-      message: "모바일 초대장 테스트를 위해 먼저 공유드려요.",
-      rsvpStatus: "RSVP_ACCEPTED",
-      attendees: 2,
-      invitationCode: "INV-SPRING-001",
-      sentAt: plusDays(-3),
-      viewedAt: plusDays(-3),
-      respondedAt: plusDays(-2)
-    }
-  });
-
-  await prisma.invitation.upsert({
-    where: { invitationCode: "INV-SPRING-002" },
-    update: {
-      eventPlanId: springWedding.id,
-      senderId: planner.id,
-      recipientName: "최민재",
-      recipientPhone: "010-1234-9876",
-      recipientEmail: "guest2@yeon.local",
-      message: "웨딩 초대장을 확인해 주세요.",
-      rsvpStatus: "SENT",
-      attendees: null,
-      sentAt: plusDays(-2),
-      viewedAt: null,
-      respondedAt: null
-    },
-    create: {
-      eventPlanId: springWedding.id,
-      senderId: planner.id,
-      recipientName: "최민재",
-      recipientPhone: "010-1234-9876",
-      recipientEmail: "guest2@yeon.local",
-      message: "웨딩 초대장을 확인해 주세요.",
-      rsvpStatus: "SENT",
-      invitationCode: "INV-SPRING-002",
-      sentAt: plusDays(-2)
-    }
-  });
-
-  await prisma.invitation.upsert({
-    where: { invitationCode: "INV-FUNERAL-001" },
-    update: {
-      eventPlanId: familyFuneral.id,
-      senderId: planner.id,
-      recipientName: "윤하늘",
-      recipientPhone: "010-6543-2109",
-      recipientEmail: "guest3@yeon.local",
-      message: "가족 장례 일정과 조문 안내를 전달드립니다.",
-      rsvpStatus: "VIEWED",
-      attendees: null,
-      sentAt: plusDays(-1),
-      viewedAt: plusDays(-1),
-      respondedAt: null
-    },
-    create: {
-      eventPlanId: familyFuneral.id,
-      senderId: planner.id,
-      recipientName: "윤하늘",
-      recipientPhone: "010-6543-2109",
-      recipientEmail: "guest3@yeon.local",
-      message: "가족 장례 일정과 조문 안내를 전달드립니다.",
-      rsvpStatus: "VIEWED",
-      invitationCode: "INV-FUNERAL-001",
-      sentAt: plusDays(-1),
-      viewedAt: plusDays(-1)
-    }
-  });
-
   return {
-    users: { planner, venueVendor, cateringVendor, memorialVendor, guest, admin },
-    plans: { springWedding, familyFuneral }
+    users: { planner, venueVendor, cateringVendor, memorialVendor, guest, admin }
   };
 }
