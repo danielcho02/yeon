@@ -126,6 +126,11 @@ enum InvitationStatus {
   RSVP_DECLINED
 }
 
+enum CardType {
+  WEDDING
+  FUNERAL
+}
+
 model User {
   id                      String                @id @default(cuid())
   email                   String                @unique
@@ -165,6 +170,7 @@ model User {
   quoteProposalRevisions  QuoteProposalRevision[] @relation("QuoteProposalRevisionVendor")
   notifications           Notification[]        @relation("UserNotifications")
   activityLogs            ActivityLog[]         @relation("ActivityActor")
+  mobileCards             MobileCard[]          @relation("OwnedMobileCards")
 
   @@index([role, isActive])
 }
@@ -195,6 +201,7 @@ model EventPlan {
   reviews          Review[]       @relation("EventReviews")
   invitations      Invitation[]
   planTransactions Transaction[]  @relation("PlanTransactions")
+  mobileCard       MobileCard?    @relation("PlanMobileCard")
 
   @@index([ownerId, status])
   @@index([type, scheduledAt])
@@ -229,6 +236,7 @@ model Reservation {
   reviews                 Review[]          @relation("ReservationReviews")
   changeRequests          ReservationChangeRequest[]
   cancellationRequests    ReservationCancellationRequest[]
+  mobileCard              MobileCard?       @relation("CardSourceReservation")
 
   @@index([eventPlanId, status])
   @@index([vendorId, status])
@@ -576,4 +584,24 @@ model VendorServiceOption {
   vendorService   VendorService @relation(fields: [vendorServiceId], references: [id], onDelete: Cascade)
 
   @@index([vendorServiceId, isActive])
+}
+
+model MobileCard {
+  id                  String       @id @default(cuid())
+  planId              String       @unique
+  sourceReservationId String?      @unique
+  ownerId             String
+  cardType            CardType
+  slug                String       @unique
+  content             Json
+  isPublished         Boolean      @default(false)
+  viewCount           Int          @default(0)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  plan                EventPlan    @relation("PlanMobileCard", fields: [planId], references: [id], onDelete: Cascade)
+  sourceReservation   Reservation? @relation("CardSourceReservation", fields: [sourceReservationId], references: [id], onDelete: SetNull)
+  owner               User         @relation("OwnedMobileCards", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, cardType])
+  @@index([slug, isPublished])
 }

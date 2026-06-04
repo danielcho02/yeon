@@ -40,3 +40,7 @@ Thumbs.db
 
 # Claude Code local settings (machine-specific, may contain secrets)
 .claude/settings.local.json
+
+# Mobile card uploads (local dev only — not for production/CDN)
+public/uploads/mobile-cards/*
+!public/uploads/mobile-cards/.gitkeep

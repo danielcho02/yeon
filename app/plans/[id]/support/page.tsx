@@ -27,7 +27,7 @@ export default async function EventSupportPage({
   if (!plan) notFound();
 
   const isWedding = plan.type === "WEDDING";
-  
+
   // Theme styles based on event type
   const theme = {
     title: "행사 운영 지원 서비스",
@@ -80,32 +80,32 @@ export default async function EventSupportPage({
         {/* Feature Cards Grid */}
         <div className="grid gap-6 sm:grid-cols-2">
           {/* 1. 모바일 청첩장/부고장 관리 */}
-          <div className="relative flex flex-col justify-between rounded-[1.5rem] border border-border/60 bg-white p-6 shadow-sm opacity-85">
+          <div className={`flex flex-col justify-between rounded-[1.5rem] border border-border/60 bg-white p-6 shadow-sm transition-all duration-300 ${theme.cardHover}`}>
             <div>
               <div className="mb-4 flex items-center justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${isWedding ? "bg-rose-50 text-rose-600" : "bg-zinc-100 text-zinc-800"}`}>
                   <Phone className="h-5 w-5" />
                 </div>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
-                  U08 구현 예정
+                <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${theme.badgeBg}`}>
+                  운영 가능
                 </span>
               </div>
-              <h3 className="text-base font-bold text-slate-700">
+              <h3 className="text-base font-bold text-foreground">
                 {isWedding ? "모바일 청첩장 관리" : "모바일 부고장 관리"}
               </h3>
-              <p className="text-sm text-slate-400 mt-2 leading-relaxed">
+              <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                 {isWedding
-                  ? "하객 안내를 위한 모바일 청첩장을 제작하고, 참석 여부(RSVP) 및 축하 메시지를 한눈에 모아 확인합니다."
-                  : "부고 소식을 전할 모바일 부고장을 제작하고, 조문객 정보 및 위로 메시지를 한눈에 모아 확인합니다."}
+                  ? "확정된 예약 정보를 바탕으로 모바일 청첩장 초안을 만들고, 대표 이미지를 등록해 공유용 페이지를 관리합니다."
+                  : "확정된 예약 정보를 바탕으로 모바일 부고장 초안을 만들고, 대표 이미지를 등록해 공유용 페이지를 관리합니다."}
               </p>
             </div>
             <div className="mt-6">
-              <button
-                disabled
-                className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-400 cursor-not-allowed"
+              <Link
+                href={`/plans/${plan.id}/mobile-card`}
+                className={`inline-flex h-11 w-full items-center justify-center rounded-2xl px-4 text-sm font-semibold shadow-sm transition-colors ${theme.buttonBg}`}
               >
-                서비스 준비 중
-              </button>
+                {isWedding ? "청첩장 관리하기 →" : "부고장 관리하기 →"}
+              </Link>
             </div>
           </div>
 
@@ -117,8 +117,8 @@ export default async function EventSupportPage({
                   <Wallet className="h-5 w-5" />
                 </div>
                 <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
-                  isWedding 
-                    ? "bg-rose-50/50 border-rose-100 text-rose-700" 
+                  isWedding
+                    ? "bg-rose-50/50 border-rose-100 text-rose-700"
                     : "bg-zinc-50 border-zinc-200 text-zinc-800"
                 }`}>
                   핵심 서비스
@@ -128,7 +128,7 @@ export default async function EventSupportPage({
                 {isWedding ? "축의금 정산 장부" : "조의금 정산 장부"}
               </h3>
               <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                {isWedding 
+                {isWedding
                   ? "하객들이 전달한 축의금 내역을 수동으로 등록하고, 관계별/입금수단별로 투명하게 분류해 요약 리포트를 확인합니다."
                   : "조문객들이 전달한 조의금 내역을 수동으로 등록하고, 관계별/입금수단별로 투명하게 분류해 요약 리포트를 확인합니다."}
               </p>
