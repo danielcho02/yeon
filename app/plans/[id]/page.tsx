@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { CalendarDays, Edit, MapPin, Trash2, Users, Wallet } from "lucide-react";
+import { CalendarDays, Edit, MapPin, Trash2, Users, Wallet, Layers } from "lucide-react";
 
 import { Nav } from "@/components/nav";
 import { buttonVariants } from "@/components/ui/button";
@@ -110,15 +110,24 @@ export default async function PlanDetailPage({
           <StatCard label="취소" count={stats.cancelled} tone="neutral" />
         </div>
 
-        {/* 플래너 빠른 진입 */}
+        {/* 플래너 빠른 진입 및 행사 운영 지원 바로가기 */}
         {plan.type && (
-          <div className="mb-6">
+          <div className="mb-6 flex flex-wrap gap-3">
             <Link
               href={`/planner/${plan.type.toLowerCase()}?planId=${plan.id}`}
               className="inline-flex items-center gap-1.5 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm font-semibold text-primary transition-all duration-200 hover:bg-primary/10"
             >
               이 행사로 업체 찾기 →
             </Link>
+            {(plan.type === "WEDDING" || plan.type === "FUNERAL") && (
+              <Link
+                href={`/plans/${plan.id}/support`}
+                className="inline-flex items-center gap-1.5 rounded-2xl border border-emerald-600/30 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition-all duration-200 hover:bg-emerald-100/50"
+              >
+                <Layers className="mr-1.5 h-4 w-4" />
+                행사 운영 지원 서비스 →
+              </Link>
+            )}
           </div>
         )}
 

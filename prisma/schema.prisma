@@ -49,6 +49,12 @@ enum ReservationStatus {
   COMPLETED
 }
 
+enum ReservationRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum QuoteStatus {
   PENDING
   RESPONDED
@@ -120,6 +126,11 @@ enum InvitationStatus {
   RSVP_DECLINED
 }
 
+enum CardType {
+  WEDDING
+  FUNERAL
+}
+
 model User {
   id                      String                @id @default(cuid())
   email                   String                @unique
@@ -141,6 +152,10 @@ model User {
   updatedAt               DateTime              @updatedAt
   ownedEventPlans         EventPlan[]           @relation("EventOwner")
   vendorReservations      Reservation[]         @relation("ReservationVendor")
+  plannerReservationChangeRequests ReservationChangeRequest[] @relation("ReservationChangeRequestPlanner")
+  vendorReservationChangeRequests  ReservationChangeRequest[] @relation("ReservationChangeRequestVendor")
+  plannerReservationCancellationRequests ReservationCancellationRequest[] @relation("ReservationCancellationRequestPlanner")
+  vendorReservationCancellationRequests  ReservationCancellationRequest[] @relation("ReservationCancellationRequestVendor")
   authoredPosts           Post[]                @relation("PostAuthor")
   writtenReviews          Review[]              @relation("ReviewAuthor")
   receivedReviews         Review[]              @relation("ReviewVendor")
@@ -155,6 +170,7 @@ model User {
   quoteProposalRevisions  QuoteProposalRevision[] @relation("QuoteProposalRevisionVendor")
   notifications           Notification[]        @relation("UserNotifications")
   activityLogs            ActivityLog[]         @relation("ActivityActor")
+  mobileCards             MobileCard[]          @relation("OwnedMobileCards")
 
   @@index([role, isActive])
 }
@@ -185,6 +201,7 @@ model EventPlan {
   reviews          Review[]       @relation("EventReviews")
   invitations      Invitation[]
   planTransactions Transaction[]  @relation("PlanTransactions")
+  mobileCard       MobileCard?    @relation("PlanMobileCard")
 
   @@index([ownerId, status])
   @@index([type, scheduledAt])
@@ -217,9 +234,56 @@ model Reservation {
   quoteProposalRevision   QuoteProposalRevision? @relation(fields: [quoteProposalRevisionId], references: [id], onDelete: SetNull)
   transaction             Transaction?
   reviews                 Review[]          @relation("ReservationReviews")
+  changeRequests          ReservationChangeRequest[]
+  cancellationRequests    ReservationCancellationRequest[]
+  mobileCard              MobileCard?       @relation("CardSourceReservation")
 
   @@index([eventPlanId, status])
   @@index([vendorId, status])
+}
+
+model ReservationChangeRequest {
+  id                              String                   @id @default(cuid())
+  reservationId                   String
+  plannerId                       String
+  vendorId                        String
+  requestedServiceDate            DateTime?
+  requestedGuestCount             Int?
+  requestedNotes                  String?
+  requestedReason                 String
+  requestedSelectedServiceOptions Json?
+  status                          ReservationRequestStatus @default(PENDING)
+  vendorDecisionMemo              String?
+  decidedAt                       DateTime?
+  createdAt                       DateTime                 @default(now())
+  updatedAt                       DateTime                 @updatedAt
+  reservation                     Reservation              @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  planner                         User                     @relation("ReservationChangeRequestPlanner", fields: [plannerId], references: [id], onDelete: Cascade)
+  vendor                          User                     @relation("ReservationChangeRequestVendor", fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([reservationId, status])
+  @@index([vendorId, status, createdAt])
+  @@index([plannerId, status, createdAt])
+}
+
+model ReservationCancellationRequest {
+  id                 String                   @id @default(cuid())
+  reservationId      String
+  plannerId          String
+  vendorId           String
+  reason             String
+  status             ReservationRequestStatus @default(PENDING)
+  vendorDecisionMemo String?
+  decidedAt          DateTime?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  reservation        Reservation              @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  planner            User                     @relation("ReservationCancellationRequestPlanner", fields: [plannerId], references: [id], onDelete: Cascade)
+  vendor             User                     @relation("ReservationCancellationRequestVendor", fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([reservationId, status])
+  @@index([vendorId, status, createdAt])
+  @@index([plannerId, status, createdAt])
 }
 
 model Post {
@@ -520,4 +584,24 @@ model VendorServiceOption {
   vendorService   VendorService @relation(fields: [vendorServiceId], references: [id], onDelete: Cascade)
 
   @@index([vendorServiceId, isActive])
+}
+
+model MobileCard {
+  id                  String       @id @default(cuid())
+  planId              String       @unique
+  sourceReservationId String?      @unique
+  ownerId             String
+  cardType            CardType
+  slug                String       @unique
+  content             Json
+  isPublished         Boolean      @default(false)
+  viewCount           Int          @default(0)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  plan                EventPlan    @relation("PlanMobileCard", fields: [planId], references: [id], onDelete: Cascade)
+  sourceReservation   Reservation? @relation("CardSourceReservation", fields: [sourceReservationId], references: [id], onDelete: SetNull)
+  owner               User         @relation("OwnedMobileCards", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, cardType])
+  @@index([slug, isPublished])
 }

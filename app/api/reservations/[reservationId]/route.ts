@@ -1,23 +1,15 @@
 import { revalidatePath } from "next/cache";
 
-import { QuoteStatus, ReservationStatus, UserRole } from "@/generated/prisma/client";
+import { ReservationRequestStatus, ReservationStatus, UserRole } from "@/generated/prisma/client";
 import { getServerAuthSession } from "@/lib/auth/session";
 import { getActionError, isDatabaseBusyError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
-import { assertQuoteTransition, assertReservationTransition } from "@/lib/state-machine";
-import {
-  getKstDayRange,
-  normalizePositiveInt,
-  parseDateOnlyToKst
-} from "@/lib/step3.shared";
+import { normalizePositiveInt, parseDateOnlyToKst } from "@/lib/step3.shared";
 import {
   createWorkflowActivity,
   createWorkflowNotification,
   getVendorDashboardHref
 } from "@/lib/workflow-events";
-
-import type { ReservationStatus as SharedReservationStatus } from "@/types/reservation";
-import type { QuoteStatus as SharedQuoteStatus } from "@/types/quote";
 
 type RouteContext = {
   params: {
@@ -63,42 +55,6 @@ function revalidateReservationViews(eventPlanId: string) {
   revalidatePath("/vendor/dashboard");
 }
 
-function mapSharedReservationStatus(status: ReservationStatus): SharedReservationStatus {
-  if (
-    status === ReservationStatus.CONFIRMED ||
-    status === ReservationStatus.REJECTED ||
-    status === ReservationStatus.CHANGED ||
-    status === ReservationStatus.CANCELED
-  ) {
-    return status;
-  }
-
-  return "PENDING";
-}
-
-function mapSharedQuoteStatus(status: QuoteStatus): SharedQuoteStatus {
-  if (status === QuoteStatus.RESPONDED || status === QuoteStatus.ACCEPTED || status === QuoteStatus.CANCELED) {
-    return status;
-  }
-
-  return "PENDING";
-}
-
-function getInvalidTransitionResponse(
-  current: ReservationStatus,
-  next: SharedReservationStatus
-) {
-  try {
-    assertReservationTransition(mapSharedReservationStatus(current), next);
-    return null;
-  } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "예약 상태를 변경할 수 없습니다." },
-      { status: 400 }
-    );
-  }
-}
-
 function routeErrorResponse(error: unknown) {
   if (isDatabaseBusyError(error)) {
     return Response.json(
@@ -115,6 +71,23 @@ function routeErrorResponse(error: unknown) {
   }
 
   throw error;
+}
+
+function canRequestReservationChange(status: ReservationStatus) {
+  return status === ReservationStatus.PENDING || status === ReservationStatus.CONFIRMED;
+}
+
+async function hasPendingReservationRequest(reservationId: string) {
+  const [changeCount, cancellationCount] = await Promise.all([
+    prisma.reservationChangeRequest.count({
+      where: { reservationId, status: ReservationRequestStatus.PENDING }
+    }),
+    prisma.reservationCancellationRequest.count({
+      where: { reservationId, status: ReservationRequestStatus.PENDING }
+    })
+  ]);
+
+  return changeCount + cancellationCount > 0;
 }
 
 async function handlePatch(request: Request, context: RouteContext) {
@@ -141,12 +114,22 @@ async function handlePatch(request: Request, context: RouteContext) {
     return Response.json({ error: "이미 취소된 예약입니다." }, { status: 400 });
   }
 
+  if (!canRequestReservationChange(reservation.status)) {
+    return Response.json({ error: "변경 요청을 보낼 수 없는 예약 상태입니다." }, { status: 400 });
+  }
+
   const body = (await request.json()) as Record<string, unknown>;
   const action = typeof body.action === "string" ? body.action : "update";
   const serviceDateInput =
     typeof body.serviceDate === "string" ? body.serviceDate : "";
   const guestCount = normalizePositiveInt(body.guestCount);
   const notes = typeof body.notes === "string" ? body.notes.trim() : "";
+  const reason =
+    typeof body.reason === "string"
+      ? body.reason.trim()
+      : typeof body.requestedReason === "string"
+      ? body.requestedReason.trim()
+      : "";
 
   if (action === "confirm") {
     return Response.json(
@@ -155,67 +138,39 @@ async function handlePatch(request: Request, context: RouteContext) {
     );
   }
 
-  if (!serviceDateInput) {
-    return Response.json({ error: "변경할 예약일이 필요합니다." }, { status: 400 });
+  if (!reason) {
+    return Response.json({ error: "변경 요청 사유가 필요합니다." }, { status: 400 });
   }
 
-  const { start, end } = getKstDayRange(serviceDateInput);
-  const conflictingReservation = await prisma.reservation.findFirst({
-    where: {
-      id: {
-        not: reservation.id
-      },
-      vendorId: reservation.vendorId,
-      status: {
-        in: [ReservationStatus.PENDING, ReservationStatus.CONFIRMED]
-      },
-      serviceDate: {
-        gte: start,
-        lte: end
-      }
-    },
-    select: {
-      id: true,
-      serviceName: true
-    }
-  });
-
-  if (conflictingReservation) {
-    return Response.json(
-      {
-        error: `같은 날짜에 다른 예약이 있어 변경할 수 없습니다: ${conflictingReservation.serviceName}`
-      },
-      { status: 409 }
-    );
+  if (await hasPendingReservationRequest(reservation.id)) {
+    return Response.json({ error: "이미 업체 승인 대기 중인 변경/취소 요청이 있습니다." }, { status: 409 });
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.reservation.update({
-      where: {
-        id: reservation.id
-      },
+  const changeRequest = await prisma.$transaction(async (tx) => {
+    const created = await tx.reservationChangeRequest.create({
       data: {
-        serviceDate: parseDateOnlyToKst(serviceDateInput),
-        guestCount,
-        notes: notes || null,
-        status:
-          reservation.status === ReservationStatus.CONFIRMED
-            ? ReservationStatus.CONFIRMED
-            : ReservationStatus.PENDING
+        reservationId: reservation.id,
+        plannerId: session.user.id,
+        vendorId: reservation.vendorId,
+        requestedServiceDate: serviceDateInput ? parseDateOnlyToKst(serviceDateInput) : null,
+        requestedGuestCount: guestCount,
+        requestedNotes: notes || null,
+        requestedReason: reason
       }
     });
 
     await createWorkflowNotification(tx, {
       userId: reservation.vendorId,
       type: "RESERVATION_CHANGE_REQUESTED",
-      title: "예약 정보가 변경되었습니다",
-      message: `${reservation.eventPlan.title} 예약 정보가 사용자에 의해 변경되었습니다.`,
+      title: "예약 변경 요청이 도착했습니다",
+      message: `${reservation.eventPlan.title} 예약 변경 요청을 확인해 주세요.`,
       href: getVendorDashboardHref(),
       metadata: {
         planId: reservation.eventPlanId,
         reservationId: reservation.id,
         quoteRequestId: reservation.quoteRequestId ?? "",
         quoteResponseId: reservation.quoteResponseId ?? "",
+        changeRequestId: created.id,
         serviceDate: serviceDateInput,
         guestCount: guestCount ?? 0
       }
@@ -229,16 +184,21 @@ async function handlePatch(request: Request, context: RouteContext) {
       quoteResponseId: reservation.quoteResponseId ?? null,
       reservationId: reservation.id,
       type: "RESERVATION_CHANGE_REQUESTED",
-      message: "일반 사용자가 예약 정보를 변경했습니다."
+      message: "일반 사용자가 예약 변경 승인을 요청했습니다.",
+      metadata: {
+        changeRequestId: created.id
+      }
     });
+
+    return created;
   });
 
   revalidateReservationViews(reservation.eventPlanId);
 
-  return Response.json({ ok: true });
+  return Response.json({ ok: true, changeRequestId: changeRequest.id });
 }
 
-async function handleDelete(_request: Request, context: RouteContext) {
+async function handleDelete(request: Request, context: RouteContext) {
   const session = await getServerAuthSession();
 
   if (!session?.user?.id) {
@@ -262,54 +222,45 @@ async function handleDelete(_request: Request, context: RouteContext) {
     return Response.json({ error: "이미 취소된 예약입니다." }, { status: 400 });
   }
 
-  const invalidTransitionResponse = getInvalidTransitionResponse(
-    reservation.status,
-    "CANCELED"
-  );
-  if (invalidTransitionResponse) return invalidTransitionResponse;
+  if (!canRequestReservationChange(reservation.status)) {
+    return Response.json({ error: "취소 요청을 보낼 수 없는 예약 상태입니다." }, { status: 400 });
+  }
 
-  await prisma.$transaction(async (tx) => {
-    if (reservation.quoteRequestId) {
-      const quoteRequest = await tx.quoteRequest.findFirst({
-        where: {
-          id: reservation.quoteRequestId,
-          plan: {
-            ownerId: session.user.id
-          }
-        },
-        select: { id: true, status: true }
-      });
+  const body = await request
+    .json()
+    .catch(() => ({} as Record<string, unknown>)) as Record<string, unknown>;
+  const reason = typeof body.reason === "string" ? body.reason.trim() : "";
 
-      if (quoteRequest && quoteRequest.status !== QuoteStatus.CANCELED) {
-        assertQuoteTransition(mapSharedQuoteStatus(quoteRequest.status), "CANCELED");
-        await tx.quoteRequest.update({
-          where: { id: quoteRequest.id },
-          data: { status: QuoteStatus.CANCELED }
-        });
-      }
-    }
+  if (!reason) {
+    return Response.json({ error: "취소 사유가 필요합니다." }, { status: 400 });
+  }
 
-    await tx.reservation.update({
-      where: {
-        id: reservation.id
-      },
+  if (await hasPendingReservationRequest(reservation.id)) {
+    return Response.json({ error: "이미 업체 승인 대기 중인 변경/취소 요청이 있습니다." }, { status: 409 });
+  }
+
+  const cancellationRequest = await prisma.$transaction(async (tx) => {
+    const created = await tx.reservationCancellationRequest.create({
       data: {
-        status: ReservationStatus.CANCELED,
-        vendorConfirmationDueAt: null
+        reservationId: reservation.id,
+        plannerId: session.user.id,
+        vendorId: reservation.vendorId,
+        reason
       }
     });
 
     await createWorkflowNotification(tx, {
       userId: reservation.vendorId,
-      type: "RESERVATION_CANCELED",
-      title: "예약이 취소되었습니다",
-      message: `${reservation.eventPlan.title} 예약이 사용자에 의해 취소되었습니다.`,
+      type: "RESERVATION_CANCELLATION_REQUESTED",
+      title: "예약 취소 요청이 도착했습니다",
+      message: `${reservation.eventPlan.title} 예약 취소 요청을 확인해 주세요.`,
       href: getVendorDashboardHref(),
       metadata: {
         planId: reservation.eventPlanId,
         reservationId: reservation.id,
         quoteRequestId: reservation.quoteRequestId ?? "",
-        quoteResponseId: reservation.quoteResponseId ?? ""
+        quoteResponseId: reservation.quoteResponseId ?? "",
+        cancellationRequestId: created.id
       }
     });
 
@@ -320,14 +271,19 @@ async function handleDelete(_request: Request, context: RouteContext) {
       quoteRequestId: reservation.quoteRequestId ?? null,
       quoteResponseId: reservation.quoteResponseId ?? null,
       reservationId: reservation.id,
-      type: "RESERVATION_CANCELED",
-      message: "일반 사용자가 예약을 취소했습니다."
+      type: "RESERVATION_CANCELLATION_REQUESTED",
+      message: "일반 사용자가 예약 취소 승인을 요청했습니다.",
+      metadata: {
+        cancellationRequestId: created.id
+      }
     });
+
+    return created;
   });
 
   revalidateReservationViews(reservation.eventPlanId);
 
-  return Response.json({ ok: true });
+  return Response.json({ ok: true, cancellationRequestId: cancellationRequest.id });
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
