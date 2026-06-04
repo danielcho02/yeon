@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { CalendarDays, Edit, MapPin, Trash2, Users, Wallet } from "lucide-react";
+import { CalendarDays, Edit, MapPin, Smartphone, Trash2, Users, Wallet } from "lucide-react";
 
 import { Nav } from "@/components/nav";
 import { buttonVariants } from "@/components/ui/button";
@@ -37,6 +37,7 @@ export default async function PlanDetailPage({
         },
         orderBy: { createdAt: "desc" },
       },
+      mobileCard: { select: { id: true, isPublished: true, slug: true } },
     },
   });
 
@@ -120,6 +121,16 @@ export default async function PlanDetailPage({
               이 행사로 업체 찾기 →
             </Link>
           </div>
+        )}
+
+        {/* 모바일 카드 CTA */}
+        {(plan.type === "WEDDING" || plan.type === "FUNERAL") && (
+          <MobileCardCTA
+            planId={id}
+            planType={plan.type}
+            hasConfirmed={stats.confirmed > 0}
+            existingCard={plan.mobileCard ?? null}
+          />
         )}
 
         <div className="grid gap-5 lg:grid-cols-[1fr_0.85fr]">
@@ -262,6 +273,75 @@ function StatCard({
     <div className={`rounded-2xl border p-4 ${toneClass}`}>
       <p className="text-2xl font-bold">{count}</p>
       <p className="mt-0.5 text-xs font-medium opacity-70">{label}</p>
+    </div>
+  );
+}
+
+function MobileCardCTA({
+  planId,
+  planType,
+  hasConfirmed,
+  existingCard,
+}: {
+  planId: string;
+  planType: "WEDDING" | "FUNERAL";
+  hasConfirmed: boolean;
+  existingCard: { id: string; isPublished: boolean; slug: string } | null;
+}) {
+  const isWedding = planType === "WEDDING";
+  const label = isWedding ? "모바일 청첩장" : "모바일 부고장";
+  const cardHref = `/plans/${planId}/mobile-card`;
+
+  const containerCls = isWedding
+    ? "border-rose-200/70 bg-rose-50/40"
+    : "border-slate-200/70 bg-slate-50/40";
+  const iconCls = isWedding ? "text-rose-400" : "text-slate-400";
+  const titleCls = isWedding ? "text-rose-700" : "text-slate-700";
+  const btnCls = isWedding
+    ? "bg-rose-500 hover:bg-rose-600 text-white"
+    : "bg-slate-600 hover:bg-slate-700 text-white";
+  const btnOutlineCls = isWedding
+    ? "border border-rose-300 text-rose-600 hover:bg-rose-50"
+    : "border border-slate-300 text-slate-600 hover:bg-slate-50";
+
+  return (
+    <div className={`mb-6 rounded-2xl border p-5 ${containerCls}`}>
+      <div className="flex items-center gap-2 mb-3">
+        <Smartphone className={`h-4 w-4 ${iconCls}`} />
+        <span className={`text-sm font-semibold ${titleCls}`}>{label}</span>
+        {existingCard?.isPublished && (
+          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">공개 중</span>
+        )}
+      </div>
+
+      {hasConfirmed ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={cardHref}
+            className={`inline-flex h-9 items-center gap-1.5 rounded-xl px-4 text-xs font-bold transition-colors ${existingCard ? btnOutlineCls : btnCls}`}
+          >
+            {existingCard ? `${label} 관리` : `${label} 만들기`}
+          </Link>
+          {existingCard && (
+            <Link
+              href={`/plans/${planId}/mobile-card/preview`}
+              className={`inline-flex h-9 items-center gap-1.5 rounded-xl px-4 text-xs font-semibold transition-colors ${btnOutlineCls}`}
+            >
+              미리보기
+            </Link>
+          )}
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <button
+            disabled
+            className="inline-flex h-9 cursor-not-allowed items-center rounded-xl bg-muted px-4 text-xs font-semibold text-muted-foreground opacity-60"
+          >
+            {label} 만들기
+          </button>
+          <span className="text-xs text-muted-foreground">업체 최종 확정 후 생성 가능합니다</span>
+        </div>
+      )}
     </div>
   );
 }

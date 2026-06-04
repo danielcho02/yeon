@@ -3,7 +3,7 @@ import "server-only";
 import { UserRole, type Prisma } from "@/generated/prisma/client";
 import { getServerAuthSession } from "@/lib/auth/session";
 
-import type { InvitationData } from "@/types/invitation";
+import type { InvitationData, MobileCardData, WeddingCardContent, FuneralCardContent } from "@/types/invitation";
 import type { EventPlanData, EventType, PlanStatus } from "@/types/plan";
 import type {
   QuoteRequestData,
@@ -146,6 +146,20 @@ type InvitationLike = {
   content: Prisma.JsonValue | null;
   invitationCode: string;
   isPublished: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type MobileCardLike = {
+  id: string;
+  planId: string;
+  sourceReservationId: string | null;
+  ownerId: string;
+  cardType: string;
+  slug: string;
+  content: Prisma.JsonValue;
+  isPublished: boolean;
+  viewCount: number;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -414,5 +428,35 @@ export function mapInvitation(invitation: InvitationLike | null | undefined): In
     isPublished: invitation.isPublished,
     createdAt: invitation.createdAt.toISOString(),
     updatedAt: invitation.updatedAt.toISOString()
+  };
+}
+
+function parseMobileCardContent(
+  cardType: string,
+  raw: Prisma.JsonValue
+): WeddingCardContent | FuneralCardContent {
+  const obj = recordFromJson(raw);
+  if (cardType === "WEDDING") {
+    return obj as unknown as WeddingCardContent;
+  }
+  return obj as unknown as FuneralCardContent;
+}
+
+export function mapMobileCard(card: MobileCardLike): MobileCardData {
+  const cardType = card.cardType === "WEDDING" ? "WEDDING" : "FUNERAL";
+  const prefix = cardType === "WEDDING" ? "/i/" : "/o/";
+  return {
+    id: card.id,
+    planId: card.planId,
+    sourceReservationId: card.sourceReservationId,
+    ownerId: card.ownerId,
+    cardType,
+    slug: card.slug,
+    content: parseMobileCardContent(card.cardType, card.content),
+    isPublished: card.isPublished,
+    viewCount: card.viewCount,
+    shareUrl: `${prefix}${card.slug}`,
+    createdAt: card.createdAt.toISOString(),
+    updatedAt: card.updatedAt.toISOString()
   };
 }
