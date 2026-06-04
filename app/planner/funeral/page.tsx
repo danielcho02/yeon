@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getQuotesByPlan, getVendorPackages, getVendorServiceModules } from "@/app/actions/quote";
 import { EventPlanningWorkspace } from "@/components/features/planning/event-planning-workspace";
 import type { ReservationItem } from "@/components/features/planning/workspace-types";
-import { UserRole } from "@/generated/prisma/client";
+import { ReservationRequestStatus, UserRole } from "@/generated/prisma/client";
 import { getServerAuthSession } from "@/lib/auth/session";
 import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { vendorSupportsAnyServiceModule } from "@/lib/step3.shared";
@@ -147,6 +147,42 @@ export default async function FuneralPlannerPage({
               status: true
             }
           },
+          changeRequests: {
+            where: { status: ReservationRequestStatus.PENDING },
+            orderBy: { createdAt: "desc" as const },
+            select: {
+              id: true,
+              reservationId: true,
+              plannerId: true,
+              vendorId: true,
+              requestedServiceDate: true,
+              requestedGuestCount: true,
+              requestedNotes: true,
+              requestedReason: true,
+              requestedSelectedServiceOptions: true,
+              status: true,
+              vendorDecisionMemo: true,
+              decidedAt: true,
+              createdAt: true,
+              updatedAt: true
+            }
+          },
+          cancellationRequests: {
+            where: { status: ReservationRequestStatus.PENDING },
+            orderBy: { createdAt: "desc" as const },
+            select: {
+              id: true,
+              reservationId: true,
+              plannerId: true,
+              vendorId: true,
+              reason: true,
+              status: true,
+              vendorDecisionMemo: true,
+              decidedAt: true,
+              createdAt: true,
+              updatedAt: true
+            }
+          },
           selectedServiceOptions: true,
           eventPlan: {
             select: { id: true, title: true, type: true, region: true, scheduledAt: true, hostName: true, honoreeName: true }
@@ -230,6 +266,34 @@ export default async function FuneralPlannerPage({
           quoteResponseId: r.quoteResponseId,
           quoteRequestStatus: r.quoteRequest?.status ?? null,
           selectedServiceOptions: r.selectedServiceOptions as ReservationItem["selectedServiceOptions"] ?? null,
+          pendingChangeRequests: r.changeRequests.map((request) => ({
+            id: request.id,
+            reservationId: request.reservationId,
+            plannerId: request.plannerId,
+            vendorId: request.vendorId,
+            requestedServiceDate: request.requestedServiceDate?.toISOString() ?? null,
+            requestedGuestCount: request.requestedGuestCount,
+            requestedNotes: request.requestedNotes,
+            requestedReason: request.requestedReason,
+            requestedSelectedServiceOptions: request.requestedSelectedServiceOptions as ReservationItem["selectedServiceOptions"] ?? null,
+            status: request.status,
+            vendorDecisionMemo: request.vendorDecisionMemo,
+            decidedAt: request.decidedAt?.toISOString() ?? null,
+            createdAt: request.createdAt.toISOString(),
+            updatedAt: request.updatedAt.toISOString()
+          })),
+          pendingCancellationRequests: r.cancellationRequests.map((request) => ({
+            id: request.id,
+            reservationId: request.reservationId,
+            plannerId: request.plannerId,
+            vendorId: request.vendorId,
+            reason: request.reason,
+            status: request.status,
+            vendorDecisionMemo: request.vendorDecisionMemo,
+            decidedAt: request.decidedAt?.toISOString() ?? null,
+            createdAt: request.createdAt.toISOString(),
+            updatedAt: request.updatedAt.toISOString()
+          })),
           eventPlan: {
             id: r.eventPlan.id,
             title: r.eventPlan.title,

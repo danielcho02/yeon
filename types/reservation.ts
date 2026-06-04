@@ -10,6 +10,38 @@ export type ReservationStatus =
   | "CANCELED"
   | "COMPLETED";
 
+export type ReservationRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export interface ReservationChangeRequestData {
+  id: string;
+  reservationId: string;
+  plannerId: string;
+  vendorId: string;
+  requestedServiceDate: string | null;
+  requestedGuestCount: number | null;
+  requestedNotes: string | null;
+  requestedReason: string;
+  requestedSelectedServiceOptions: VendorDashboardSelectedServiceOptionDTO[] | null;
+  status: ReservationRequestStatus;
+  vendorDecisionMemo: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReservationCancellationRequestData {
+  id: string;
+  reservationId: string;
+  plannerId: string;
+  vendorId: string;
+  reason: string;
+  status: ReservationRequestStatus;
+  vendorDecisionMemo: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ReservationData {
   id: string;
   planId: string;
@@ -25,6 +57,8 @@ export interface ReservationData {
   updatedAt: string;
   vendor?: VendorProfileData;
   quoteResponse?: QuoteResponseData;
+  pendingChangeRequest?: ReservationChangeRequestData | null;
+  pendingCancellationRequest?: ReservationCancellationRequestData | null;
 }
 
 export interface CreateReservationPayload {
@@ -63,6 +97,8 @@ export interface VendorDashboardReservationDTO {
   selectedPackageSnapshot?: VendorPackageSnapshot | null;
   priceSnapshot?: VendorPackagePriceSnapshot | null;
   selectedServiceOptions: VendorDashboardSelectedServiceOptionDTO[] | null;
+  pendingChangeRequests?: ReservationChangeRequestData[];
+  pendingCancellationRequests?: ReservationCancellationRequestData[];
   eventPlan: {
     id: string;
     title: string;
@@ -80,11 +116,21 @@ export interface VendorDashboardReservationDTO {
   };
 }
 
+export interface VendorDashboardReservationChangeRequestDTO extends ReservationChangeRequestData {
+  reservation: VendorDashboardReservationDTO;
+}
+
+export interface VendorDashboardReservationCancellationRequestDTO extends ReservationCancellationRequestData {
+  reservation: VendorDashboardReservationDTO;
+}
+
 export interface VendorDashboardReservationCountsDTO {
   newRequestsCount: number;
   pendingConfirmationsCount: number;
   confirmedReservationsCount: number;
   respondedQuotesCount: number;
+  pendingChangeRequestsCount: number;
+  pendingCancellationRequestsCount: number;
 }
 
 export interface VendorDashboardReservationContractDTO {
@@ -93,5 +139,7 @@ export interface VendorDashboardReservationContractDTO {
   quoteResponsesWaitingForUserAcceptance: VendorDashboardReservationDTO[];
   pendingConfirmations: VendorDashboardReservationDTO[];
   confirmedReservations: VendorDashboardReservationDTO[];
+  pendingChangeRequests: VendorDashboardReservationChangeRequestDTO[];
+  pendingCancellationRequests: VendorDashboardReservationCancellationRequestDTO[];
   counts: VendorDashboardReservationCountsDTO;
 }

@@ -7,6 +7,7 @@ import {
   Prisma,
   QuoteProposalRevisionStatus as PrismaQuoteProposalRevisionStatus,
   QuoteStatus as PrismaQuoteStatus,
+  ReservationRequestStatus,
   ReservationStatus as PrismaReservationStatus,
   UserRole,
   VendorApprovalStatus
@@ -1816,13 +1817,40 @@ export async function getStep4DashboardData(
               revisions: { orderBy: [{ version: "desc" }, { createdAt: "desc" }] }
             }
           },
-          reservation: { include: { quoteProposalRevision: true } }
+          reservation: {
+            include: {
+              quoteProposalRevision: true,
+              changeRequests: {
+                where: { status: ReservationRequestStatus.PENDING },
+                orderBy: { createdAt: "desc" },
+                take: 1
+              },
+              cancellationRequests: {
+                where: { status: ReservationRequestStatus.PENDING },
+                orderBy: { createdAt: "desc" },
+                take: 1
+              }
+            }
+          }
         }
       });
 
       const reservations = await prisma.reservation.findMany({
         where: { eventPlanId: plan.id, vendor: { isActive: true } },
-        include: { vendor: true, quoteRequest: true }
+        include: {
+          vendor: true,
+          quoteRequest: true,
+          changeRequests: {
+            where: { status: ReservationRequestStatus.PENDING },
+            orderBy: { createdAt: "desc" },
+            take: 1
+          },
+          cancellationRequests: {
+            where: { status: ReservationRequestStatus.PENDING },
+            orderBy: { createdAt: "desc" },
+            take: 1
+          }
+        }
       });
 
       const allSelectedModuleIds = Array.from(

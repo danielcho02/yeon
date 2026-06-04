@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { redirect } from "next/navigation";
 
 import { VendorWorkspace } from "@/components/features/planning/vendor-workspace";
+import { ReservationRequestStatus } from "@/generated/prisma/client";
 import type { ReservationItem } from "@/components/features/planning/workspace-types";
 import { Nav } from "@/components/nav";
 import { getServerAuthSession } from "@/lib/auth/session";
@@ -16,11 +17,40 @@ import {
   getCatalogKeyForVendorModule
 } from "@/lib/vendor-service-modules";
 import { buildVendorDashboardReservationContract } from "@/lib/vendor-dashboard-contract";
-import type { VendorDashboardReservationDTO } from "@/types/reservation";
+import type {
+  VendorDashboardReservationDTO,
+  VendorDashboardSelectedServiceOptionDTO
+} from "@/types/reservation";
 import type { QuoteRequestForVendorDTO, QuoteStatus } from "@/types/quote";
 import type { VendorServiceModuleData } from "@/types/vendor-module";
 import type { VendorPackagePriceSnapshot, VendorPackageSnapshot } from "@/types/vendor-package";
 import { VendorOnboardingForm } from "./onboarding-form";
+
+function selectedOptionsFromJson(value: unknown): VendorDashboardSelectedServiceOptionDTO[] | null {
+  if (!Array.isArray(value)) return null;
+
+  const options = value
+    .map((item) => {
+      const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
+      const name = typeof record.name === "string" ? record.name : null;
+      const price = typeof record.price === "number" ? record.price : null;
+      const pricingType = typeof record.pricingType === "string" ? record.pricingType : "FLAT";
+
+      if (!name || price === null) return null;
+
+      return {
+        catalogKey: typeof record.catalogKey === "string" ? record.catalogKey : null,
+        name,
+        price,
+        pricingType,
+        ...(typeof record.quantity === "number" ? { quantity: record.quantity } : {}),
+        ...(typeof record.subtotal === "number" ? { subtotal: record.subtotal } : {})
+      };
+    })
+    .filter((item): item is VendorDashboardSelectedServiceOptionDTO => Boolean(item));
+
+  return options.length > 0 ? options : null;
+}
 
 export default async function VendorDashboardPage() {
   const session = await getServerAuthSession();
@@ -67,6 +97,42 @@ export default async function VendorDashboardPage() {
           quoteResponse: {
             select: {
               note: true
+            }
+          },
+          changeRequests: {
+            where: { status: ReservationRequestStatus.PENDING },
+            orderBy: { createdAt: "desc" as const },
+            select: {
+              id: true,
+              reservationId: true,
+              plannerId: true,
+              vendorId: true,
+              requestedServiceDate: true,
+              requestedGuestCount: true,
+              requestedNotes: true,
+              requestedReason: true,
+              requestedSelectedServiceOptions: true,
+              status: true,
+              vendorDecisionMemo: true,
+              decidedAt: true,
+              createdAt: true,
+              updatedAt: true
+            }
+          },
+          cancellationRequests: {
+            where: { status: ReservationRequestStatus.PENDING },
+            orderBy: { createdAt: "desc" as const },
+            select: {
+              id: true,
+              reservationId: true,
+              plannerId: true,
+              vendorId: true,
+              reason: true,
+              status: true,
+              vendorDecisionMemo: true,
+              decidedAt: true,
+              createdAt: true,
+              updatedAt: true
             }
           },
           selectedServiceOptions: true,
@@ -241,7 +307,35 @@ export default async function VendorDashboardPage() {
     quoteRequestStatus: r.quoteRequest?.status ?? null,
     selectedPackageSnapshot: (r.quoteRequest?.selectedPackageSnapshot as VendorPackageSnapshot | null) ?? null,
     priceSnapshot: (r.quoteRequest?.priceSnapshot as VendorPackagePriceSnapshot | null) ?? null,
-    selectedServiceOptions: r.selectedServiceOptions as ReservationItem["selectedServiceOptions"] ?? null,
+    selectedServiceOptions: selectedOptionsFromJson(r.selectedServiceOptions),
+    pendingChangeRequests: r.changeRequests.map((request) => ({
+      id: request.id,
+      reservationId: request.reservationId,
+      plannerId: request.plannerId,
+      vendorId: request.vendorId,
+      requestedServiceDate: request.requestedServiceDate?.toISOString() ?? null,
+      requestedGuestCount: request.requestedGuestCount,
+      requestedNotes: request.requestedNotes,
+      requestedReason: request.requestedReason,
+      requestedSelectedServiceOptions: selectedOptionsFromJson(request.requestedSelectedServiceOptions),
+      status: request.status,
+      vendorDecisionMemo: request.vendorDecisionMemo,
+      decidedAt: request.decidedAt?.toISOString() ?? null,
+      createdAt: request.createdAt.toISOString(),
+      updatedAt: request.updatedAt.toISOString()
+    })),
+    pendingCancellationRequests: r.cancellationRequests.map((request) => ({
+      id: request.id,
+      reservationId: request.reservationId,
+      plannerId: request.plannerId,
+      vendorId: request.vendorId,
+      reason: request.reason,
+      status: request.status,
+      vendorDecisionMemo: request.vendorDecisionMemo,
+      decidedAt: request.decidedAt?.toISOString() ?? null,
+      createdAt: request.createdAt.toISOString(),
+      updatedAt: request.updatedAt.toISOString()
+    })),
     eventPlan: {
       id: r.eventPlan.id,
       title: r.eventPlan.title,
@@ -392,6 +486,8 @@ export default async function VendorDashboardPage() {
           companyName={companyName}
           reservations={reservationContract.reservations}
           pendingConfirmations={reservationContract.pendingConfirmations}
+          pendingChangeRequests={reservationContract.pendingChangeRequests}
+          pendingCancellationRequests={reservationContract.pendingCancellationRequests}
           supportedEventTypes={supportedEventTypes}
           supportedServiceModules={supportedServiceModules}
           vendorServices={vendorServices}

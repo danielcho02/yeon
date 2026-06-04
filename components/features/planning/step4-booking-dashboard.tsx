@@ -17,7 +17,9 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { cancelReservation, requestChange } from "@/app/actions/reservation";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { useRouter } from "next/navigation";
 import type {
   QuoteRequestWithResponses,
   QuoteResponseData,
@@ -65,6 +67,228 @@ const STEP4_PANELS: Array<{ key: Step4PanelKey; label: string }> = [
   { key: "history", label: "조율 내역" },
   { key: "reservation", label: "예약 진행" }
 ];
+
+type PlannerReservationRequestControlsProps = {
+  reservation: {
+    id: string;
+    reservedDate?: string | null;
+    serviceDate?: string | null;
+    guestCount?: number | null;
+    notes?: string | null;
+    pendingChangeRequest?: unknown | null;
+    pendingCancellationRequest?: unknown | null;
+    pendingChangeRequests?: unknown[];
+    pendingCancellationRequests?: unknown[];
+  };
+};
+
+function PlannerReservationRequestControls({
+  reservation
+}: PlannerReservationRequestControlsProps) {
+  const router = useRouter();
+  const [changeDate, setChangeDate] = useState(() =>
+    (reservation.reservedDate ?? reservation.serviceDate ?? "").slice(0, 10)
+  );
+  const [changeGuestCount, setChangeGuestCount] = useState(() =>
+    reservation.guestCount ? String(reservation.guestCount) : ""
+  );
+  const [changeNotes, setChangeNotes] = useState(reservation.notes ?? "");
+  const [changeReason, setChangeReason] = useState("");
+  const [cancelReason, setCancelReason] = useState("");
+  const [requestMode, setRequestMode] = useState<"change" | "cancel">("change");
+  const [busyAction, setBusyAction] = useState<"change" | "cancel" | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const hasPendingChange = Boolean(
+    reservation.pendingChangeRequest ??
+      (reservation.pendingChangeRequests && reservation.pendingChangeRequests.length > 0)
+  );
+  const hasPendingCancellation = Boolean(
+    reservation.pendingCancellationRequest ??
+      (reservation.pendingCancellationRequests && reservation.pendingCancellationRequests.length > 0)
+  );
+  const hasPendingRequest = hasPendingChange || hasPendingCancellation;
+
+  function toggleRequestMode(mode: "change" | "cancel") {
+    setRequestMode(mode);
+    setMessage(null);
+    setError(null);
+  }
+
+  async function submitChangeRequest() {
+    if (busyAction) return;
+    setBusyAction("change");
+    setMessage(null);
+    setError(null);
+
+    try {
+      const result = await requestChange(reservation.id, {
+        reservedDate: changeDate || undefined,
+        guestCount: changeGuestCount ? Number(changeGuestCount) : undefined,
+        notes: changeNotes || undefined,
+        reason: changeReason
+      });
+
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+
+      setMessage("예약 변경 요청을 보냈습니다. 업체 승인 전까지 기존 예약이 유지됩니다.");
+      setChangeReason("");
+      router.refresh();
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function submitCancellationRequest() {
+    if (busyAction) return;
+    setBusyAction("cancel");
+    setMessage(null);
+    setError(null);
+
+    try {
+      const result = await cancelReservation(reservation.id, cancelReason);
+
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+
+      setMessage("예약 취소 요청을 보냈습니다. 업체 승인 전까지 예약은 취소되지 않습니다.");
+      setCancelReason("");
+      router.refresh();
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-xl border border-[#e5e2da] bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm font-bold text-[#2c3455]">예약 조정 요청</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            날짜, 인원, 서비스 변경 또는 취소 요청은 업체 승인 후 예약에 반영됩니다.
+          </p>
+        </div>
+        {!hasPendingRequest && (
+          <div className="inline-flex rounded-xl border border-[#e5e2da] bg-[#faf9f5] p-1 text-xs font-bold">
+            <button
+              type="button"
+              onClick={() => toggleRequestMode("change")}
+              className={`rounded-lg px-3 py-2 transition-colors ${
+                requestMode === "change"
+                  ? "bg-white text-[#2c3455] shadow-sm"
+                  : "text-[#8c8275] hover:bg-white/60"
+              }`}
+            >
+              변경 요청
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleRequestMode("cancel")}
+              className={`rounded-lg px-3 py-2 transition-colors ${
+                requestMode === "cancel"
+                  ? "bg-white text-[#2c3455] shadow-sm"
+                  : "text-[#8c8275] hover:bg-white/60"
+              }`}
+            >
+              취소 요청
+            </button>
+          </div>
+        )}
+      </div>
+
+      {hasPendingRequest ? (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/45 p-4 text-xs leading-5 text-amber-900">
+          <p className="font-bold">업체 승인 대기 중</p>
+          <p className="mt-1">
+            {hasPendingCancellation
+              ? "예약 취소 요청을 보냈습니다. 업체 승인 전까지 예약은 유지됩니다."
+              : "예약 변경 요청을 보냈습니다. 업체 승인 전까지 기존 예약 정보가 유지됩니다."}
+          </p>
+        </div>
+      ) : requestMode === "change" ? (
+        <div className="mt-4 grid gap-3 text-xs">
+          <label className="grid gap-1.5">
+            <span className="font-bold text-[#8c8275]">희망 날짜</span>
+            <input
+              type="date"
+              value={changeDate}
+              onChange={(event) => setChangeDate(event.target.value)}
+              className="h-10 rounded-lg border border-[#e5e2da] px-3 text-[#2c3455] outline-none focus:border-[#c4977a]"
+            />
+          </label>
+          <label className="grid gap-1.5">
+            <span className="font-bold text-[#8c8275]">변경 인원</span>
+            <input
+              inputMode="numeric"
+              value={changeGuestCount}
+              onChange={(event) => setChangeGuestCount(event.target.value.replace(/[^\d]/g, ""))}
+              placeholder="예: 90"
+              className="h-10 rounded-lg border border-[#e5e2da] px-3 text-[#2c3455] outline-none focus:border-[#c4977a]"
+            />
+          </label>
+          <label className="grid gap-1.5">
+            <span className="font-bold text-[#8c8275]">선택 서비스 변경 요청 또는 메모</span>
+            <textarea
+              value={changeNotes}
+              onChange={(event) => setChangeNotes(event.target.value)}
+              placeholder="선택 서비스 변경 요청 또는 업체에 전달할 메모를 입력해 주세요."
+              className="min-h-[72px] resize-none rounded-lg border border-[#e5e2da] px-3 py-2 text-[#2c3455] outline-none focus:border-[#c4977a]"
+            />
+          </label>
+          <label className="grid gap-1.5">
+            <span className="font-bold text-[#8c8275]">변경 요청 사유</span>
+            <textarea
+              value={changeReason}
+              onChange={(event) => setChangeReason(event.target.value)}
+              placeholder="변경 요청 사유를 입력해 주세요."
+              className="min-h-[72px] resize-none rounded-lg border border-[#e5e2da] px-3 py-2 text-[#2c3455] outline-none focus:border-[#c4977a]"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={busyAction !== null || !changeReason.trim()}
+            onClick={submitChangeRequest}
+            className="inline-flex h-9 w-full items-center justify-center rounded-lg bg-[#2c3455] px-3 text-xs font-semibold text-white hover:bg-[#1f2745] disabled:opacity-50"
+          >
+            {busyAction === "change" ? "요청 중..." : "변경 요청 보내기"}
+          </button>
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-3 text-xs">
+          <label className="grid gap-1.5">
+            <span className="font-bold text-[#8c8275]">취소 사유</span>
+            <textarea
+              value={cancelReason}
+              onChange={(event) => setCancelReason(event.target.value)}
+              placeholder="취소 사유 또는 업체에 전달할 추가 메모를 입력해 주세요."
+              className="min-h-[120px] w-full resize-none rounded-lg border border-[#e5e2da] bg-white px-3 py-2 text-[#2c3455] outline-none focus:border-[#c4977a]"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={busyAction !== null || !cancelReason.trim()}
+            onClick={submitCancellationRequest}
+            className="inline-flex h-9 w-full items-center justify-center rounded-lg bg-rose-700 px-3 text-xs font-semibold text-white hover:bg-rose-800 disabled:opacity-50"
+          >
+            {busyAction === "cancel" ? "요청 중..." : "취소 요청 보내기"}
+          </button>
+        </div>
+      )}
+
+      {(message || error) && (
+        <p className={`mt-3 text-xs font-semibold ${error ? "text-red-600" : "text-emerald-700"}`}>
+          {error ?? message}
+        </p>
+      )}
+    </div>
+  );
+}
 
 const MODULE_CATEGORY_LABELS: Record<string, string> = {
   VENUE: "예식장·공간",
@@ -869,6 +1093,7 @@ export function Step4BookingDashboard({
                         </div>
                       )}
                     </div>
+                    {reservation && <PlannerReservationRequestControls reservation={reservation} />}
                   </div>
                 )}
 
@@ -907,6 +1132,7 @@ export function Step4BookingDashboard({
                         <ArrowRight className="h-3.5 w-3.5" />
                       </Link>
                     )}
+                    <PlannerReservationRequestControls reservation={reservation} />
                   </div>
                 )}
 

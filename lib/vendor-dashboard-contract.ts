@@ -38,6 +38,18 @@ export function buildVendorDashboardReservationContract(
   const pendingConfirmations = reservations.filter(isPendingConfirmation);
   const quoteResponsesWaitingForUserAcceptance = reservations.filter(isWaitingForUserAcceptance);
   const confirmedReservations = reservations.filter(isConfirmedReservation);
+  const pendingChangeRequests = reservations.flatMap((reservation) =>
+    (reservation.pendingChangeRequests ?? []).map((request) => ({
+      ...request,
+      reservation
+    }))
+  );
+  const pendingCancellationRequests = reservations.flatMap((reservation) =>
+    (reservation.pendingCancellationRequests ?? []).map((request) => ({
+      ...request,
+      reservation
+    }))
+  );
 
   return {
     reservations,
@@ -45,11 +57,15 @@ export function buildVendorDashboardReservationContract(
     quoteResponsesWaitingForUserAcceptance,
     pendingConfirmations,
     confirmedReservations,
+    pendingChangeRequests,
+    pendingCancellationRequests,
     counts: {
       newRequestsCount: newQuoteRequests.length,
       pendingConfirmationsCount: pendingConfirmations.length,
       confirmedReservationsCount: confirmedReservations.length,
-      respondedQuotesCount: quoteResponsesWaitingForUserAcceptance.length
+      respondedQuotesCount: quoteResponsesWaitingForUserAcceptance.length,
+      pendingChangeRequestsCount: pendingChangeRequests.length,
+      pendingCancellationRequestsCount: pendingCancellationRequests.length
     }
   };
 }
