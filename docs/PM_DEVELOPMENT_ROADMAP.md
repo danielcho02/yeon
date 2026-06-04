@@ -1,7 +1,9 @@
 # yeON PM Development Roadmap
 
 > Last updated: 2026-06-03
-> Current branch: `codex/event-date-domain-model`
+> Current branch: `main`
+> Current HEAD: `3718fad Merge branch 'codex/event-date-domain-model'`
+> Included feature commits: `cb672b6 feat: add event date domain model`, `c7b1720 fix: simplify event date request inputs`
 
 ---
 
@@ -21,12 +23,14 @@ yeON currently supports the core demo lifecycle for wedding/funeral planning:
 - Wedding quote requests support either an exact fixed wedding date or a preferred date range.
 - Vendor proposals persist a proposed service date on `QuoteProposalRevision`; accepted reservations copy that date into `Reservation.serviceDate`.
 - Funeral planning uses the occurrence/reception date as the service start date and displays the derived 3-day funeral schedule.
+- Wedding request UI infers exact-vs-range from `희망 시작일` and `희망 종료일` equality instead of using a segmented toggle.
+- Funeral request UI keeps the input row aligned and moves the 3-day explanation into a separate schedule card.
 
 ---
 
 ## Current Branch Scope
 
-`codex/event-date-domain-model` is scoped to wedding/funeral event-date modeling:
+Current completed scope is wedding/funeral event-date modeling plus request-form UI QA:
 
 - Wedding planner request UX separates exact fixed dates from preferred date ranges.
 - Wedding vendors confirm a fixed date or choose one date inside the requested range; casual fixed-date changes are rejected server-side.
@@ -37,6 +41,7 @@ yeON currently supports the core demo lifecycle for wedding/funeral planning:
 - `Reservation.serviceDate` remains the final accepted service date.
 - Generic `일정 불가 회신` is removed from visible vendor UI, but backend decline verification remains.
 - U09 proposal adjustment, package snapshots, and reservation continuity remain preserved.
+- The UI QA follow-up is intentionally UI/payload mapping only: no schema, migration, or server-action changes.
 
 Do not expand this branch into real-time chat, complex negotiation threads, full calendar availability, event-type-specific decline redesign, notification center work, or account/profile management.
 
@@ -56,19 +61,23 @@ These are polish items unless they block a core use case:
 
 ## Next Development Priorities
 
-1. **U06 reservation change/cancel flow**
+1. **Post-merge browser QA for event-date flow**
+   - Complete manual browser QA for wedding start/end alignment, exact/range payload mapping, funeral row alignment, funeral 3-day card, vendor proposal service date, and final reservation service date.
+   - If QA finds issues, use a new focused follow-up branch; do not revert `3718fad`, `cb672b6`, or `c7b1720`.
+
+2. **U06 reservation change/cancel flow**
    - Clarify planner/vendor change and cancellation responsibilities after Reservation(PENDING/CONFIRMED).
    - Preserve workflow history and user-facing status copy.
 
-2. **U08 mobile invitation/obituary prototype**
+3. **U08 mobile invitation/obituary prototype**
    - Add a minimal mobile-first shareable invitation/obituary prototype.
    - Keep it scoped to MVP publishing and viewing.
 
-3. **U07 event money ledger / settlement**
+4. **U07 event money ledger / settlement**
    - Track event-related money entries and basic settlement summaries.
    - Avoid payment processing until the ledger use case is validated.
 
-4. **Event-specific availability responses**
+5. **Event-specific availability responses**
    - Replace the backend-only quote decline path with wedding/funeral-specific availability response UX.
    - Keep the existing decline contract until the new response model is explicitly verified.
 
