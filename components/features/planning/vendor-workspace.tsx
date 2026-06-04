@@ -22,7 +22,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { confirmReservation } from "@/app/actions/reservation";
+import {
+  approveReservationCancellationRequest,
+  approveReservationChangeRequest,
+  confirmReservation,
+  rejectReservationCancellationRequest,
+  rejectReservationChangeRequest
+} from "@/app/actions/reservation";
 import { declineQuoteRequest, submitQuoteResponse, submitQuoteRevision } from "@/app/actions/quote";
 import { formatCurrency, formatDate } from "@/lib/format";
 import {
@@ -33,6 +39,10 @@ import {
 } from "@/lib/step3.shared";
 import { ServiceManager } from "@/app/vendor/dashboard/service-manager";
 import type { QuoteProposalRevisionData, QuoteRequestForVendorDTO } from "@/types/quote";
+import type {
+  VendorDashboardReservationCancellationRequestDTO,
+  VendorDashboardReservationChangeRequestDTO
+} from "@/types/reservation";
 import type {
   VendorPackagePriceSnapshot,
   VendorPackageSnapshot,
@@ -84,6 +94,8 @@ type Props = {
   companyName: string;
   reservations: ReservationItem[];
   pendingConfirmations?: ReservationItem[];
+  pendingChangeRequests?: VendorDashboardReservationChangeRequestDTO[];
+  pendingCancellationRequests?: VendorDashboardReservationCancellationRequestDTO[];
   supportedEventTypes?: MvpQuoteEventType[];
   supportedServiceModules?: string[];
   vendorServices?: ServiceRow[];
@@ -91,13 +103,14 @@ type Props = {
   quoteRequests?: QuoteRequestForVendorDTO[];
 };
 
-type PanelKey = "home" | "inbox" | "proposals" | "final_confirm" | "confirmed";
+type PanelKey = "home" | "inbox" | "proposals" | "final_confirm" | "reservation_requests" | "confirmed";
 
 const PANELS: Array<{ key: PanelKey; label: string; description: string; icon: ElementType }> = [
   { key: "home",          label: "업무 홈",       description: "오늘 처리할 일",        icon: TrendingUp },
   { key: "inbox",         label: "새 요청",       description: "신규 수신 요청",        icon: Inbox },
   { key: "proposals",     label: "견적 응답",     description: "제안 상태 관리",       icon: MessageSquareQuote },
   { key: "final_confirm", label: "최종 확정",     description: "고객 수락 완료 및 대기",  icon: Clock },
+  { key: "reservation_requests", label: "변경/취소", description: "승인 요청 처리", icon: ClipboardList },
   { key: "confirmed",     label: "확정 예약",     description: "확정 일정 관리",        icon: BadgeCheck },
 ];
 
@@ -601,6 +614,8 @@ export function VendorWorkspace({
   companyName,
   reservations,
   pendingConfirmations,
+  pendingChangeRequests = [],
+  pendingCancellationRequests = [],
   supportedEventTypes,
   supportedServiceModules,
   vendorServices,
@@ -612,6 +627,7 @@ export function VendorWorkspace({
   const [isPending, startTransition] = useTransition();
   const [activePanel, setActivePanel] = useState<PanelKey>("home");
   const [showServiceManager, setShowServiceManager] = useState(false);
+  const [busyRequestId, setBusyRequestId] = useState("");
 
   function getRequestMemo(reservation: ReservationItem | null | undefined) {
     if (!reservation) return null;
@@ -955,17 +971,67 @@ export function VendorWorkspace({
     }
   }
 
+  async function decideChangeRequest(requestId: string, decision: "approve" | "reject") {
+    if (busyRequestId === requestId) return;
+    setBusyRequestId(requestId);
+    setMessage(null);
+    setError(null);
+
+    try {
+      const result =
+        decision === "approve"
+          ? await approveReservationChangeRequest(requestId)
+          : await rejectReservationChangeRequest(requestId);
+
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+
+      setMessage(decision === "approve" ? "예약 변경 요청을 승인했습니다." : "예약 변경 요청을 거절했습니다.");
+      startTransition(() => router.refresh());
+    } finally {
+      setBusyRequestId("");
+    }
+  }
+
+  async function decideCancellationRequest(requestId: string, decision: "approve" | "reject") {
+    if (busyRequestId === requestId) return;
+    setBusyRequestId(requestId);
+    setMessage(null);
+    setError(null);
+
+    try {
+      const result =
+        decision === "approve"
+          ? await approveReservationCancellationRequest(requestId)
+          : await rejectReservationCancellationRequest(requestId);
+
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+
+      setMessage(decision === "approve" ? "예약 취소 요청을 승인했습니다." : "예약 취소 요청을 거절했습니다.");
+      startTransition(() => router.refresh());
+    } finally {
+      setBusyRequestId("");
+    }
+  }
+
   const confirmedTotal = confirmedReservations.reduce(
     (sum, r) => sum + (r.confirmedAmount ?? r.quotedAmount ?? 0),
     0
   );
   const proposalActivityCount = inProgressReservations.length + respondedQuoteRequests.length;
+  const pendingReservationRequestCount = pendingChangeRequests.length + pendingCancellationRequests.length;
 
   const panelCount = {
-    home: pendingConfirmationReservations.length + inboxItems.length,
+    home: pendingConfirmationReservations.length + inboxItems.length + pendingReservationRequestCount,
     inbox: inboxItems.length,
     proposals: proposalActivityCount,
     final_confirm: pendingConfirmationReservations.length,
+    reservation_requests: pendingReservationRequestCount,
     confirmed: confirmedReservations.length,
   };
 
@@ -1866,6 +1932,142 @@ export function VendorWorkspace({
               <div className="py-12">
                 <EmptyState emoji="✨" title="최종 확정 대기 중인 일정이 없습니다." description="고객이 보낸 견적 제안을 수락하면 이곳에 대기 목록으로 올라옵니다." />
               </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {activePanel === "reservation_requests" && (
+        <section className="animate-fade-in rounded-2xl border border-[#e5e2da] bg-white p-6 shadow-sm">
+          <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-[var(--font-serif)] text-sm font-bold text-[#2c3455]">예약 변경/취소 승인 요청</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                고객 요청은 승인 전까지 기존 예약에 반영되지 않습니다. 승인 또는 거절로 처리해 주세요.
+              </p>
+            </div>
+            <Badge className="bg-[#faf6f2] text-[#c4977a] border border-[#ebdccf]/50 text-[10px]">
+              {pendingReservationRequestCount}건 대기
+            </Badge>
+          </div>
+
+          <div className="grid gap-4">
+            {pendingChangeRequests.map((request) => {
+              const reservation = request.reservation;
+              const requestedOptions = request.requestedSelectedServiceOptions ?? [];
+
+              return (
+                <article key={request.id} className="rounded-xl border border-[#e5e2da]/80 bg-[#fcfbf8] p-5">
+                  <div className="mb-4 flex flex-col gap-2 border-b border-[#f2ece4] pb-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <Badge className="bg-amber-50 text-amber-800 border border-amber-200 text-[9px] font-bold">
+                        예약 변경 승인 대기
+                      </Badge>
+                      <p className="mt-2 font-semibold text-sm text-[#2c3455]">{reservation.eventPlan.title}</p>
+                      <p className="mt-1 text-[11px] text-[#8c8275]">{getServiceLabel(reservation)}</p>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">요청일 {formatDate(request.createdAt)}</p>
+                  </div>
+
+                  <div className="grid gap-3 text-xs text-[#2c3455] sm:grid-cols-2">
+                    <div className="rounded-lg border border-[#f2ece4] bg-white p-3">
+                      <p className="text-[10px] font-bold text-[#8c8275]">현재 예약</p>
+                      <p className="mt-2">날짜: {formatDate(reservation.serviceDate)}</p>
+                      <p>인원: {reservation.guestCount ? `${reservation.guestCount}명` : "미정"}</p>
+                      <p>메모: {reservation.notes ?? "없음"}</p>
+                    </div>
+                    <div className="rounded-lg border border-amber-200/70 bg-amber-50/40 p-3">
+                      <p className="text-[10px] font-bold text-amber-800">요청 변경</p>
+                      <p className="mt-2">날짜: {request.requestedServiceDate ? formatDate(request.requestedServiceDate) : "변경 없음"}</p>
+                      <p>인원: {request.requestedGuestCount ? `${request.requestedGuestCount}명` : "변경 없음"}</p>
+                      <p>메모: {request.requestedNotes ?? "변경 없음"}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 rounded-lg border border-[#f2ece4] bg-white p-3 text-xs leading-5 text-[#2c3455]">
+                    <p className="font-bold text-[#8c8275]">요청 사유</p>
+                    <p className="mt-1">{request.requestedReason}</p>
+                    {requestedOptions.length > 0 && (
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        선택 서비스 변경 요청: {requestedOptions.map((option) => option.name).join(", ")}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isPending || busyRequestId === request.id}
+                      onClick={() => decideChangeRequest(request.id, "reject")}
+                      className="h-9 rounded-xl text-xs font-semibold"
+                    >
+                      {busyRequestId === request.id ? "처리 중..." : "거절"}
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={isPending || busyRequestId === request.id}
+                      onClick={() => decideChangeRequest(request.id, "approve")}
+                      className="h-9 rounded-xl bg-[#2c3455] px-4 text-xs font-semibold text-white hover:bg-[#1f2745]"
+                    >
+                      {busyRequestId === request.id ? "처리 중..." : "변경 승인"}
+                    </Button>
+                  </div>
+                </article>
+              );
+            })}
+
+            {pendingCancellationRequests.map((request) => {
+              const reservation = request.reservation;
+
+              return (
+                <article key={request.id} className="rounded-xl border border-rose-200/70 bg-rose-50/20 p-5">
+                  <div className="mb-4 flex flex-col gap-2 border-b border-rose-100 pb-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <Badge className="bg-white text-rose-700 border border-rose-200 text-[9px] font-bold">
+                        예약 취소 승인 대기
+                      </Badge>
+                      <p className="mt-2 font-semibold text-sm text-[#2c3455]">{reservation.eventPlan.title}</p>
+                      <p className="mt-1 text-[11px] text-[#8c8275]">
+                        {getServiceLabel(reservation)} · {formatDate(reservation.serviceDate)}
+                      </p>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">요청일 {formatDate(request.createdAt)}</p>
+                  </div>
+
+                  <div className="rounded-lg border border-rose-100 bg-white p-3 text-xs leading-5 text-[#2c3455]">
+                    <p className="font-bold text-rose-700">취소 사유</p>
+                    <p className="mt-1">{request.reason}</p>
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      승인 전까지 예약 상태는 {reservation.status === "CONFIRMED" ? "확정" : "대기"}로 유지됩니다.
+                    </p>
+                  </div>
+
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isPending || busyRequestId === request.id}
+                      onClick={() => decideCancellationRequest(request.id, "reject")}
+                      className="h-9 rounded-xl text-xs font-semibold"
+                    >
+                      {busyRequestId === request.id ? "처리 중..." : "거절"}
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={isPending || busyRequestId === request.id}
+                      onClick={() => decideCancellationRequest(request.id, "approve")}
+                      className="h-9 rounded-xl bg-rose-700 px-4 text-xs font-semibold text-white hover:bg-rose-800"
+                    >
+                      {busyRequestId === request.id ? "처리 중..." : "취소 승인"}
+                    </Button>
+                  </div>
+                </article>
+              );
+            })}
+
+            {pendingReservationRequestCount === 0 && (
+              <EmptyState emoji="🗂️" title="처리할 변경/취소 요청이 없습니다." description="고객이 예약 변경 또는 취소 승인을 요청하면 이곳에 표시됩니다." />
             )}
           </div>
         </section>

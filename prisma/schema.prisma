@@ -49,6 +49,12 @@ enum ReservationStatus {
   COMPLETED
 }
 
+enum ReservationRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum QuoteStatus {
   PENDING
   RESPONDED
@@ -141,6 +147,10 @@ model User {
   updatedAt               DateTime              @updatedAt
   ownedEventPlans         EventPlan[]           @relation("EventOwner")
   vendorReservations      Reservation[]         @relation("ReservationVendor")
+  plannerReservationChangeRequests ReservationChangeRequest[] @relation("ReservationChangeRequestPlanner")
+  vendorReservationChangeRequests  ReservationChangeRequest[] @relation("ReservationChangeRequestVendor")
+  plannerReservationCancellationRequests ReservationCancellationRequest[] @relation("ReservationCancellationRequestPlanner")
+  vendorReservationCancellationRequests  ReservationCancellationRequest[] @relation("ReservationCancellationRequestVendor")
   authoredPosts           Post[]                @relation("PostAuthor")
   writtenReviews          Review[]              @relation("ReviewAuthor")
   receivedReviews         Review[]              @relation("ReviewVendor")
@@ -217,9 +227,55 @@ model Reservation {
   quoteProposalRevision   QuoteProposalRevision? @relation(fields: [quoteProposalRevisionId], references: [id], onDelete: SetNull)
   transaction             Transaction?
   reviews                 Review[]          @relation("ReservationReviews")
+  changeRequests          ReservationChangeRequest[]
+  cancellationRequests    ReservationCancellationRequest[]
 
   @@index([eventPlanId, status])
   @@index([vendorId, status])
+}
+
+model ReservationChangeRequest {
+  id                              String                   @id @default(cuid())
+  reservationId                   String
+  plannerId                       String
+  vendorId                        String
+  requestedServiceDate            DateTime?
+  requestedGuestCount             Int?
+  requestedNotes                  String?
+  requestedReason                 String
+  requestedSelectedServiceOptions Json?
+  status                          ReservationRequestStatus @default(PENDING)
+  vendorDecisionMemo              String?
+  decidedAt                       DateTime?
+  createdAt                       DateTime                 @default(now())
+  updatedAt                       DateTime                 @updatedAt
+  reservation                     Reservation              @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  planner                         User                     @relation("ReservationChangeRequestPlanner", fields: [plannerId], references: [id], onDelete: Cascade)
+  vendor                          User                     @relation("ReservationChangeRequestVendor", fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([reservationId, status])
+  @@index([vendorId, status, createdAt])
+  @@index([plannerId, status, createdAt])
+}
+
+model ReservationCancellationRequest {
+  id                 String                   @id @default(cuid())
+  reservationId      String
+  plannerId          String
+  vendorId           String
+  reason             String
+  status             ReservationRequestStatus @default(PENDING)
+  vendorDecisionMemo String?
+  decidedAt          DateTime?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  reservation        Reservation              @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  planner            User                     @relation("ReservationCancellationRequestPlanner", fields: [plannerId], references: [id], onDelete: Cascade)
+  vendor             User                     @relation("ReservationCancellationRequestVendor", fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([reservationId, status])
+  @@index([vendorId, status, createdAt])
+  @@index([plannerId, status, createdAt])
 }
 
 model Post {

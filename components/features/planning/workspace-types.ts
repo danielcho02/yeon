@@ -1,4 +1,8 @@
 import { Heart, Shield, Sparkles, type LucideIcon } from "lucide-react";
+import type {
+  ReservationCancellationRequestData,
+  ReservationChangeRequestData
+} from "@/types/reservation";
 import type { VendorPackagePriceSnapshot, VendorPackageSnapshot } from "@/types/vendor-package";
 
 export type Recommendation = {
@@ -90,6 +94,8 @@ export type ReservationItem = {
     quantity?: number;
     subtotal?: number;
   }> | null;
+  pendingChangeRequests?: ReservationChangeRequestData[];
+  pendingCancellationRequests?: ReservationCancellationRequestData[];
   eventPlan: {
     id: string;
     title: string;
