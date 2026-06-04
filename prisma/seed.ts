@@ -113,9 +113,15 @@ async function createVendorPackages(
 }
 
 async function seedModularQuoteData() {
+  await prisma.activityLog.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.mobileCard.deleteMany();
   await prisma.review.deleteMany();
   await prisma.transaction.deleteMany();
+  await prisma.reservationChangeRequest.deleteMany();
+  await prisma.reservationCancellationRequest.deleteMany();
   await prisma.reservation.deleteMany();
+  await prisma.quoteProposalRevision.deleteMany();
   await prisma.quoteResponse.deleteMany();
   await prisma.quoteRequest.deleteMany();
   await prisma.vendorPackageModule.deleteMany();
@@ -377,11 +383,17 @@ async function main() {
   await prisma.$executeRawUnsafe("PRAGMA journal_mode = WAL");
   await prisma.$executeRawUnsafe("PRAGMA busy_timeout = 10000");
 
-  await prisma.review.deleteMany();
-  await prisma.transaction.deleteMany();
+  await prisma.activityLog.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.mobileCard.deleteMany();
   await prisma.invitation.deleteMany();
   await prisma.post.deleteMany();
+  await prisma.review.deleteMany();
+  await prisma.transaction.deleteMany();
+  await prisma.reservationChangeRequest.deleteMany();
+  await prisma.reservationCancellationRequest.deleteMany();
   await prisma.reservation.deleteMany();
+  await prisma.quoteProposalRevision.deleteMany();
   await prisma.quoteResponse.deleteMany();
   await prisma.quoteRequest.deleteMany();
   await prisma.eventPlan.deleteMany();
@@ -399,13 +411,19 @@ async function main() {
     prisma.user.count(),
     prisma.eventPlan.count(),
     prisma.reservation.count(),
+    prisma.reservationChangeRequest.count(),
+    prisma.reservationCancellationRequest.count(),
     prisma.post.count(),
     prisma.review.count(),
     prisma.transaction.count(),
     prisma.invitation.count(),
     prisma.vendorServiceModule.count(),
     prisma.quoteRequest.count(),
-    prisma.quoteResponse.count()
+    prisma.quoteResponse.count(),
+    prisma.quoteProposalRevision.count(),
+    prisma.mobileCard.count(),
+    prisma.notification.count(),
+    prisma.activityLog.count()
   ]);
 
   console.log("Seed complete");
@@ -415,13 +433,19 @@ async function main() {
         users: counts[0],
         eventPlans: counts[1],
         reservations: counts[2],
-        posts: counts[3],
-        reviews: counts[4],
-        transactions: counts[5],
-        invitations: counts[6],
-        vendorServiceModules: counts[7],
-        quoteRequests: counts[8],
-        quoteResponses: counts[9],
+        reservationChangeRequests: counts[3],
+        reservationCancellationRequests: counts[4],
+        posts: counts[5],
+        reviews: counts[6],
+        transactions: counts[7],
+        invitations: counts[8],
+        vendorServiceModules: counts[9],
+        quoteRequests: counts[10],
+        quoteResponses: counts[11],
+        quoteProposalRevisions: counts[12],
+        mobileCards: counts[13],
+        notifications: counts[14],
+        activityLogs: counts[15],
         demoAccounts: {
           planner: `${demoAccountCredentials.planner} / ${demoAccountPassword}`,
           vendor: `${demoAccountCredentials.venue} / ${demoAccountPassword}`,

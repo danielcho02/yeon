@@ -1,7 +1,8 @@
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-import { PrismaClient, QuoteStatus, ReservationStatus } from "../generated/prisma/client";
+import { EventStatus, EventType, PrismaClient, QuoteStatus, ReservationStatus } from "../generated/prisma/client";
 import type { Prisma } from "../generated/prisma/client";
 import { demoAccountCredentials } from "../lib/demo/ensure-demo-data";
+import { generateStep3MockAIRecommendation } from "../lib/mocks/step3-ai-recommendation";
 
 const prisma = new PrismaClient({
   adapter: new PrismaBetterSqlite3({
@@ -14,17 +15,87 @@ const day = 24 * 60 * 60 * 1000;
 function plusDays(n: number) { return new Date(Date.now() + n * day); }
 function asJson(v: unknown) { return v as unknown as Prisma.InputJsonValue; }
 
+async function upsertScenarioPlans(plannerId: string) {
+  const weddingPlanData = {
+    ownerId: plannerId,
+    title: "봄빛 가든 웨딩",
+    type: EventType.WEDDING,
+    status: EventStatus.PLANNING,
+    hostName: "김연우",
+    honoreeName: "김연우 · 최하준",
+    venueName: "모먼트 가든",
+    region: "서울",
+    scheduledAt: plusDays(45),
+    guestTarget: 160,
+    budget: 4_800_000,
+    description: "따뜻한 정원 결혼식을 위한 메인 행사 플랜입니다.",
+    aiRecommendation: generateStep3MockAIRecommendation({
+      budget: 4_800_000,
+      guestCount: 160,
+      region: "서울",
+      eventType: EventType.WEDDING,
+      description: "소프트 로즈와 샴페인 톤, 가족 중심 동선, 자연광 포토존"
+    })
+  };
+
+  const funeralPlanData = {
+    ownerId: plannerId,
+    title: "가족 장례 안내",
+    type: EventType.FUNERAL,
+    status: EventStatus.PUBLISHED,
+    hostName: "김연우",
+    honoreeName: "故 김정훈",
+    venueName: "한결 추모관",
+    region: "인천",
+    scheduledAt: plusDays(12),
+    guestTarget: 48,
+    budget: 2_500_000,
+    description: "조용하고 안정적인 조문 동선과 안내가 중요한 가족 장례 일정입니다.",
+    aiRecommendation: generateStep3MockAIRecommendation({
+      budget: 2_500_000,
+      guestCount: 48,
+      region: "인천",
+      eventType: EventType.FUNERAL,
+      description: "차분한 안내, 주차 동선, 접객 인력 최소화, 정보 전달 명확성"
+    })
+  };
+
+  const weddingPlan = await prisma.eventPlan.upsert({
+    where: { slug: "spring-garden-wedding" },
+    update: weddingPlanData,
+    create: {
+      slug: "spring-garden-wedding",
+      ...weddingPlanData
+    }
+  });
+
+  const funeralPlan = await prisma.eventPlan.upsert({
+    where: { slug: "family-funeral-guidance" },
+    update: funeralPlanData,
+    create: {
+      slug: "family-funeral-guidance",
+      ...funeralPlanData
+    }
+  });
+
+  return { weddingPlan, funeralPlan };
+}
+
 async function main() {
   const stateArg = process.argv.find(a => a.startsWith("--state="))?.replace("--state=", "") ?? "C";
   const state = stateArg.toUpperCase() as "A" | "B" | "C" | "D";
 
+  const planner = await prisma.user.findUniqueOrThrow({ where: { email: demoAccountCredentials.planner } });
   const venueVendor = await prisma.user.findUniqueOrThrow({ where: { email: demoAccountCredentials.venue } });
   const funeralVendor = await prisma.user.findUniqueOrThrow({ where: { email: demoAccountCredentials.memorial } });
-  const weddingPlan = await prisma.eventPlan.findUniqueOrThrow({ where: { slug: "spring-garden-wedding" } });
-  const funeralPlan = await prisma.eventPlan.findUniqueOrThrow({ where: { slug: "family-funeral-guidance" } });
+  const { weddingPlan, funeralPlan } = await upsertScenarioPlans(planner.id);
 
   const venueModules = await prisma.vendorServiceModule.findMany({ where: { vendorId: venueVendor.id, isActive: true }, orderBy: { sortOrder: "asc" } });
   const funeralModules = await prisma.vendorServiceModule.findMany({ where: { vendorId: funeralVendor.id, isActive: true }, orderBy: { sortOrder: "asc" } });
+
+  if (venueModules.length === 0 || funeralModules.length === 0) {
+    throw new Error("Missing VendorServiceModules. Run npm run db:seed before scenario seed.");
+  }
 
   // Guard: don't create duplicate active requests
   const existingVenue = await prisma.quoteRequest.findFirst({
