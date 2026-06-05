@@ -193,7 +193,7 @@ yeON은 행사 준비 상태를 명확하게 나눕니다.
 
 ---
 
-## 🖼️ Preview
+## 🖼️ Theme Palette Preview
 
 | Planner Workspace | Vendor Dashboard |
 | --- | --- |
@@ -203,7 +203,6 @@ yeON은 행사 준비 상태를 명확하게 나눕니다.
 | --- | --- |
 | ![Modular Quote Builder Preview](https://placehold.co/600x360/FFF7ED/9A3412?text=Modular+Quote+Builder) | ![Reservation Workflow Preview](https://placehold.co/600x360/ECFDF5/065F46?text=Reservation+Workflow) |
 
-> Preview images are placeholders and can be replaced with actual product screenshots.
 
 ---
 
